@@ -55,8 +55,9 @@ public class RedisCache implements Cache {
         }
     }
 
-    public Object get(Object[] args) {
+    public Object get(ProceedingJoinPoint proceedingJoinPoint) {
         try {
+            Object[] args = proceedingJoinPoint.getArgs();
             String key = keyParser.generateKey(redisCached.name(), redisCached.key(), cachedMethod, args);
             return this.get(key);
         } catch (Throwable throwable) {

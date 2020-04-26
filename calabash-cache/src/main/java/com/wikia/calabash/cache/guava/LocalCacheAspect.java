@@ -1,5 +1,6 @@
 package com.wikia.calabash.cache.guava;
 
+import com.wikia.calabash.cache.AnnotationCacheConfig;
 import com.wikia.calabash.cache.CacheManager;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -18,14 +19,19 @@ import javax.annotation.Resource;
 public class LocalCacheAspect {
     @Resource
     private CacheManager cacheManager;
+    @Resource
+    private AnnotationCacheConfig config;
 
     @Around("@annotation(LocalCached)")
     public Object doAround(ProceedingJoinPoint joinPoint) throws Throwable {
         try {
+            if (!config.isEnable()) {
+                return joinPoint.proceed();
+            }
             MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
             LocalCached localCached = methodSignature.getMethod().getAnnotation(LocalCached.class);
             LocalCache cache = cacheManager.getLocalCache(localCached.name());
-            return cache.get(joinPoint.getArgs());
+            return cache.get(joinPoint);
         } catch (Throwable throwable) {
             log.warn("local cache exception", throwable);
             return joinPoint.proceed();

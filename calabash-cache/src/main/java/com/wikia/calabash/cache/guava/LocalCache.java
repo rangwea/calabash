@@ -10,31 +10,37 @@ import com.wikia.calabash.cache.CacheException;
 import com.wikia.calabash.cache.JsonKeyParser;
 import com.wikia.calabash.cache.KeyParser;
 import lombok.extern.slf4j.Slf4j;
+import org.aspectj.lang.ProceedingJoinPoint;
 
 import java.lang.reflect.Method;
 import java.util.Optional;
 
 @Slf4j
 public class LocalCache implements Cache {
-    private final LoadingCache<String, Optional<Object>> guavaCache;
-    private final ListeningExecutorService refreshListeningExecutor;
+    private LoadingCache<String, Optional<Object>> guavaCache;
+    private ListeningExecutorService refreshListeningExecutor;
 
-    private final LocalCached localCached;
-    private final KeyParser keyParser = new JsonKeyParser();
-    private final Method cachedMethod;
+    private LocalCached localCached;
+    private KeyParser keyParser = new JsonKeyParser();
+    private Method cachedMethod;
+    private ProceedingJoinPoint proceedingJoinPoint;
 
-    public LocalCache(ListeningExecutorService refreshListeningExecutor, LocalCached localCached, Method cacheMethod, Object methodProxy) {
+    public LocalCache(ListeningExecutorService refreshListeningExecutor, LocalCached localCached, Method cacheMethod) {
         this.refreshListeningExecutor = refreshListeningExecutor;
         this.localCached = localCached;
         this.cachedMethod = cacheMethod;
-        this.guavaCache = buildCache(localCached, cacheMethod, methodProxy);
+        this.guavaCache = buildCache(localCached);
     }
 
-    public Object get(Object[] args) {
+    public Object get(ProceedingJoinPoint proceedingJoinPoint) {
         try {
+            this.proceedingJoinPoint = proceedingJoinPoint;
+            Object[] args = proceedingJoinPoint.getArgs();
             String cacheKey = keyParser.generateKey(localCached.name(), localCached.key(), cachedMethod, args);
             Optional<Object> optional = guavaCache.get(cacheKey);
             return optional.orElse(null);
+        } catch (CacheLoader.InvalidCacheLoadException ice) {
+            return null;
         } catch (Throwable throwable) {
             throw new CacheException(localCached.name(), localCached.key(), cachedMethod, throwable);
         }
@@ -54,7 +60,7 @@ public class LocalCache implements Cache {
     }
 
     @SuppressWarnings("unchecked")
-    private LoadingCache<String, Optional<Object>> buildCache(LocalCached localCache, Method method, Object methodProxy) {
+    private LoadingCache<String, Optional<Object>> buildCache(LocalCached localCache) {
         CacheBuilder cacheBuilder = CacheBuilder.newBuilder();
 
         if (localCache.expireAfterWrite() != 0) {
@@ -70,8 +76,8 @@ public class LocalCache implements Cache {
             @Override
             public Object load(String key) {
                 try {
-                    Object[] args = keyParser.parseKey(key, method);
-                    Object proceed = method.invoke(methodProxy, args);
+                    Object[] args = keyParser.parseKey(key, cachedMethod);
+                    Object proceed = proceedingJoinPoint.proceed(args);
                     if (log.isDebugEnabled()) {
                         log.debug("load cache:key={}, value={}", key, proceed);
                     } else {
@@ -94,3 +100,5 @@ public class LocalCache implements Cache {
         });
     }
 }
+
+

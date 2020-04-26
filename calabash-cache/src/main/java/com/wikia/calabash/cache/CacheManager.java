@@ -51,7 +51,6 @@ public class CacheManager {
                 refreshListeningExecutor
                 , localCached
                 , method
-                , methodProxy
         ));
     }
 

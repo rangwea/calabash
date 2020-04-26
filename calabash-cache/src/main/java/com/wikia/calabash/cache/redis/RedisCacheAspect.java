@@ -1,5 +1,6 @@
 package com.wikia.calabash.cache.redis;
 
+import com.wikia.calabash.cache.AnnotationCacheConfig;
 import com.wikia.calabash.cache.CacheManager;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -18,10 +19,15 @@ import javax.annotation.Resource;
 public class RedisCacheAspect {
     @Resource
     private CacheManager cacheManager;
+    @Resource
+    private AnnotationCacheConfig config;
 
     @Around("@annotation(RedisCached)")
     public Object doAround(ProceedingJoinPoint joinPoint) throws Throwable {
         try {
+            if (!config.isEnable()) {
+                return joinPoint.proceed();
+            }
             MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
             RedisCached redisCached = methodSignature.getMethod().getAnnotation(RedisCached.class);
 
