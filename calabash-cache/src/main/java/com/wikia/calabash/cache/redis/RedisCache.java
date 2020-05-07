@@ -28,7 +28,7 @@ public class RedisCache implements Cache {
     public RedisCache(RedisTemplate<String, String> redisTemplate, Method cachedMethod, RedisCached redisCached) {
         this.redisTemplate = redisTemplate;
         this.cachedMethod = cachedMethod;
-        this.cacheReturnType = cachedMethod.getReturnType();
+        this.cacheReturnType = cachedMethod.getGenericReturnType();
         this.redisCached = redisCached;
     }
 
