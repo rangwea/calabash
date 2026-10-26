@@ -9,7 +9,7 @@
   "scripts": {
     "desktop:web:dev": "vite desktop-ui --host 127.0.0.1",
     "desktop:web:build": "vite build desktop-ui",
-    "desktop:backend:build": "uv run --group desktop python3 scripts/build_desktop_sidecar.py",
+    "desktop:backend:build": "uv run --group desktop python scripts/build_desktop_sidecar.py",
     "desktop:dev": "tauri dev",
     "desktop:build": "npm run desktop:backend:build && tauri build"
   },

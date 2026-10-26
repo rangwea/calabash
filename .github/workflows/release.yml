@@ -75,7 +75,10 @@ jobs:
           const host = execFileSync('rustc', ['-vV'], { encoding: 'utf8' }).match(/^host: (.+)$/m)?.[1];
           if (host !== process.env.EXPECTED_TARGET) throw new Error(`Native host ${host} != ${process.env.EXPECTED_TARGET}`);
           JS
-          uv run --frozen python3 -m unittest discover -s tests -p test_app_info.py
+          # Windows virtualenvs contain python.exe, not python3.exe. Resolve the
+          # interpreter through uv instead of falling back to a global alias.
+          uv run --frozen python -c "import sys, fastapi; print(sys.executable); assert sys.version_info >= (3, 13); assert sys.prefix != sys.base_prefix"
+          uv run --frozen python -m unittest discover -s tests -p test_app_info.py
       - name: Build bundled backend and installer
         # PyInstaller first, including its offline --check-runtime self-check.
         # --bundles overrides the macOS default for the Windows NSIS job.
