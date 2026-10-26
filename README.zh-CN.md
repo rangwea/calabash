@@ -5,7 +5,7 @@
 <h1 align="center">Calabash</h1>
 
 <p align="center">
-  <a href="package.json"><img src="https://img.shields.io/github/package-json/v/rangwea/calabash?style=flat-square&amp;label=version&amp;color=367767" alt="应用版本"></a>
+  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.0.0-367767?style=flat-square" alt="应用版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="许可证：Elastic License 2.0"></a>
   <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="桌面构建"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 及以上"></a>
