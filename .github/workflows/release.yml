@@ -1,0 +1,137 @@
+name: Build release app
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+            bundles: dmg
+            artifact: src-tauri/target/release/bundle/dmg/*.dmg
+          - name: macos-x64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            bundles: dmg
+            artifact: src-tauri/target/release/bundle/dmg/*.dmg
+          - name: windows-x64
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+            artifact: src-tauri/target/release/bundle/nsis/*-setup.exe
+    env:
+      UV_FROZEN: 'true'
+      CARGO_TERM_COLOR: always
+      EXPECTED_TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+      - name: Install locked dependencies
+        run: |
+          npm ci
+          uv sync --frozen --group desktop
+      - name: Check version and native build architecture
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const { version } = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME !== `v${version}`) {
+            throw new Error(`Tag must be v${version}, got ${process.env.GITHUB_REF_NAME}`);
+          }
+          const host = execFileSync('rustc', ['-vV'], { encoding: 'utf8' }).match(/^host: (.+)$/m)?.[1];
+          if (host !== process.env.EXPECTED_TARGET) throw new Error(`Native host ${host} != ${process.env.EXPECTED_TARGET}`);
+          JS
+          uv run --frozen python3 -m unittest discover -s tests -p test_app_info.py
+      - name: Build bundled backend and installer
+        # PyInstaller first, including its offline --check-runtime self-check.
+        # --bundles overrides the macOS default for the Windows NSIS job.
+        run: npm run desktop:build -- --bundles ${{ matrix.bundles }}
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calabash-${{ matrix.name }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Create draft release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Calabash-*
+          path: installers
+          merge-multiple: true
+      - name: Attach installers to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(installers/*.dmg installers/*-setup.exe)
+          if [ "${#files[@]}" -ne 3 ]; then
+            echo "Expected three installers, got ${#files[@]}" >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" != true ]; then
+              echo "Refusing to overwrite a published release" >&2
+              exit 1
+            fi
+          else
+            cat > /tmp/release-notes.md <<'NOTES'
+          Calabash desktop preview — macOS Apple Silicon / Intel and Windows x64.
+
+          Python and the built-in runtime libraries are included. Users do not need Python or uv.
+          Optional capability plugins (including FFmpeg) are distributed separately.
+
+          These preview builds have no developer distribution signature or Apple notarization.
+          Review and test the installers on their respective platforms before publishing.
+          NOTES
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
+              --title "Calabash $RELEASE_TAG" --notes-file /tmp/release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber

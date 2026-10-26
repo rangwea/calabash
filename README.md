@@ -66,6 +66,28 @@ src-tauri/target/release/bundle/dmg/Calabash_0.2.0_aarch64.dmg
 当前 macOS 构建会产出 `.app` 和 `.dmg`。DMG 内包含 `Calabash.app` 和
 `/Applications` 快捷方式；正式对外分发前还需要接入 Apple Developer 签名和公证流程。
 
+### GitHub Actions 构建与 Release
+
+工作流为 `.github/workflows/release.yml`，使用各平台原生 runner 构建
+macOS Apple Silicon、macOS Intel 的 DMG，以及 Windows x64 的 NSIS 安装包。
+构建包含 Python sidecar 和运行库自检；FFmpeg 等可选插件不随 App 打包。
+
+- 在 GitHub Actions 中手动运行 **Build release app**，只生成安装包 Artifacts，保留 14 天。
+- 推送 `v<版本号>` 标签后，全部平台构建成功才创建 **Release 草稿**并上传三个安装包。
+- 标签必须与 `package.json` 版本完全一致，并通过现有清单版本一致性检查。
+- 同一标签重跑可更新草稿附件，不覆盖已经正式发布的 Release。
+
+例如当前版本为 `0.2.0`：
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+工作流不需要额外的模型密钥或发布令牌，使用 GitHub 自动提供的 `GITHUB_TOKEN`；
+只有创建草稿的 job 获得 `contents: write` 权限。签名与公证尚未接入，
+下载各平台安装包完成验收后，再手动发布草稿。首次 CI 构建结果仍需在 GitHub 上确认。
+
 ### 使用入口
 
 应用仅监听本机 `127.0.0.1`，端口由启动时自动选择，以启动日志为准：
