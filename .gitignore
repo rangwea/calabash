@@ -1,0 +1,32 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+.env.*
+.env.local
+.chainlit/
+logs/
+.vscode/
+.files/
+
+.playwright-mcp/
+
+.DS_Store
+files/*.zip
+
+/tools/
+.nicegui/
+
+# Desktop frontend / Tauri
+node_modules/
+desktop-ui/dist/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/

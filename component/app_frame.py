@@ -1,0 +1,50 @@
+"""Calabash 桌面窗口内容 frame。"""
+
+from collections.abc import Callable
+
+from nicegui import ui
+
+from core.app_info import APP_NAME
+from core.i18n import t
+
+
+def render_app_frame(
+    *,
+    title: str = APP_NAME,
+    subtitle: str | None = None,
+    action: Callable[[], None] | None = None,
+    action_icon: str = "o_settings",
+    action_label: str = "Diagnostics",
+) -> None:
+    """渲染跨平台内容 frame；窗口控制使用系统原生标题栏。"""
+    from component.tool_activity import install_activity_monitor
+    install_activity_monitor()
+    with ui.element("div").props('data-tauri-drag-region="deep"').classes(
+        "app-window-frame w-full h-7 flex-shrink-0 flex items-center justify-end "
+        "bg-white border-b border-gray-100 px-3 sm:px-4"
+    ):
+        if action:
+            with ui.element("div").props('data-tauri-drag-region="false"'):
+                ui.button(icon=action_icon, on_click=action).props(
+                    "flat dense round color=grey-7 data-tool-leave"
+                ).tooltip(t("设置") if action_label == "Diagnostics" else t(action_label)).classes("no-drag")
+
+    ui.add_css(
+        """
+        .app-window-frame {
+            -webkit-app-region: drag;
+            user-select: none;
+        }
+        .app-window-frame .q-btn {
+            width: 26px; height: 26px; min-width: 26px; min-height: 26px;
+            padding: 0; border-radius: 6px; color: #737780;
+        }
+        .app-window-frame .q-btn .q-icon { font-size: 17px; }
+        .app-window-frame .q-btn:hover { background: #f1f2f3; }
+        .app-window-frame .no-drag,
+        .app-window-frame [data-tauri-drag-region=\"false\"] {
+            -webkit-app-region: no-drag;
+        }
+        """,
+        shared=True,
+    )

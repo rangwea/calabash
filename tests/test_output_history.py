@@ -1,0 +1,120 @@
+import tempfile
+import unittest
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
+from pathlib import Path
+from unittest.mock import patch
+
+from service.chat import ai_chat
+from service.files import tool_inputs
+from service.files import tool_outputs
+
+
+class OutputHistoryTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        for module in (ai_chat, tool_outputs):
+            patcher = patch.object(module, "app_dir", return_value=self.root)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.owner = ("tool:demo/history", None)
+
+    def test_history_survives_new_instance_and_worker_thread(self):
+        original = tool_outputs.ToolOutputs(owner=self.owner)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            file_id = executor.submit(original.write, "report.txt", lambda path: path.write_text("one")).result()
+        restored = tool_outputs.ToolOutputs(owner=self.owner)
+        self.assertNotEqual(original.id, restored.id)
+        self.assertEqual([file_id], [row["id"] for row in restored.files()])
+        self.assertEqual("one", restored.path(file_id).read_text())
+        second_id = restored.write("report.txt", lambda path: path.write_text("two"))
+        self.assertEqual(2, len(restored.files()))
+        self.assertNotEqual(restored.path(file_id), restored.path(second_id))
+        self.assertEqual("one", restored.path(file_id).read_text())
+
+    def test_tool_and_chat_scopes_are_isolated(self):
+        ai_chat.save_chat("one", [])
+        ai_chat.save_chat("two", [])
+        writer = tool_outputs.ToolOutputs(owner=(self.owner[0], "one"))
+        file_id = writer.write("report.txt", lambda path: path.write_text("one"))
+        for owner in [self.owner, (self.owner[0], "two"), ("tool:demo/other", "one")]:
+            other = tool_outputs.ToolOutputs(owner=owner)
+            self.assertEqual([], other.files())
+            with self.assertRaises(KeyError):
+                other.path(file_id)
+
+    def test_new_batch_retains_previous_results_and_inflight_owner(self):
+        writer = tool_outputs.ToolOutputs(owner=self.owner)
+        first_run = writer.id
+
+        def export(path):
+            writer.start_run()
+            path.write_text("old run finishes")
+
+        old_id = writer.write("report.txt", export)
+        new_id = writer.write("report.txt", lambda path: path.write_text("new run"))
+        records = {row["id"]: row for row in writer.files()}
+        self.assertEqual(first_run, records[old_id]["run_id"])
+        self.assertEqual(writer.id, records[new_id]["run_id"])
+        self.assertNotEqual(first_run, writer.id)
+        self.assertEqual("old run finishes", writer.path(old_id).read_text())
+
+    def test_missing_changed_and_symlink_files_do_not_break_siblings(self):
+        writer = tool_outputs.ToolOutputs(owner=self.owner)
+        ids = [writer.write(f"report-{index}.txt", lambda path: path.write_text("one")) for index in range(4)]
+        writer.path(ids[0]).unlink()
+        writer.path(ids[1]).write_text("changed")
+        link = writer.path(ids[2])
+        link.unlink()
+        link.symlink_to(self.root / "outside")
+        restored = tool_outputs.ToolOutputs(owner=self.owner)
+        rows = {row["id"]: row for row in restored.files()}
+        self.assertEqual(4, len(rows))
+        self.assertTrue(rows[ids[3]]["available"])
+        for file_id in ids[:3]:
+            self.assertFalse(rows[file_id]["available"])
+            with self.assertRaises((OSError, ValueError)):
+                restored.path(file_id)
+
+    def test_delete_chat_removes_records_not_files_and_blocks_late_writes(self):
+        ai_chat.save_chat("one", [])
+        writer = tool_outputs.ToolOutputs(owner=(self.owner[0], "one"))
+        file_id = writer.write("report.txt", lambda path: path.write_text("one"))
+        path = writer.path(file_id)
+        ai_chat.delete_chat("one")
+        self.assertEqual([], writer.files())
+        self.assertTrue(path.is_file())
+        with self.assertRaises(KeyError):
+            writer.path(file_id)
+        with self.assertRaises(ValueError):
+            writer.write("late.txt", lambda path: path.write_text("late"))
+        with closing(ai_chat.connect()) as db:
+            self.assertEqual(0, db.execute("SELECT COUNT(*) FROM output_runs WHERE chat_id='one'").fetchone()[0])
+            self.assertEqual(0, db.execute("SELECT COUNT(*) FROM output_files").fetchone()[0])
+
+    def test_chat_deleted_during_write_does_not_register_result(self):
+        ai_chat.save_chat("one", [])
+        writer = tool_outputs.ToolOutputs(owner=(self.owner[0], "one"))
+
+        def export(path):
+            path.write_text("completed after deletion")
+            ai_chat.delete_chat("one")
+
+        with self.assertRaises(ValueError):
+            writer.write("late.txt", export)
+        self.assertEqual([], writer.files())
+        self.assertFalse(list(writer.directory.glob("*.txt")))
+
+    def test_empty_attachment_preview_keeps_chat_owner(self):
+        ai_chat.save_chat("one", [])
+        token = tool_inputs.create("one", "preview-key", [], tool_key=self.owner[0])
+        self.assertTrue(token)
+        self.assertEqual([], tool_inputs.resolve(token, "preview-key"))
+        self.assertEqual((self.owner[0], "one"), tool_inputs.owner(token, "preview-key"))
+        with self.assertRaises(ValueError):
+            tool_inputs.owner(token, "wrong-preview")
+        ai_chat.delete_chat("one")
+        with self.assertRaises(ValueError):
+            tool_inputs.owner(token, "preview-key")

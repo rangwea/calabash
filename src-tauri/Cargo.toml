@@ -1,0 +1,25 @@
+[package]
+name = "calabash-desktop"
+version = "0.2.0"
+description = "Calabash desktop shell"
+authors = ["Calabash"]
+edition = "2021"
+autobins = false
+
+[[bin]]
+name = "Calabash"
+path = "src/main.rs"
+
+[lib]
+name = "calabash_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+libc = "0.2"
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+uuid = { version = "1", features = ["v4"] }

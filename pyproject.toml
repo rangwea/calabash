@@ -1,0 +1,29 @@
+[project]
+name = "calabash"
+version = "0.2.0"
+description = "Calabash local AI tool desktop"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "loguru>=0.7.0",
+    "nicegui>=3.11.0",
+    "httpx>=0.28.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "sqlmodel>=0.0.14",
+    "cryptography>=41.0.0",
+    "python-multipart>=0.0.20",
+    "watchfiles>=0.24.0",
+    "openpyxl>=3.1.5",
+    "pandas>=3.0.6",
+    "pypdf>=6.21.1",
+    "python-docx>=1.2.0",
+    "Pillow>=11.0.0",
+    "reportlab>=4.0.0",
+    "pypdfium2>=4.0.0",
+]
+
+[dependency-groups]
+desktop = [
+    "pyinstaller>=6.10.0",
+]

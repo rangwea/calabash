@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-tool-output"
+description = "Enables the save_tool_output command without any pre-configured scope."
+commands.allow = ["save_tool_output"]
+
+[[permission]]
+identifier = "deny-save-tool-output"
+description = "Denies the save_tool_output command without any pre-configured scope."
+commands.deny = ["save_tool_output"]
