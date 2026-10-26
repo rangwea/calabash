@@ -1,4 +1,16 @@
-# Calabash
+<p align="center">
+  <img src="src-tauri/icons/icon.png" alt="Calabash logo" width="88" height="88">
+</p>
+
+<h1 align="center">Calabash</h1>
+
+<p align="center">
+  <a href="package.json"><img src="https://img.shields.io/github/package-json/v/rangwea/calabash?style=flat-square&amp;label=version&amp;color=367767" alt="App version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="License: Elastic License 2.0"></a>
+  <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="Desktop builds"></a>
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 or newer"></a>
+  <a href="src-tauri/Cargo.toml"><img src="https://img.shields.io/badge/Tauri-2-24a7b8?style=flat-square&amp;logo=tauri&amp;logoColor=white" alt="Tauri 2"></a>
+</p>
 
 **Everyone should be able to create their own app.**
 
@@ -34,11 +46,11 @@ What a particular tool can do depends on its requirements, generated code, selec
 
 ## Getting started
 
-Calabash is in preview. Check [Releases](https://github.com/rangwea/calabash/releases) for publicly available versions. If no installer is available, run it from source.
+Calabash is in preview. Check [Releases](https://github.com/rangwea/calabash/releases) for publicly available versions. For running from source, see the [contributor guide](CONTRIBUTING.md).
 
 Desktop packages include the Python backend and built-in runtime libraries. End users do not need Python or uv. Configure your model API and key in Settings, select a model, and start a conversation. No Calabash account is required.
 
-CI builds are configured for macOS Apple Silicon, macOS Intel and Windows x64. Actual platform readiness depends on installer testing. Developer distribution signing and Apple notarization are not configured yet.
+Installer availability for macOS Apple Silicon, macOS Intel and Windows x64 depends on the published release. Current preview packages do not have developer distribution signing or Apple notarization.
 
 ### Files and data
 
@@ -48,71 +60,11 @@ Tool source lives in `~/.calabash/tools`. Indexes, conversations and execution r
 
 Tool ZIPs contain executable source. Import only trusted tools, and check for keys or business data before sharing. ZIP validation is not a security sandbox.
 
-## Local development
+## Feedback and ideas
 
-Requires Python 3.13+, [uv](https://docs.astral.sh/uv/), Node.js 22 and Rust/Cargo.
+Share a tool idea or report a problem through [Issues](https://github.com/rangwea/calabash/issues). Use synthetic examples and leave out model keys and sensitive files.
 
-```bash
-git clone https://github.com/rangwea/calabash.git
-cd calabash
-uv sync --frozen
-npm ci
-npm run desktop:dev
-```
-
-To run just the Python interface:
-
-```bash
-uv run python3 main.py
-```
-
-The backend chooses an available port on `127.0.0.1`. Read the startup log for its URL.
-
-### Building and releasing
-
-```bash
-npm run desktop:build
-```
-
-PyInstaller packages the backend and checks bundled runtime libraries, then Tauri creates the installer. Default macOS outputs are under `src-tauri/target/release/bundle/`.
-
-The [GitHub Release workflow](.github/workflows/release.yml) supports:
-
-- Manually running **Build release app** to produce installer artifacts for three platforms, retained for 14 days.
-- Pushing a `v<version>` tag matching `package.json` to create a draft release with installers after all builds succeed.
-- Rerunning a tag to update draft assets only. Published releases are not overwritten. Test each platform’s installer before publishing the draft manually.
-
-It uses the automatically provided `GITHUB_TOKEN`, without an additional publishing token. Optional capability plugins are distributed separately from the main app.
-
-### Checks
-
-```bash
-uvx --offline ruff check
-.venv/bin/python3 -m unittest discover -s tests
-node --test tests/tool_activity.test.mjs
-cargo test --manifest-path src-tauri/Cargo.toml
-```
-
-### Repository structure
-
-| Path | Purpose |
-| --- | --- |
-| `src-tauri/`, `desktop-ui/` | Native window, desktop bridge and startup screen |
-| `backend/`, `main.py` | Python backend and development entry point |
-| `ui/`, `component/` | Pages and reusable UI components |
-| `service/`, `api/` | Business services and internal local APIs |
-| `core/`, `models/` | Runtime infrastructure, localization and data models |
-| `agent/skills/calabash/` | Bundled agent skill and tool conventions |
-| `website/` | Independent bilingual website, guide and demo assets |
-| `scripts/`, `tests/` | Build scripts and regression tests |
-
-Built with Tauri v2, Python, NiceGUI, FastAPI and SQLite. Dependencies are defined in `pyproject.toml`, `uv.lock` and the npm lockfile. The app does not read `.env`. See [AGENTS.md](AGENTS.md) for development conventions and the [Roadmap](ROADMAP.md) for planned work.
-
-## Build with us
-
-Share a tool idea or report a problem through [Issues](https://github.com/rangwea/calabash/issues), or contribute a Pull Request. Use synthetic examples when reporting problems, and leave out model keys and sensitive files.
-
-We hope that one day, when something feels harder than it should, your next thought is not only “Is there an app for that?” but also: **“I could make my own.”**
+Want to contribute? See the [contributor guide](CONTRIBUTING.md).
 
 ## License
 
@@ -124,26 +76,30 @@ ELv2 does not impose a blanket ban on selling redistributed desktop copies. Thir
 
 ## Why Calabash exists
 
-General-purpose AI agents can process files, operate browsers, write code and carry out increasingly complex tasks. Explain what you need, and they can often deliver a useful result.
+I want everyone to be able to create their own app.
+
+Not everyone wants to become a programmer. But everyone has their own way of working, a problem to solve, or a moment of thinking, “I wish there were a tool for this.” For a long time, the effort of building software kept many of those ideas from becoming real. I found the closest available product and learned to work around it.
+
+General-purpose AI agents have opened another possibility. They can process files, operate browsers and write code. You can describe what you need and get help doing it, without first learning a programming language.
 
 Then next week, the same task comes around again.
 
-You bring a new file, explain the rules again, repeat the details you clarified last time, and wait for the agent to understand, plan and execute. More tokens are spent. The result may also differ: columns move, a calculation changes, or a step you already settled needs correcting again.
+You bring new input, explain the rules again, repeat the details you clarified last time, and wait for the agent to understand, plan and execute. More tokens are spent, and the result may differ. A problem you already solved often needs solving all over again.
 
-That flexibility is valuable for a one-off task. But when a method works and the job will repeat, we want to keep it.
+If you can explain the task, and AI has found a way to do it, why not keep that method as an app of your own?
 
-**What if a problem solved in one conversation could become an app you simply open next time?**
+**The first time, build it through conversation. Next time, just open it.**
 
-That is the idea behind Calabash.
+That is where Calabash starts. Describe an idea in chat, let AI create a tool, and try it in the preview beside the conversation. Keep refining the fields, buttons and results until they fit. Then keep it on your computer as a tool you can use again.
 
-The first time, describe your needs in chat and let AI create a tool. Try it in the preview beside the conversation, refine the rules, interface and results, then save it on your computer.
+Next time, change the input and run it. Logic captured in code can be reused without generating it again. Operations that do not call a model consume no model tokens. When your needs change, come back and edit it. Tools still need testing, and steps that depend on models or external services can still vary. But your experience and the rules you have checked now live in an implementation you can inspect, keep and improve.
 
-Next time, open the tool, change the input and run it. Processing logic already captured in code can be reused without asking a model to reason through and generate it again. Operations that do not call a model consume no model tokens. When your needs change, return to the conversation and edit the tool.
+It might solve one small problem for one person. Or it might grow into something you share with colleagues and friends, who build on your idea in turn. Software does not have to serve everyone from day one. A need should not require a large market before it deserves a tool.
 
-Saved code makes the rules inspectable and reusable. It still needs testing, and steps that depend on external models or services can still vary. But you have an implementation you can keep improving, rather than only the result of a previous chat.
+I want Calabash to help more people move from finding an app that works to making an app that fits. Fewer repeated prompts and fewer tokens spent are practical benefits. Giving more people a way to turn their ideas into software is the larger ambition.
 
-A tool does not have to serve everyone. It can fit your way of working, solve a problem that matters to you, and grow as your ideas change.
+**I hope for an era of apps made by everyone—where anyone can be a creator of software, as well as a user.**
 
-**We hope for an era of apps made by everyone: creating software becomes a way for anyone to express an idea and solve a problem, as well as a profession.**
+Starting with an idea, a conversation and a tool of your own.
 
-Calabash starts with personal desktop tools. It is a step in that direction.
+Calabash means “gourd,” or *hulu* in Chinese. In Chinese tradition, its many seeds and trailing vines carry wishes for flourishing generations and abundant blessings. In mythology, a gourd can also be a magical vessel, holding a world within it and possessing extraordinary powers. I chose the name with those images in mind: a small vessel with room for a vast world, where every idea can grow into another tool. I hope Calabash becomes a personal treasure for anyone who creates with it—holding limitless imagination and gaining new abilities as their ideas take shape.

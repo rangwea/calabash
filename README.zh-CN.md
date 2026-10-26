@@ -1,4 +1,16 @@
-# Calabash
+<p align="center">
+  <img src="src-tauri/icons/icon.png" alt="Calabash 标志" width="88" height="88">
+</p>
+
+<h1 align="center">Calabash</h1>
+
+<p align="center">
+  <a href="package.json"><img src="https://img.shields.io/github/package-json/v/rangwea/calabash?style=flat-square&amp;label=version&amp;color=367767" alt="应用版本"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="许可证：Elastic License 2.0"></a>
+  <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="桌面构建"></a>
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 及以上"></a>
+  <a href="src-tauri/Cargo.toml"><img src="https://img.shields.io/badge/Tauri-2-24a7b8?style=flat-square&amp;logo=tauri&amp;logoColor=white" alt="Tauri 2"></a>
+</p>
 
 **让每个人，都能创造自己的 App。**
 
@@ -34,11 +46,11 @@ Calabash turns your ideas into interactive tools with AI—built for you, runnin
 
 ## 开始使用
 
-Calabash 目前处于预览阶段。可在 [Releases](https://github.com/rangwea/calabash/releases) 查看已公开的版本；若暂无安装包，可从源码运行。
+Calabash 目前处于预览阶段。可在 [Releases](https://github.com/rangwea/calabash/releases) 查看已公开的版本；源码运行请参考[开发指南](CONTRIBUTING.zh-CN.md)。
 
 桌面安装包包含 Python 后端和内置运行库，最终用户不需要安装 Python 或 uv。首次使用需在设置中配置模型 API 和密钥，再选择模型开始对话；不需要 Calabash 账号。
 
-目前配置了 macOS Apple Silicon、Intel 与 Windows x64 的 CI 构建，各平台实际可用性以安装包验收为准。开发者分发签名和 Apple 公证尚未接入。
+macOS Apple Silicon、Intel 与 Windows x64 安装包的可用情况以发布页面为准。目前的预览安装包尚未接入开发者分发签名与 Apple 公证。
 
 ### 文件和数据
 
@@ -48,71 +60,11 @@ Calabash 目前处于预览阶段。可在 [Releases](https://github.com/rangwea
 
 工具 ZIP 包含可执行源码。只导入可信来源，分享前检查密钥和业务数据；ZIP 导入检查不等于安全沙箱。
 
-## 本地开发
+## 反馈与交流
 
-需要 Python 3.13+、[uv](https://docs.astral.sh/uv/)、Node.js 22 和 Rust/Cargo。
+欢迎通过 [Issues](https://github.com/rangwea/calabash/issues) 分享工具想法或反馈使用问题。请使用合成样例，不附带模型密钥或敏感文件。
 
-```bash
-git clone https://github.com/rangwea/calabash.git
-cd calabash
-uv sync --frozen
-npm ci
-npm run desktop:dev
-```
-
-仅启动 Python 界面：
-
-```bash
-uv run python3 main.py
-```
-
-启动时自动选择 `127.0.0.1` 上的可用端口，以日志为准。
-
-### 构建与发布
-
-```bash
-npm run desktop:build
-```
-
-构建先用 PyInstaller 打包后端并检查内置运行库，再由 Tauri 生成安装包。默认 macOS 产物位于 `src-tauri/target/release/bundle/`。
-
-[GitHub Release 工作流](.github/workflows/release.yml)支持：
-
-- 手动运行 **Build release app**，生成三个平台的安装包 Artifacts，保留 14 天。
-- 推送与 `package.json` 版本一致的 `v<版本号>` 标签，全部构建成功后创建 Release 草稿并上传安装包。
-- 同一标签重跑只更新草稿，不覆盖已发布的 Release；验收各平台安装包后再手动发布。
-
-使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外发布令牌。可选能力插件独立分发，不打进主 App。
-
-### 检查
-
-```bash
-uvx --offline ruff check
-.venv/bin/python3 -m unittest discover -s tests
-node --test tests/tool_activity.test.mjs
-cargo test --manifest-path src-tauri/Cargo.toml
-```
-
-### 项目结构
-
-| 路径 | 职责 |
-| --- | --- |
-| `src-tauri/`、`desktop-ui/` | 原生窗口、桌面桥接与启动页 |
-| `backend/`、`main.py` | Python 后端与开发入口 |
-| `ui/`、`component/` | 页面与可复用界面组件 |
-| `service/`、`api/` | 业务服务与本地内部 API |
-| `core/`、`models/` | 运行基础设施、国际化与数据模型 |
-| `agent/skills/calabash/` | 随 App 内置的 Agent Skill 与工具规范 |
-| `website/` | 独立中英文产品网站、指南与演示素材 |
-| `scripts/`、`tests/` | 构建脚本与回归测试 |
-
-技术栈：Tauri v2、Python、NiceGUI、FastAPI、SQLite。依赖以 `pyproject.toml`、`uv.lock` 和 npm 锁文件为准，不读取 `.env`。更多开发约定见 [AGENTS.md](AGENTS.md)；后续方向见 [Roadmap](ROADMAP.md)。
-
-## 一起创造
-
-欢迎通过 [Issues](https://github.com/rangwea/calabash/issues) 分享你想创造的工具、使用中遇到的问题，或通过 Pull Request 改进 Calabash。报告问题时请使用合成样例，不附带模型密钥或敏感文件。
-
-希望有一天，遇到一件不顺手的事，你想到的不只是“有没有这样的 App”，还有：**“我可以做一个自己的。”**
+想参与开发？请阅读[开发与贡献指南](CONTRIBUTING.zh-CN.md)。
 
 ## 许可证
 
@@ -124,26 +76,30 @@ ELv2 并不全面禁止售卖再分发的桌面版本。第三方组件仍遵循
 
 ## 为什么会有 Calabash
 
-通用 AI Agent 已经能帮我们处理文件、操作浏览器、编写代码，完成越来越复杂的工作。很多时候，只要把需求说清楚，它就能交出一份不错的结果。
+我希望，每个人都能写出属于自己的 App。
+
+不是每个人都想成为程序员，但每个人都有自己的工作习惯、想解决的问题，和一句“要是有个这样的工具就好了”。过去，做一款软件的门槛，让很多这样的想法停在了脑海里。我只能寻找最接近的产品，再慢慢适应它。
+
+通用 AI Agent 让这件事有了新的可能。它能处理文件、操作浏览器、编写代码。你不必先学会一门编程语言，就可以描述需求，让它帮你完成工作。
 
 但到了下周，同样的事情又来了。
 
-你换了一份文件，重新解释规则，补充上次强调过的细节，再等它理解、规划、执行。又消耗了一轮 Token，也可能得到和上次不太一样的结果：字段顺序变了，统计口径偏了，某个已经确认过的步骤又需要重新纠正。
+你换了一份输入，重新解释规则，补充上次强调过的细节，再等它理解、规划、执行。又消耗了一轮 Token，结果也可能和上次不同。一个已经解决过的问题，往往还得再解决一遍。
 
-对于临时任务，这样的灵活性很有价值。但对已经做对、还会反复做的事情，我们希望能把验证过的方法留下来。
+我想，既然你已经能把需求讲清楚，AI 也已经找到了处理方法，为什么不把它留下来，变成你自己的 App？
 
-**如果一次对话解决的问题，能变成一个下次直接打开的 App 呢？**
+**第一次，用对话把想法做出来；下一次，直接打开它。**
 
-这就是 Calabash 想做的事。
+这就是 Calabash 的出发点。你在聊天里描述想法，让 AI 创建工具，在旁边的预览中试用。字段怎么排、按钮做什么、结果如何呈现，都可以继续对话调整。满意之后，把它留在自己的电脑上，成为一件可以反复使用的工具。
 
-第一次，用对话描述需求，让 AI 创建工具。在旁边的预览中试用，把规则、界面和结果调整到满意，再将它保存在自己的电脑上。
+下一次，换一份输入，点击运行。已经写进代码的流程可以直接复用，无需每次重新生成；不调用模型的操作，也不消耗模型 Token。需求变了，再回来修改。工具仍然需要测试，依赖模型或外部服务的步骤也仍可能变化，但你的经验和确认过的规则，有了一份可以检查、保留和持续改进的实现。
 
-下一次，打开工具，换一份输入，点击运行。已经写进代码的处理流程可以直接复用，不必每次都让模型重新推理和生成；不调用模型的操作，也无需消耗模型 Token。需求变了，再回到对话里修改这件工具。
+它可以只解决一个很小的问题，只适合你一个人。也可以慢慢丰富起来，分享给同事、朋友，让别人在你的想法上继续创造。软件不必一开始就面向所有人，值得被做出来的需求，也不必先有一个足够大的市场。
 
-保存下来的代码让处理规则可以被检查和复用。它仍然需要测试，依赖外部模型或服务的步骤也仍可能变化，但你有了一份可以持续改进的实现，而不只是上一次聊天里的结果。
+我希望，Calabash 让更多人从“找一个能用的 App”，走向“做一个适合自己的 App”。减少重复提问和 Token 消耗，是这件事带来的实际价值；让普通人也能把自己的想法变成软件，是我更长远的愿望。
 
-工具不必为所有人而设计。它可以只服务你的工作方式，只解决你在意的问题，也可以随着你的想法慢慢长大。
+**我期待一个全民 App 的时代：人人都可以是软件的使用者，也可以是创造者。**
 
-**我们期待一个全民 App 的时代：创造软件不再只是少数人的职业，也可以是每个人表达想法、解决问题的方式。**
+从一个念头、一段对话、一件自己的工具开始。
 
-Calabash 从个人桌面工具开始，朝这个方向迈一步。
+Calabash 的中文意思是“葫芦”。在中国传统文化中，葫芦多籽、藤蔓绵延，寄托着子孙兴旺、多子多福的祝愿；在神话故事里，它又常是藏有乾坤、各具神通的法宝。我喜欢这些意象，也把自己的期待放进这个名字里：小小的葫芦，可以装下大千世界；每一个想法，都可以生长出新的工具。我希望 Calabash 像一件属于每个人的法宝，容纳无限想象，随着你的创造，拥有越来越丰富的本领。
