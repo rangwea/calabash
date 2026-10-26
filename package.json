@@ -3,6 +3,8 @@
   "productName": "Calabash",
   "version": "1.0.0",
   "private": true,
+  "license": "Elastic-2.0",
+  "keywords": ["ai-agent", "desktop-app", "app-builder", "personal-tools", "productivity", "local-first", "tauri", "python", "nicegui", "source-available"],
   "type": "module",
   "scripts": {
     "desktop:web:dev": "vite desktop-ui --host 127.0.0.1",

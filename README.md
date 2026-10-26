@@ -1,56 +1,56 @@
 # Calabash
 
-**让每个人，都能创造自己的 App。**
+**Everyone should be able to create their own app.**
 
-中文 | [English](README.en.md)
+English | [中文](README.zh-CN.md)
 
 Calabash turns your ideas into interactive tools with AI—built for you, running on your desktop.
 
-## 从一句话，到一件可以继续用的工具
+## From a request to a tool you can keep using
 
-![在聊天中描述需求，在右侧预览并操作生成的工具](website/assets/demos/ledger-zh.gif)
+![Describe a request in chat, then preview and operate the resulting tool](website/assets/demos/ledger-en.gif)
 
-*聊天生成部分为流程示意，等待已加速；预览中的工具操作为真实录制，使用合成数据。*
+*The chat generation sequence is an illustration with accelerated waiting. Tool interactions are real recordings using synthetic data.*
 
-1. **说出来。** 描述需求、输入和希望得到的结果。
-2. **试一试。** 在工具界面中填写参数、查看结果，继续对话调整。
-3. **留下来。** 工具保存在本机，可以反复使用，也可以通过 ZIP 导出分享。
+1. **Describe it.** Explain your inputs, requirements and intended result.
+2. **Try it.** Adjust parameters, inspect results and keep chatting to refine the tool.
+3. **Keep it.** Save it locally, use it again, or share it as a tool ZIP.
 
-你可以从一个很小的想法开始。它不需要是宏大的产品，也不需要和别人一样。
+Start with a small idea. It does not need to become a large product, or look like anyone else’s.
 
-更多场景见[产品介绍](website/index.html)与[使用指南](website/guide.html)。演示中的工具是可创建的示例，不是 App 的固定功能边界。
+Explore the [product website](website/index.html?lang=en) and [guide](website/guide.html?lang=en). The demonstrations show examples you can create, rather than a fixed boundary for the app.
 
-## 现在可以做什么
+## What it offers today
 
-- **对话创建和修改工具**：选择自己配置的外部模型，在聊天中迭代本地工具。
-- **有界面的操作**：表单、表格、图表与交互预览，让工具可以被直接使用。
-- **本地文件处理**：选择文件，执行单项或批量任务，查看进度与结果历史，交付新的结果文件。
-- **可控的执行过程**：防重复提交、安全取消；出错后可确认发送必要摘要给 Agent 修复，再手动重试。
-- **本地保存与分享**：按项目整理工具，支持本地 ZIP 导入、导出。
-- **扩展运行能力**：常用文档、表格和图片库随 App 打包；FFmpeg 等可选能力通过本地签名插件 ZIP 导入。
-- **中英文界面**：按习惯使用中文或英文。
+- **Create and edit tools in chat:** configure an external model and iterate on local tools through conversation.
+- **Interfaces you can use:** forms, tables, charts and interactive previews.
+- **Local file workflows:** choose files, run individual or batch jobs, follow progress and result history, and deliver new output files.
+- **Controlled execution:** duplicate-submission prevention and safe cancellation. With your confirmation, send a necessary error summary to the agent for repair, then retry manually.
+- **Local storage and sharing:** organize tools by project and import or export local tool ZIPs.
+- **Extensible runtime capabilities:** common document, spreadsheet and image libraries are bundled. Optional capabilities such as FFmpeg are imported as local signed plugin ZIPs.
+- **Chinese and English UI.**
 
-具体工具能做什么，取决于需求、生成的代码、所选模型和可用运行能力；生成后仍应检查行为与结果。
+What a particular tool can do depends on its requirements, generated code, selected model and available runtime capabilities. Check generated behavior and results before relying on them.
 
-## 开始使用
+## Getting started
 
-Calabash 目前处于预览阶段。可在 [Releases](https://github.com/rangwea/calabash/releases) 查看已公开的版本；若暂无安装包，可从源码运行。
+Calabash is in preview. Check [Releases](https://github.com/rangwea/calabash/releases) for publicly available versions. If no installer is available, run it from source.
 
-桌面安装包包含 Python 后端和内置运行库，最终用户不需要安装 Python 或 uv。首次使用需在设置中配置模型 API 和密钥，再选择模型开始对话；不需要 Calabash 账号。
+Desktop packages include the Python backend and built-in runtime libraries. End users do not need Python or uv. Configure your model API and key in Settings, select a model, and start a conversation. No Calabash account is required.
 
-目前配置了 macOS Apple Silicon、Intel 与 Windows x64 的 CI 构建，各平台实际可用性以安装包验收为准。开发者分发签名和 Apple 公证尚未接入。
+CI builds are configured for macOS Apple Silicon, macOS Intel and Windows x64. Actual platform readiness depends on installer testing. Developer distribution signing and Apple notarization are not configured yet.
 
-### 文件和数据
+### Files and data
 
-工具源码位于 `~/.calabash/tools`，本地索引、对话及运行记录使用 SQLite 保存。回环 HTTP 仅用于桌面壳与本地后端通信，不提供远程管理服务。
+Tool source lives in `~/.calabash/tools`. Indexes, conversations and execution records are stored locally using SQLite. Loopback HTTP is internal communication between the desktop shell and local backend, not a remote administration service.
 
-**本地运行不代表模型离线运行。** 对话消息和 Agent 读取的相关文件内容可能发送给你选择的外部模型服务商。处理敏感文件前，请确认数据边界。
+**Local execution does not mean offline AI.** Conversation messages and relevant file contents read by the agent may be sent to your selected external model provider. Review these boundaries before working with sensitive files.
 
-工具 ZIP 包含可执行源码。只导入可信来源，分享前检查密钥和业务数据；ZIP 导入检查不等于安全沙箱。
+Tool ZIPs contain executable source. Import only trusted tools, and check for keys or business data before sharing. ZIP validation is not a security sandbox.
 
-## 本地开发
+## Local development
 
-需要 Python 3.13+、[uv](https://docs.astral.sh/uv/)、Node.js 22 和 Rust/Cargo。
+Requires Python 3.13+, [uv](https://docs.astral.sh/uv/), Node.js 22 and Rust/Cargo.
 
 ```bash
 git clone https://github.com/rangwea/calabash.git
@@ -60,31 +60,31 @@ npm ci
 npm run desktop:dev
 ```
 
-仅启动 Python 界面：
+To run just the Python interface:
 
 ```bash
 uv run python3 main.py
 ```
 
-启动时自动选择 `127.0.0.1` 上的可用端口，以日志为准。
+The backend chooses an available port on `127.0.0.1`. Read the startup log for its URL.
 
-### 构建与发布
+### Building and releasing
 
 ```bash
 npm run desktop:build
 ```
 
-构建先用 PyInstaller 打包后端并检查内置运行库，再由 Tauri 生成安装包。默认 macOS 产物位于 `src-tauri/target/release/bundle/`。
+PyInstaller packages the backend and checks bundled runtime libraries, then Tauri creates the installer. Default macOS outputs are under `src-tauri/target/release/bundle/`.
 
-[GitHub Release 工作流](.github/workflows/release.yml)支持：
+The [GitHub Release workflow](.github/workflows/release.yml) supports:
 
-- 手动运行 **Build release app**，生成三个平台的安装包 Artifacts，保留 14 天。
-- 推送与 `package.json` 版本一致的 `v<版本号>` 标签，全部构建成功后创建 Release 草稿并上传安装包。
-- 同一标签重跑只更新草稿，不覆盖已发布的 Release；验收各平台安装包后再手动发布。
+- Manually running **Build release app** to produce installer artifacts for three platforms, retained for 14 days.
+- Pushing a `v<version>` tag matching `package.json` to create a draft release with installers after all builds succeed.
+- Rerunning a tag to update draft assets only. Published releases are not overwritten. Test each platform’s installer before publishing the draft manually.
 
-使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外发布令牌。可选能力插件独立分发，不打进主 App。
+It uses the automatically provided `GITHUB_TOKEN`, without an additional publishing token. Optional capability plugins are distributed separately from the main app.
 
-### 检查
+### Checks
 
 ```bash
 uvx --offline ruff check
@@ -93,47 +93,57 @@ node --test tests/tool_activity.test.mjs
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-### 项目结构
+### Repository structure
 
-| 路径 | 职责 |
+| Path | Purpose |
 | --- | --- |
-| `src-tauri/`、`desktop-ui/` | 原生窗口、桌面桥接与启动页 |
-| `backend/`、`main.py` | Python 后端与开发入口 |
-| `ui/`、`component/` | 页面与可复用界面组件 |
-| `service/`、`api/` | 业务服务与本地内部 API |
-| `core/`、`models/` | 运行基础设施、国际化与数据模型 |
-| `agent/skills/calabash/` | 随 App 内置的 Agent Skill 与工具规范 |
-| `website/` | 独立中英文产品网站、指南与演示素材 |
-| `scripts/`、`tests/` | 构建脚本与回归测试 |
+| `src-tauri/`, `desktop-ui/` | Native window, desktop bridge and startup screen |
+| `backend/`, `main.py` | Python backend and development entry point |
+| `ui/`, `component/` | Pages and reusable UI components |
+| `service/`, `api/` | Business services and internal local APIs |
+| `core/`, `models/` | Runtime infrastructure, localization and data models |
+| `agent/skills/calabash/` | Bundled agent skill and tool conventions |
+| `website/` | Independent bilingual website, guide and demo assets |
+| `scripts/`, `tests/` | Build scripts and regression tests |
 
-技术栈：Tauri v2、Python、NiceGUI、FastAPI、SQLite。依赖以 `pyproject.toml`、`uv.lock` 和 npm 锁文件为准，不读取 `.env`。更多开发约定见 [AGENTS.md](AGENTS.md)；后续方向见 [Roadmap](ROADMAP.md)。
+Built with Tauri v2, Python, NiceGUI, FastAPI and SQLite. Dependencies are defined in `pyproject.toml`, `uv.lock` and the npm lockfile. The app does not read `.env`. See [AGENTS.md](AGENTS.md) for development conventions and the [Roadmap](ROADMAP.md) for planned work.
 
-## 一起创造
+## Build with us
 
-欢迎通过 [Issues](https://github.com/rangwea/calabash/issues) 分享你想创造的工具、使用中遇到的问题，或通过 Pull Request 改进 Calabash。报告问题时请使用合成样例，不附带模型密钥或敏感文件。
+Share a tool idea or report a problem through [Issues](https://github.com/rangwea/calabash/issues), or contribute a Pull Request. Use synthetic examples when reporting problems, and leave out model keys and sensitive files.
 
-希望有一天，遇到一件不顺手的事，你想到的不只是“有没有这样的 App”，还有：**“我可以做一个自己的。”**
+We hope that one day, when something feels harder than it should, your next thought is not only “Is there an app for that?” but also: **“I could make my own.”**
 
-## 许可证
+## License
 
-仓库尚未明确发布许可证；在许可证确定前，不应假定代码可被自由复制、修改或再分发。
+Calabash is source-available under the [Elastic License 2.0 (ELv2)](LICENSE). It is not OSI-approved open source.
 
-## 为什么会有 Calabash
+Personal use, internal business use, modification and redistribution are permitted subject to the license. You may not offer Calabash as a hosted or managed service that gives third parties access to a substantial set of its features. This restriction is not limited to paid services. You must not circumvent license-key functionality or remove licensing, copyright or other licensor notices.
 
-你可能有过这样的时刻：手头的一件事，用现成的软件做起来总差一点。
+ELv2 does not impose a blanket ban on selling redistributed desktop copies. Third-party components retain their own licenses. See [NOTICE](NOTICE); the full license text controls.
 
-少一个字段，多几个用不上的步骤。一个每周都会重复的操作，还是得手动做。你知道自己想要什么，甚至能把界面画出来，却很难找到一款刚好适合的软件。
+## Why Calabash exists
 
-于是，你开始迁就工具。把需求拆散，在几个软件之间来回切换；或者写下一句“以后有空，做个小工具”。那个“以后”，往往一直没有到来。
+General-purpose AI agents can process files, operate browsers, write code and carry out increasingly complex tasks. Explain what you need, and they can often deliver a useful result.
 
-AI 让写代码变得更容易了。接下来的问题是：生成的代码放在哪里？怎么运行？怎么变成一个有界面、可以每天打开、还可以继续修改的 App？
+Then next week, the same task comes around again.
 
-Calabash 想把这些步骤接起来。
+You bring a new file, explain the rules again, repeat the details you clarified last time, and wait for the agent to understand, plan and execute. More tokens are spent. The result may also differ: columns move, a calculation changes, or a step you already settled needs correcting again.
 
-打开聊天框，说清楚你想做什么。让 AI 创建工具，在旁边的预览中试用，再告诉它哪里需要调整。把满意的工具留在自己的电脑上，下次直接打开。
+That flexibility is valuable for a one-off task. But when a method works and the job will repeat, we want to keep it.
 
-工具不必为所有人而设计。它可以只服务你的工作方式，只解决你在意的问题，也可以随着你的想法慢慢长大。
+**What if a problem solved in one conversation could become an app you simply open next time?**
 
-**我们期待一个全民 App 的时代：创造软件不再只是少数人的职业，也可以是每个人表达想法、解决问题的方式。**
+That is the idea behind Calabash.
 
-Calabash 从个人桌面工具开始，朝这个方向迈一步。
+The first time, describe your needs in chat and let AI create a tool. Try it in the preview beside the conversation, refine the rules, interface and results, then save it on your computer.
+
+Next time, open the tool, change the input and run it. Processing logic already captured in code can be reused without asking a model to reason through and generate it again. Operations that do not call a model consume no model tokens. When your needs change, return to the conversation and edit the tool.
+
+Saved code makes the rules inspectable and reusable. It still needs testing, and steps that depend on external models or services can still vary. But you have an implementation you can keep improving, rather than only the result of a previous chat.
+
+A tool does not have to serve everyone. It can fit your way of working, solve a problem that matters to you, and grow as your ideas change.
+
+**We hope for an era of apps made by everyone: creating software becomes a way for anyone to express an idea and solve a problem, as well as a profession.**
+
+Calabash starts with personal desktop tools. It is a step in that direction.

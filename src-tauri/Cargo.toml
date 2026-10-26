@@ -2,6 +2,7 @@
 name = "calabash-desktop"
 version = "1.0.0"
 description = "Calabash desktop shell"
+license = "Elastic-2.0"
 authors = ["Calabash"]
 edition = "2021"
 autobins = false
