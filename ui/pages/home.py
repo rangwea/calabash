@@ -74,10 +74,17 @@ def render_desktop_home(repair_id: str | None = None) -> None:
     def navigate_view(view_name: str) -> None:
         active_view["name"] = view_name
         chat_host.set_visibility(view_name == "chat")
-        workspace_host.set_visibility(view_name != "chat")
+        workspace_host.set_visibility(view_name in {"tools", "diagnostics"})
+        if view_name != "tool":
+            tool_workspace.hide()
         sidebar.refresh()
-        if view_name != "chat":
+        if view_name in {"tools", "diagnostics"}:
             workspace.refresh()
+
+    def open_tool(tool):
+        from ui.tool_list import _record_recent_tool
+        _record_recent_tool(tool)
+        tool_workspace.open(tool)
 
     def chat_changed(chat_id):
         chat_state["id"] = chat_id
@@ -129,6 +136,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                     open_chat,
                     chat_state["id"],
                     sidebar.refresh,
+                    open_tool,
                 )
 
             from component.panel_resize import resize_handle
@@ -158,6 +166,8 @@ def render_desktop_home(repair_id: str | None = None) -> None:
             sidebar_divider.props("data-panel=desktop-sidebar")
 
             with ui.column().classes("flex-1 min-w-0 h-full overflow-hidden gap-0"):
+                from component.tool_workspace import ToolWorkspace
+                tool_workspace = ToolWorkspace(lambda: navigate_view("tool"), lambda: navigate_view("tools"), open_chat)
                 chat_host = ui.column().classes("w-full flex-1 min-h-0 overflow-hidden gap-0")
                 chat_host.set_visibility(active_view["name"] == "chat")
                 with ui.column().classes(_BODY_SCROLL) as workspace_host:
@@ -213,6 +223,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                                         _render_project_section(
                                             project_name, project_tools, discuss_tool,
                                             lambda: refresh_tool_data(notify=False, force=True),
+                                            open_tool,
                                         )
 
                             search.on("change", lambda _: render_tools.refresh())
@@ -233,7 +244,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
             tools_data = load_tools()
             project_names = sorted({t.get("project", "未分组") for t in tools_data})
             sidebar.refresh()
-            if active_view["name"] != "chat":
+            if active_view["name"] in {"tools", "diagnostics"}:
                 workspace.refresh()
             if notify:
                 ui.notify(t("工具索引已刷新"), type="positive")

@@ -11,6 +11,7 @@ def _render_desktop_sidebar(
     on_chat,
     active_chat=None,
     on_refresh=None,
+    on_tool=None,
 ) -> None:
     recent_tools = _get_recent_tools(tools_data)
     ui.add_css("""
@@ -60,7 +61,7 @@ def _render_desktop_sidebar(
             _sidebar_item(
                 t("工具"),
                 "folder_open",
-                active_view == "tools",
+                active_view in {"tools", "tool"},
                 lambda: on_select("tools"),
             )
 
@@ -125,7 +126,7 @@ def _render_desktop_sidebar(
                 with ui.element("div").classes(
                     "sidebar-entry sidebar-conversation w-full min-w-0 px-2 py-0 cursor-pointer flex items-center gap-2 "
                     + ("sidebar-selected" if selected else "text-gray-600")
-                ).props('data-tool-leave role=button tabindex=0').on(
+                ).props('role=button tabindex=0').on(
                     "click", lambda _, cid=chat_id: on_chat(cid),
                     js_handler="(event) => { if (event.target.closest('.calabash-action, .q-menu')) return; emit(); }",
                 ).on(
@@ -174,7 +175,7 @@ def _render_desktop_sidebar(
         with ui.column().classes("w-full px-2 pt-5 gap-0.5"):
             ui.label(t("最近工具")).classes("sidebar-section-label px-2 pb-1.5")
             for tool in recent_tools:
-                _sidebar_tool_item(tool)
+                _sidebar_tool_item(tool, on_tool)
             if not recent_tools:
                 ui.label(t("暂无使用记录")).classes("px-2 py-1 text-xs text-gray-400")
 
@@ -193,7 +194,6 @@ def _sidebar_item(label: str, icon: str, active: bool, on_click) -> None:
     )
     with (
         ui.element("div")
-        .props("data-tool-leave")
         .classes(classes)
         .on("click", on_click)
     ):
@@ -201,14 +201,14 @@ def _sidebar_item(label: str, icon: str, active: bool, on_click) -> None:
         ui.label(label).classes("text-[13px] font-medium flex-1")
 
 
-def _sidebar_tool_item(tool: dict) -> None:
+def _sidebar_tool_item(tool: dict, on_tool=None) -> None:
     label = _tool_display_name(tool)
     with (
         ui.element("div")
         .classes(
             "sidebar-entry w-full min-w-0 flex items-center gap-2 px-2 py-1.5 cursor-pointer text-gray-600"
         )
-        .on("click", lambda t=tool: use_tool(t))
+        .on("click", lambda t=tool: (on_tool or use_tool)(t))
     ):
         ui.icon("terminal").classes("text-[15px] text-gray-400")
         ui.label(label).classes("text-xs truncate min-w-0 flex-1").tooltip(

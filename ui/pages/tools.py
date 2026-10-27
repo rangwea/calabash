@@ -20,9 +20,14 @@ logger = get_logger(__name__)
 
 
 @ui.page("/tools/{project_name}/{tool_name}")
-async def tools_handler(request: Request, project_name: str, tool_name: str):
+async def tools_handler(request: Request, project_name: str, tool_name: str, embedded: bool = False, workspace: str | None = None):
     """项目工具路由处理器"""
     logger.info(f"Loading project tool: {project_name}/{tool_name}")
+    if embedded and workspace:
+        from component.tool_workspace import WORKSPACES
+        parent = WORKSPACES.get(workspace)
+        if parent and (project_name, tool_name) in parent.items:
+            ui.context.client.calabash_parent_repair = parent.repair
     feedback = RepairFeedback(project_name, tool_name)
     ui.on_exception(lambda error: feedback.capture(error, "callback"))
     phase = "load"
@@ -55,6 +60,7 @@ async def tools_handler(request: Request, project_name: str, tool_name: str):
                     title=shell_title,
                     subtitle=project_name,
                     mode="tool",
+                    show_header=not embedded,
                 ),
                 tool_log_context(project_name, tool_name),
             ):
@@ -68,18 +74,18 @@ async def tools_handler(request: Request, project_name: str, tool_name: str):
             )
 
     except ToolCapabilityError as error:
-        with render_tool_shell(title=tool_name, subtitle=project_name, mode="tool"):
+        with render_tool_shell(title=tool_name, subtitle=project_name, mode="tool", show_header=not embedded):
             render_capability_gate(error)
     except Exception as e:
         error_msg = str(e)
         with tool_log_context(project_name, tool_name):
             logger.exception(f"工具渲染失败: {project_name}/{tool_name}")
 
-        _render_tool_error(error_msg, project_name, tool_name)
+        _render_tool_error(error_msg, project_name, tool_name, embedded=embedded)
         feedback.capture(e, phase)
 
 
-def _render_tool_error(error_msg: str, project_name: str, tool_name: str) -> None:
+def _render_tool_error(error_msg: str, project_name: str, tool_name: str, *, embedded: bool = False) -> None:
     """把运行异常转换为用户可理解的错误状态。"""
     if "工具不存在" in error_msg:
         icon, title, message, tone = (
@@ -108,11 +114,12 @@ def _render_tool_error(error_msg: str, project_name: str, tool_name: str) -> Non
         ui.label(t(title)).classes(f"text-xl font-semibold {tone}")
         ui.label(t(message)).classes("text-sm text-gray-500 text-center max-w-md")
         ui.label(f"{project_name}/{tool_name}").classes("text-xs text-gray-400")
-        ui.button(
-            t("返回工具中心"),
-            icon="arrow_back",
-            on_click=lambda: ui.navigate.to("/"),
-        ).props("unelevated color=dark").classes("mt-3")
+        if not embedded:
+            ui.button(
+                t("返回工具中心"),
+                icon="arrow_back",
+                on_click=lambda: ui.navigate.to("/"),
+            ).props("unelevated color=dark").classes("mt-3")
         ui.button(
             t("查看日志"),
             icon="article",

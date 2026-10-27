@@ -29,7 +29,7 @@ def render_app_frame(
                 ui.add_css(ACTION_CSS, shared=True)
                 label = t("设置") if action_label == "Diagnostics" else t(action_label)
                 button = ui.button(icon=action_icon, on_click=action, color=None).props(
-                    "flat dense data-tool-leave"
+                    "flat dense"
                 ).classes("calabash-action no-drag").tooltip(label)
                 button._props["aria-label"] = label
 

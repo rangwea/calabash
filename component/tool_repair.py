@@ -66,4 +66,8 @@ class RepairFeedback:
             return
         self.label.set_text(t("修复请求已排队，请在对话中查看。修复后手动重试。"))
         if not self.source.get("preview_key"):
-            ui.navigate.to(f"/?repair={self.report_id}")
+            parent_repair = getattr(ui.context.client, 'calabash_parent_repair', None)
+            if parent_repair:
+                parent_repair(self.report_id)
+            else:
+                ui.navigate.to(f"/?repair={self.report_id}")

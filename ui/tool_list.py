@@ -85,6 +85,7 @@ def _render_project_section(
     project_tools: list,
     on_chat=None,
     on_delete=None,
+    on_open=None,
 ) -> None:
     with ui.column().classes("w-full gap-3"):
         with ui.row().classes(
@@ -95,7 +96,7 @@ def _render_project_section(
 
         with ui.column().classes("w-full gap-0"):
             for tool in project_tools:
-                _render_tool_row(tool, on_chat, on_delete)
+                _render_tool_row(tool, on_chat, on_delete, on_open)
 
 
 def _render_tool_tag(label: str, project_name: str) -> None:
@@ -105,7 +106,8 @@ def _render_tool_tag(label: str, project_name: str) -> None:
     )
 
 
-def _render_tool_row(tool: dict, on_chat=None, on_delete=None) -> None:
+def _render_tool_row(tool: dict, on_chat=None, on_delete=None, on_open=None) -> None:
+    open_tool = on_open or use_tool
     display_name = _tool_display_name(tool)
     description = tool.get("description") or t("暂无描述")
     tool_tags = _parse_tags(tool)
@@ -123,7 +125,7 @@ def _render_tool_row(tool: dict, on_chat=None, on_delete=None) -> None:
             with (
                 ui.column()
                 .classes("min-w-0 flex-1 gap-0")
-                .on("click", lambda t=tool: use_tool(t))
+                .on("click", lambda t=tool: open_tool(t))
             ):
                 ui.label(display_name).classes(
                     "text-sm font-medium text-gray-950 truncate"
@@ -136,7 +138,7 @@ def _render_tool_row(tool: dict, on_chat=None, on_delete=None) -> None:
             with ui.row().classes("gap-1 items-center shrink-0"):
                 if on_chat:
                     action_button("chat", t("对话修改工具"), lambda _, item=tool: on_chat(item))
-                action_button("play", t("运行工具"), lambda _, item=tool: use_tool(item))
+                action_button("play", t("运行工具"), lambda _, item=tool: open_tool(item))
                 action_button("download", t("导出工具 ZIP"), lambda: export_tool(tool))
                 if on_delete:
                     action_button("delete", t("删除工具"), lambda: _confirm_delete_tool(tool, on_delete))
