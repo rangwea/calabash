@@ -1,6 +1,6 @@
 [project]
 name = "calabash"
-version = "1.0.0"
+version = "1.0.1"
 description = "Calabash local AI tool desktop"
 readme = "README.md"
 license = "Elastic-2.0"
