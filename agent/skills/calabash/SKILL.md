@@ -27,6 +27,7 @@ python3 "$CALABASH_SKILL_ROOT/scripts/validate-tool.py" <file>
    新建直接写 `~/.calabash/tools/<project>/<name>.py` 或用本地 `create`，不查询远端、不调用导入接口。
    同名冲突且覆盖意图不明时澄清；明确修改已有目标无需再确认。
 2. **编辑 → 校验**：按下表加载所需参考，运行静态校验；根据具体错误修复，再校验。
+   内置聊天 Agent 使用组件前调用 `read_component_api` 查询真实构造参数、方法和属性，不猜测 `mount()` 等生命周期接口。该查询只检查受信任的内置组件，不导入用户工具；外部 Agent 没有此查询工具时读取 `references/file-workflow.md` 和对应源码，不把查询工具当作 Python API。
    创建工具先读 [runtime.md](references/runtime.md) 与共享依赖清单，优先使用 App 内置库，不要求用户安装系统工具；规划中的可选能力不能视为已安装。使用可选插件须在模块 docstring 声明 `requires: media.ffmpeg>=9.0.2` 等能力 ID/最低版本，内置库工具留空；由宿主运行前检查并引导本地 ZIP 导入，安装后由用户手动重试。
    校验通过且只要求生成/修改时交付，不强制预览。
    新建或调整 UI 时，必须遵守 `references/design.md` 的桌面端工作区、控件对齐和响应式规则；尤其检查同一控制行的基线、控件密度、可伸缩列和固定操作组，禁止用局部 margin 修齐。

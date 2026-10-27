@@ -6,6 +6,7 @@ from nicegui import ui
 
 from core.app_info import APP_NAME
 from core.i18n import t
+from component.action_button import ACTION_CSS
 
 
 def render_app_frame(
@@ -25,9 +26,12 @@ def render_app_frame(
     ):
         if action:
             with ui.element("div").props('data-tauri-drag-region="false"'):
-                ui.button(icon=action_icon, on_click=action).props(
-                    "flat dense round color=grey-7 data-tool-leave"
-                ).tooltip(t("设置") if action_label == "Diagnostics" else t(action_label)).classes("no-drag")
+                ui.add_css(ACTION_CSS, shared=True)
+                label = t("设置") if action_label == "Diagnostics" else t(action_label)
+                button = ui.button(icon=action_icon, on_click=action, color=None).props(
+                    "flat dense data-tool-leave"
+                ).classes("calabash-action no-drag").tooltip(label)
+                button._props["aria-label"] = label
 
     ui.add_css(
         """
@@ -37,7 +41,7 @@ def render_app_frame(
         }
         .app-window-frame .q-btn {
             width: 26px; height: 26px; min-width: 26px; min-height: 26px;
-            padding: 0; border-radius: 6px; color: #737780;
+            padding: 4px; border-radius: 6px;
         }
         .app-window-frame .q-btn .q-icon { font-size: 17px; }
         .app-window-frame .q-btn:hover { background: #f1f2f3; }

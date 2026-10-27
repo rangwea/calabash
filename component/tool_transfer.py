@@ -3,6 +3,7 @@
 import json
 
 from nicegui import run, ui
+from component.action_button import action_button
 
 from component.file_access import choose_path
 from core.i18n import t
@@ -35,11 +36,8 @@ class ToolTransfer:
 
     def render(self):
         with ui.column().classes("gap-0 shrink-0") as self.container:
-            self.button = (
-                ui.button(t("导入工具"), icon="o_file_upload", on_click=self.select)
-                .props("flat dense no-caps color=grey-7")
-                .tooltip(t("从本地 ZIP 导入工具"))
-            )
+            self.button, tip = action_button("upload", t("导入工具"), self.select, text=True)
+            tip.set_text(t("从本地 ZIP 导入工具"))
 
     async def select(self):
         if self.busy:

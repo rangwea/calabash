@@ -16,6 +16,7 @@ class ToolResults:
     def __init__(self, outputs=None):
         self.outputs = outputs or ToolOutputs(owner=getattr(ui.context.client, "calabash_output_owner", None))
         self.limit = 20
+        self.expanded = False
         self.container = ui.column().classes("w-full gap-1")
         self.refresh()
 
@@ -32,35 +33,53 @@ class ToolResults:
             return
         items = self.outputs.files(limit=self.limit + 1)
         self.container.clear()
+        self.container.set_visibility(bool(items))
+        if not items:
+            return
         with self.container:
-            with ui.row().classes("w-full items-center justify-end"):
-                ui.button(icon="refresh", on_click=self.refresh).props("flat round dense").tooltip(t("刷新结果"))
-            if not items:
-                ui.label(t("暂无结果文件")).classes("text-sm text-gray-500 py-2")
-            run_id = None
-            for item in items[:self.limit]:
-                if item["run_id"] != run_id:
-                    run_id = item["run_id"]
-                    timestamp = datetime.fromtimestamp(item["created"], UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-                    label = t("本次运行") if run_id == self.outputs.id else t("历史运行")
-                    ui.label(f"{label} · {timestamp}").classes("text-xs text-gray-500 pt-2")
-                with ui.row().classes("w-full items-center gap-2 flex-nowrap border-b border-gray-100 py-2"):
-                    ui.icon("description").classes("text-gray-400")
-                    ui.label(item["name"]).classes("min-w-0 flex-1 break-all text-sm")
-                    ui.label(f'{item["size"] / 1024:.1f} KB').classes("text-xs text-gray-400 shrink-0")
+            with ui.row().classes("w-full items-center gap-1 flex-nowrap"):
+                count = f"{self.limit}+" if len(items) > self.limit else str(len(items))
+                toggle = ui.button(
+                    t("结果文件（{count}）", count=count),
+                    icon="keyboard_arrow_down" if self.expanded else "chevron_right",
+                    on_click=self.toggle,
+                ).props("flat dense no-caps").classes("text-xs text-gray-500 min-w-0")
+                toggle._props["aria-expanded"] = "true" if self.expanded else "false"
+                ui.space()
+                ui.button(icon="refresh", on_click=self.refresh).props("flat round dense size=sm").tooltip(t("刷新结果"))
+            with ui.column().classes("w-full min-w-0 gap-1 max-h-64 overflow-y-auto") as self.body:
+                self._render_items(items)
+            self.body.set_visibility(self.expanded)
+
+    def toggle(self):
+        self.expanded = not self.expanded
+        self.refresh()
+
+    def _render_items(self, items):
+        run_id = None
+        for item in items[:self.limit]:
+            if item["run_id"] != run_id:
+                run_id = item["run_id"]
+                timestamp = datetime.fromtimestamp(item["created"], UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+                label = t("本次运行") if run_id == self.outputs.id else t("历史运行")
+                ui.label(f"{label} · {timestamp}").classes("text-xs text-gray-500 pt-2")
+            with ui.row().classes("w-full items-center gap-2 flex-nowrap border-b border-gray-100 py-2"):
+                ui.icon("description").classes("text-gray-400")
+                ui.label(item["name"]).classes("min-w-0 flex-1 break-all text-sm")
+                ui.label(f'{item["size"] / 1024:.1f} KB').classes("text-xs text-gray-400 shrink-0")
+                if not item["available"]:
+                    ui.label(t("文件不可用")).classes("text-xs text-gray-500 shrink-0").tooltip(t("文件已被移动、删除或修改"))
+                for icon, label, callback in [
+                    ("open_in_new", t("打开"), lambda _, key=item["id"]: self.open(key)),
+                    ("folder_open", t("在文件夹中显示"), lambda _, key=item["id"]: self.open(key, reveal=True)),
+                    ("download", t("另存为"), lambda _, key=item["id"]: self.download(key)),
+                ]:
+                    button = ui.button(icon=icon, on_click=callback).props("flat round dense").tooltip(label)
+                    button._props["aria-label"] = f"{label} {item['name']}"
                     if not item["available"]:
-                        ui.label(t("文件不可用")).classes("text-xs text-gray-500 shrink-0").tooltip(t("文件已被移动、删除或修改"))
-                    for icon, label, callback in [
-                        ("open_in_new", t("打开"), lambda _, key=item["id"]: self.open(key)),
-                        ("folder_open", t("在文件夹中显示"), lambda _, key=item["id"]: self.open(key, reveal=True)),
-                        ("download", t("另存为"), lambda _, key=item["id"]: self.download(key)),
-                    ]:
-                        button = ui.button(icon=icon, on_click=callback).props("flat round dense").tooltip(label)
-                        button._props["aria-label"] = f"{label} {item['name']}"
-                        if not item["available"]:
-                            button.disable()
-            if len(items) > self.limit:
-                ui.button(t("显示更多"), icon="expand_more", on_click=self.show_more).props("flat dense no-caps")
+                        button.disable()
+        if len(items) > self.limit:
+            ui.button(t("显示更多"), icon="expand_more", on_click=self.show_more).props("flat dense no-caps")
 
     async def open(self, key, *, reveal=False):
         try:

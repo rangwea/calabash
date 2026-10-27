@@ -48,6 +48,7 @@ class AIChatTests(unittest.TestCase):
                     self.assertEqual(
                         {
                             "chats",
+                            "chat_previews",
                             "chat_files",
                             "message_files",
                             "tool_input_contexts",

@@ -19,6 +19,11 @@ class RepairFixture:
         self.path = self.root / "tools/demo/example.py"
         self.path.parent.mkdir(parents=True)
         self.path.write_text('api_key = "private-tool-key"\ndef main():\n    pass\n')
+        from service.tools import preview_service
+        for target, value in (("_TMP_DIR", self.root / "previews"), ("_PREVIEW_META_DIR", self.root / "previews/_meta")):
+            patcher = patch.object(preview_service, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         for target, value in (("app_dir", self.root), ("tools_dir", self.root / "tools")):
             patcher = patch.object(ai_chat, target, return_value=value)
             patcher.start()
@@ -35,6 +40,32 @@ class RepairFixture:
 
 
 class RepairTests(RepairFixture, unittest.TestCase):
+    def test_preflight_api_error_retains_safe_diagnosis(self):
+        from service.tools.tool_runtime import ToolEntryPointError
+        self.path.write_text('from component.tool_results import ToolResults\ndef main():\n    results = ToolResults()\n    results.mount()\n')
+        report = tool_repairs.get(tool_repairs.capture(ToolEntryPointError('private'), 'demo', 'example'))
+        self.assertIn('remove mount()', tool_repairs.summary(report))
+        self.assertNotIn('private', tool_repairs.summary(report))
+
+    def test_safe_api_diagnosis_uses_structured_attribute_metadata(self):
+        from component.tool_results import ToolResults
+        result = object.__new__(ToolResults)
+        self.path.write_text('def fail(result):\n    result.mount()\n')
+        namespace = {}
+        exec(compile(self.path.read_text(), str(self.path.resolve()), 'exec'), namespace)
+        try:
+            namespace['fail'](result)
+        except AttributeError as exc:
+            error = exc
+        report = tool_repairs.get(tool_repairs.capture(error, 'demo', 'example'))
+        summary = tool_repairs.summary(report)
+        self.assertIn('missing_attribute', summary)
+        self.assertIn('ToolResults', summary)
+        self.assertNotIn('secret', summary)
+        unknown = AttributeError('secret', name='mount', obj=object())
+        report = tool_repairs.get(tool_repairs.capture(unknown, 'demo', 'example'))
+        self.assertNotIn('diagnosis', report)
+
     def test_summary_does_not_include_raw_error_and_requires_consent(self):
         report_id = self.report()
         report = tool_repairs.get(report_id)
@@ -51,6 +82,9 @@ class RepairTests(RepairFixture, unittest.TestCase):
 
     def test_repair_restricts_target_redacts_credentials_and_requires_read(self):
         session = tool_repairs.RepairSession(tool_repairs.get(self.report()))
+        api = session.execute('read_component_api', {'component': 'ToolResults'})
+        self.assertIn('refresh', api['methods'])
+        self.assertIsNone(session.read_revision)
         args = {"project": "demo", "name": "example"}
         self.assertIn("error", session.execute("read_attachment", args))
         self.assertIn("error", session.execute("read_tool", {**args, "name": "other"}))
@@ -59,6 +93,16 @@ class RepairTests(RepairFixture, unittest.TestCase):
         self.assertNotIn("private-tool-key", result["content"])
         saved = session.execute("write_tool", {**args, **result})
         self.assertTrue(saved["requires_manual_run"])
+        self.assertTrue(saved["preview_url"].startswith('/preview/'))
+        self.assertIn('?context=', saved['preview_url'])
+        from urllib.parse import urlsplit, parse_qs
+        from service.files import tool_inputs
+        from service.tools import preview_service
+        parsed = urlsplit(saved['preview_url'])
+        key = parsed.path.rsplit('/', 1)[1]
+        owner, _ = tool_inputs.owner(parse_qs(parsed.query)['context'][0], key)
+        self.assertEqual('tool:demo/example', owner)
+        self.assertIn('private-tool-key', preview_service.get_preview_file(key).read_text())
         self.assertIn("private-tool-key", self.path.read_text())
         self.assertIn("error", session.execute("write_tool", {**args, **result}))
 
@@ -110,8 +154,11 @@ class RepairModelTests(RepairFixture, unittest.IsolatedAsyncioTestCase):
             count = len(requests)
             args = {"project": "demo", "name": "example"}
             if count == 1:
-                name = "read_tool"
+                name = "read_component_api"
+                args = {"component": "ToolResults"}
             elif count == 2:
+                name = "read_tool"
+            elif count == 3:
                 read = json.loads(payload["messages"][-1]["content"])
                 name = "write_tool"
                 args.update(read)
@@ -129,6 +176,9 @@ class RepairModelTests(RepairFixture, unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("secret business body", serialized)
         self.assertNotIn("private-tool-key", serialized)
         self.assertNotIn("read_attachment", serialized)
+        self.assertIn('read_component_api', serialized)
+        api_reply = next(message for message in requests[1]['messages'] if message['role'] == 'tool')
+        self.assertIn('refresh', json.loads(api_reply['content'])['methods'])
         self.assertTrue(any(kind == "manual_preview" for kind, _ in events))
         self.assertFalse(any(kind == "preview" for kind, _ in events))
         self.assertIn("private-tool-key", self.path.read_text())

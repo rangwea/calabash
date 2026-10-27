@@ -12,6 +12,23 @@ from service.files import tool_outputs
 
 
 class OutputHistoryUITests(unittest.IsolatedAsyncioTestCase):
+    async def test_empty_results_take_no_space_and_new_outputs_can_expand(self):
+        outputs = tool_outputs.ToolOutputs(owner=("tool:demo/compact-ui", None))
+        with patch.object(core, "loop", asyncio.get_running_loop()), self.container:
+            results = ToolResults(outputs)
+            self.assertFalse(results.container.visible)
+            self.assertEqual([], list(results.container.descendants()))
+            outputs.write("report.txt", lambda path: path.write_text("synthetic"))
+            results.refresh()
+            self.assertTrue(results.container.visible)
+            self.assertFalse(results.body.visible)
+            results.toggle()
+            self.assertTrue(results.body.visible)
+            results.refresh()
+            self.assertTrue(results.body.visible)
+            results.toggle()
+            self.assertFalse(results.body.visible)
+
     def setUp(self):
         self.container = ui.column()
         temporary = tempfile.TemporaryDirectory()

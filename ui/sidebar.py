@@ -1,4 +1,5 @@
 from nicegui import ui
+from component.action_button import action_button
 from core.i18n import t
 from ui.tool_list import _get_recent_tools, _tool_display_name, use_tool
 
@@ -17,6 +18,7 @@ def _render_desktop_sidebar(
         .calabash-sidebar .sidebar-entry {
             min-height: 32px; border-radius: 6px; transition: background .15s, color .15s;
         }
+        .calabash-sidebar .sidebar-conversation { height: 32px; min-height: 32px; }
         .calabash-sidebar .sidebar-entry:hover { background: #eceef1; color: #252a33; }
         .calabash-sidebar .sidebar-entry:focus-visible { outline: 2px solid #b9c7da; outline-offset: -2px; }
         .calabash-sidebar .sidebar-selected { background: #e8ebef; color: #252a33; }
@@ -121,22 +123,23 @@ def _render_desktop_sidebar(
                 pinned = chat_is_pinned(chat_id)
                 selected = active_view == "chat" and chat_id == active_chat
                 with ui.element("div").classes(
-                    "sidebar-entry w-full min-w-0 px-2 py-1.5 cursor-pointer flex items-center gap-2 "
+                    "sidebar-entry sidebar-conversation w-full min-w-0 px-2 py-0 cursor-pointer flex items-center gap-2 "
                     + ("sidebar-selected" if selected else "text-gray-600")
+                ).props('data-tool-leave role=button tabindex=0').on(
+                    "click", lambda _, cid=chat_id: on_chat(cid),
+                    js_handler="(event) => { if (event.target.closest('.calabash-action, .q-menu')) return; emit(); }",
+                ).on(
+                    "keydown", lambda _, cid=chat_id: on_chat(cid),
+                    js_handler="(event) => { if (event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return; event.preventDefault(); emit(); }",
                 ):
                     if chat_id in getattr(ui.context.client, "calabash_running_chats", set()):
                         ui.spinner(size="14px", color="grey-6").tooltip(t("正在生成回复"))
                     else:
                         ui.icon("push_pin" if pinned else "o_chat_bubble_outline")
-                    ui.label(title).props("data-tool-leave").classes(
+                    ui.label(title).classes(
                         "text-xs truncate min-w-0 flex-1"
-                    ).tooltip(title).on("click", lambda _, cid=chat_id: on_chat(cid))
-                    ui.button(
-                        icon="o_delete",
-                        on_click=lambda _, cid=chat_id: remove_dialog(cid),
-                    ).props("flat dense round size=xs color=grey-6").tooltip(
-                        t("删除对话")
-                    )
+                    ).tooltip(title)
+                    action_button("delete", t("删除对话"), lambda _, cid=chat_id: remove_dialog(cid), compact=True)
                     with (
                         ui.context_menu()
                         .props("auto-close")

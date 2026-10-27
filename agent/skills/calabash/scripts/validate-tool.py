@@ -4,7 +4,11 @@ import argparse
 import ast
 import re
 import tokenize
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from core.tool_api_contracts import api_errors
 
 _PAGE_HELPERS = {
     "component.tool_files.ToolFileInput",
@@ -90,7 +94,7 @@ def validate_source(source: str) -> list[str]:
 
     state_check = _ModuleStateCheck()
     state_check.visit(tree)
-    errors = state_check.errors
+    errors = state_check.errors + api_errors(tree)
     metadata = {}
     for line in (ast.get_docstring(tree) or "").splitlines():
         key, separator, value = line.strip().partition(":")

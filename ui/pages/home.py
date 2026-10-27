@@ -39,14 +39,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
     """渲染桌面版首页。"""
     ui.page_title(APP_NAME)
     ui.context.client.page.language = "en-US" if language() == "en" else "zh-CN"
-    ui.add_css("""
-        .tool-row-action.q-btn {
-            width: 30px; height: 30px; min-width: 30px; min-height: 30px;
-            padding: 0; border-radius: 6px; color: #747b84;
-        }
-        .tool-row-action.q-btn .q-icon { font-size: 18px; }
-        .tool-row-action.q-btn:hover { color: #252b33; background: #e9edf1; }
-    """)
+    from component.action_button import action_button
     active_view = {"name": "tools"}
     chat_state = {"id": None, "switch": None}
     if repair_id:
@@ -152,10 +145,11 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                         ).classes("w-5 h-5 shrink-0")
                         ui.label(APP_NAME).classes("text-sm font-medium text-gray-700 truncate")
                     sidebar()
-                sidebar_button = ui.button(icon="o_view_sidebar", on_click=toggle_sidebar).props(
-                    'flat dense round size=sm color=grey-7 data-testid=sidebar-toggle '
+                sidebar_button, _ = action_button("sidebar", t("切换侧边栏"), toggle_sidebar)
+                sidebar_button.props(
+                    'data-testid=sidebar-toggle '
                     f'aria-expanded=true aria-controls=desktop-sidebar aria-label="{t("切换侧边栏")}"'
-                ).classes("absolute top-1 right-1 z-10").tooltip(t("切换侧边栏"))
+                ).classes("absolute top-1 right-1 z-10")
                 # Keep a narrow, reachable expansion control when the menu is hidden.
                 ui.element("div").classes("w-8 h-9").bind_visibility_from(
                     sidebar_state, "expanded", backward=lambda value: not value

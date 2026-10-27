@@ -1,0 +1,82 @@
+"""Read-only API discovery for trusted bundled components, never user modules."""
+
+import ast
+import inspect
+import re
+
+
+def components():
+    from component.tool_files import ToolFileInput
+    from component.tool_results import ToolJobStatus, ToolResults
+    from service.files.tool_outputs import ToolOutputs
+    from service.tools.tool_jobs import ToolJobs, ToolTask
+    from nicegui import ui
+    return {cls.__name__: cls for cls in (
+        ToolFileInput, ToolResults, ToolJobStatus, ToolOutputs, ToolJobs, ToolTask,
+        ui.echart, ui.table, ui.select, ui.input,
+    )}
+
+
+def parameters(callable_):
+    """Expose call shape without serializing defaults or runtime values."""
+    try:
+        return [{"name": p.name, "kind": p.kind.name,
+                 "required": p.default is inspect.Parameter.empty and p.kind not in (
+                     inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)}
+                for p in inspect.signature(callable_).parameters.values()
+                if p.name not in {"self", "cls"}]
+    except (TypeError, ValueError):
+        return []
+
+
+def read_api(component):
+    registry = components()
+    if component not in registry:
+        return {"error": "Unknown component", "available": sorted(registry)}
+    cls = registry[component]
+    methods, properties = {}, {}
+    # getattr_static prevents invoking descriptors or reading instance state.
+    for name in dir(cls):
+        if name.startswith('_'):
+            continue
+        value = inspect.getattr_static(cls, name)
+        if isinstance(value, property):
+            properties[name] = {"writable": value.fset is not None}
+        elif inspect.isfunction(value):
+            methods[name] = {"parameters": parameters(value), "async": inspect.iscoroutinefunction(value)}
+    result = {"component": component, "constructor": parameters(cls),
+              "methods": methods, "properties": properties}
+    if component == 'ToolResults':
+        result['usage'] = 'Constructor renders immediately in the current UI container. outputs is a ToolOutputs instance. Call refresh() after publishing outputs.'
+    return result
+
+
+def diagnose(error, path):
+    """Return component/member facts only, without raw errors, locals or values."""
+    registry = components()
+    tb = error.__traceback__
+    while tb:
+        if tb.tb_frame.f_code.co_filename == str(path):
+            try:
+                tree = ast.parse(path.read_text(encoding='utf-8'))
+            except (OSError, SyntaxError, UnicodeError):
+                return None
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Attribute) or node.lineno != tb.tb_lineno:
+                    continue
+                if not isinstance(node.value, ast.Name) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', node.attr):
+                    continue
+                obj = tb.tb_frame.f_locals.get(node.value.id)
+                label = next((name for name, cls in registry.items() if type(obj) is cls), None)
+                if label is None:
+                    continue
+                if isinstance(error, AttributeError) and error.obj is obj and error.name == node.attr:
+                    return {"component": label, "member": node.attr, "problem": "missing_attribute",
+                            "next_action": "Call read_component_api for the real API before editing."}
+                if isinstance(error, AttributeError) and isinstance(node.ctx, ast.Store):
+                    member = inspect.getattr_static(type(obj), node.attr, None)
+                    if isinstance(member, property) and member.fset is None:
+                        return {"component": label, "member": node.attr, "problem": "read_only_property",
+                                "next_action": "Call read_component_api; update mutable property contents in place when supported."}
+        tb = tb.tb_next
+    return None

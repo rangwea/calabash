@@ -1,6 +1,7 @@
 """Compact local attachment controls for the conversation composer."""
 
 from nicegui import ui
+from component.action_button import action_button
 
 from component.file_access import choose_chat_files
 from core.i18n import t
@@ -55,7 +56,7 @@ def render_file(item, chat_id, *, remove=None):
                 details += " · " + (t("文件已变化，请重新选择") if status == "changed" else t("文件不可访问"))
             ui.label(details).classes("text-xs text-gray-400 break-words")
         if remove:
-            ui.button(icon="close", on_click=remove).props("flat dense round").tooltip(t("移除附件"))
+            action_button("close", t("移除附件"), remove)
 
 
 class ChatAttachments:
@@ -154,4 +155,4 @@ class ChatAttachments:
         compose.on("selection", dropped)
 
     def button(self):
-        ui.button(icon="attach_file", on_click=self.select).props("flat dense round").tooltip(t("添加文件"))
+        action_button("attach", t("添加文件"), self.select)

@@ -45,6 +45,9 @@ async def export():
 |---|---|
 | `results.start_run()` | 为一次新执行创建批次，保留历史；失败项重试不调用它。 |
 | `results.outputs.write(name, writer)` | 同步操作，放在 `run.io_bound`；name 只能是文件名。writer 接收一个私有临时 Path，成功后自动登记并返回随机结果 ID。 |
+
+`ToolResults()` 在创建时立即渲染到当前容器，无需且不存在 `mount()`。需要放到页面底部时，在底部容器内创建；写出文件后调用 `results.refresh()`。
+结果为空时组件完全隐藏；有文件时默认显示紧凑的折叠入口，用户展开后查看结果和交付操作。不要额外创建空结果占位、预留高度或重复结果面板。
 | `results.refresh()` | 重读历史和文件状态，更新 UI；不恢复批量任务执行状态。 |
 | `results.outputs.files()` | 返回元数据列表：id、name、size、run_id、created、available。不是路径列表。 |
 | `results.outputs.path(file_id)` | 按当前作用域校验结果 ID、文件身份和存在性；不要改成接收浏览器提交的任意本机路径。 |

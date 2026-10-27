@@ -6,6 +6,8 @@ import inspect
 from collections.abc import Callable
 from typing import Any
 
+from core.tool_api_contracts import api_errors
+
 from service.capabilities.tool_capabilities import require_tool_capabilities
 
 
@@ -16,6 +18,9 @@ class ToolEntryPointError(ValueError):
 def validate_tool_entrypoint(content: str) -> bool:
     """校验源码并返回 ``main()`` 是否为异步函数。"""
     tree = ast.parse(content)
+    errors = api_errors(tree)
+    if errors:
+        raise ToolEntryPointError("\n".join(errors))
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == "main":
             return False

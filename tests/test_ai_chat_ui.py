@@ -13,6 +13,44 @@ from service.chat import model_providers
 
 
 class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
+    async def test_preview_target_survives_close_switch_and_page_recreation(self):
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(core, 'loop', asyncio.get_running_loop()), patch.object(ai_chat, 'app_dir', return_value=root), patch.object(i18n, 'app_dir', return_value=root), patch.object(model_providers, 'selected', return_value='test::model'), patch.object(model_providers, 'options', return_value={'test::model': 'Test'}):
+                for chat_id in ('one', 'two'):
+                    result = {'success': True, 'requires_manual_run': True, 'preview_url': f'/preview/{chat_id}?context=synthetic'}
+                    ai_chat.save_chat(chat_id, [{'role': 'tool', 'content': json.dumps(result)}])
+                with self.container:
+                    switch = render_ai_chat('one')
+                self.assertFalse(any(e.tag == 'iframe' for e in self.container.descendants()))
+
+                async def toggle(container):
+                    pane = next(e for e in container.descendants() if e._props.get('data-chat-session') == 'one')
+                    button = next(e for e in pane.descendants() if isinstance(e, ui.button) and 'aria-pressed' in e._props)
+                    with container:
+                        next(iter(button._event_listeners.values())).handler(None)
+                    for _ in range(8):
+                        await asyncio.sleep(0)
+
+                await toggle(self.container)
+                self.assertTrue(any(e.tag == 'iframe' for e in self.container.descendants()), 'first open')
+                self.assertEqual('/preview/one?context=synthetic', ai_chat.remembered_preview('one'))
+                await toggle(self.container)  # Close, then switch away and back.
+                switch('two')
+                switch('one')
+                await toggle(self.container)
+                frame = next(e for e in self.container.descendants() if e.tag == 'iframe')
+                self.assertIn('/preview/one?', frame._props['src'])
+                with self.container:
+                    with ui.column() as recreated:
+                        render_ai_chat('one')
+                self.assertFalse(any(e.tag == 'iframe' for e in recreated.descendants()))
+                await toggle(recreated)
+                self.assertIn('/preview/one?', next(e for e in recreated.descendants() if e.tag == 'iframe')._props['src'])
+                ai_chat.delete_chat('one')
+                self.assertEqual('', ai_chat.remembered_preview('one'))
+
     def setUp(self):
         self.container = ui.column()
 
@@ -116,7 +154,7 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            result = {"success": True, "requires_manual_run": True, "preview_url": "/preview/repaired", "url": "/preview/repaired"}
+            result = {"success": True, "requires_manual_run": True, "preview_url": "/preview/repaired", "url": "/tools/demo/example"}
             saved = asyncio.Event()
             finish = asyncio.Event()
 
@@ -154,6 +192,13 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual("o_restart_alt", buttons[0]._props["icon"])
                     self.assertIn("chat-repair-retry", buttons[0]._classes)
                     self.assertFalse(any(element.tag == "iframe" for element in self.container.descendants()))
+                with patch.object(ui.navigate, 'to') as navigate, self.container:
+                    next(iter(buttons[0]._event_listeners.values())).handler(None)
+                    for _ in range(8):
+                        await asyncio.sleep(0)
+                    navigate.assert_not_called()
+                    frame = next(element for element in self.container.descendants() if element.tag == 'iframe')
+                    self.assertTrue(frame._props['src'].startswith('/preview/repaired?'))
 
     async def test_background_error_is_visible_and_retry_does_not_duplicate_message(self):
         with tempfile.TemporaryDirectory() as directory:

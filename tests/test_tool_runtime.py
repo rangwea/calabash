@@ -11,6 +11,17 @@ from service.tools.tool_runtime import (
 
 
 class ToolRuntimeTest(unittest.TestCase):
+    def test_known_invalid_component_apis_are_rejected_without_execution(self):
+        for source, hint in [
+            ('from component.tool_results import ToolResults as Results\ndef main():\n    results = Results()\n    results.mount()\n', 'remove mount()'),
+            ('from nicegui import ui\ndef main():\n    chart = ui.echart({}).classes("w-full")\n    chart.options = {}\n', 'read-only'),
+        ]:
+            with self.subTest(source=source), self.assertRaisesRegex(ToolEntryPointError, hint.replace('(', r'\(').replace(')', r'\)')):
+                validate_tool_entrypoint(source)
+
+    def test_valid_component_updates_and_unrelated_mount_are_allowed(self):
+        validate_tool_entrypoint('from component.tool_results import ToolResults\nfrom nicegui import ui\ndef main():\n    results = ToolResults()\n    results.refresh()\n    chart = ui.echart({})\n    chart.options.update({})\n    chart.update()\n    other.mount()\n')
+
     def test_validates_sync_and_async_main(self):
         self.assertFalse(validate_tool_entrypoint("def main():\n    pass\n"))
         self.assertTrue(validate_tool_entrypoint("async def main():\n    pass\n"))

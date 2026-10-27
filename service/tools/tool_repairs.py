@@ -45,6 +45,23 @@ def capture(error, project, name, *, preview_key=None, context=None, phase="rend
         frames.append(error.lineno)
     data = {"project": project, "name": name, "preview_key": preview_key, "context": context,
             "phase": phase, "exception": kind, "lines": frames[-3:], "revision": hashlib.sha256(path.read_bytes()).hexdigest()}
+    from service.tools.tool_runtime import ToolEntryPointError
+    if isinstance(error, ToolEntryPointError):
+        from core.tool_api_contracts import api_errors
+        # Recompute trusted diagnostics; never forward exception message text.
+        try:
+            errors = api_errors(ast.parse(path.read_text(encoding="utf-8")))
+        except (OSError, SyntaxError, UnicodeError):
+            errors = []
+        if errors:
+            data["diagnosis"] = {"problem": "invalid_component_api", "details": errors}
+    # Never parse or forward arbitrary exception text: it can contain user data.
+    # Python supplies structured AttributeError metadata for missing attributes.
+    if isinstance(error, AttributeError):
+        from service.tools.component_api import diagnose
+        diagnosis = diagnose(error, path)
+        if diagnosis:
+            data["diagnosis"] = diagnosis
     report_id = uuid4().hex
     with closing(ai_chat.connect()) as db, db:
         db.execute("INSERT INTO tool_repairs(id,chat_id,data) VALUES(?,?,?)", (report_id, chat_id, json.dumps(data)))
@@ -61,7 +78,8 @@ def get(report_id):
 
 
 def summary(report):
-    return json.dumps({key: report[key] for key in ("project", "name", "phase", "exception", "lines")}, ensure_ascii=False, indent=2)
+    keys = ("project", "name", "phase", "exception", "lines", "diagnosis")
+    return json.dumps({key: report[key] for key in keys if key in report}, ensure_ascii=False, indent=2)
 
 
 def model_fingerprint():
@@ -169,6 +187,9 @@ class RepairSession:
                 if not valid or current["state"] != "running" or current.get("attempt") != report["attempt"]:
                     raise ValueError("Repair approval expired")
                 db.execute("UPDATE tool_repairs SET started=CURRENT_TIMESTAMP WHERE id=?", (report["id"],))
+        if operation == "read_component_api":
+            from service.tools.component_api import read_api
+            return read_api(args.get("component"))
         if operation not in {"read_tool", "write_tool", "validate_tool", "preview_tool"} or any(args.get(k) != report[k] for k in ("project", "name")):
             return {"error": "Repair is restricted to the referenced tool code"}
         path = ai_chat.tool_path(report["project"], report["name"])
@@ -194,7 +215,16 @@ class RepairSession:
         finally:
             temp.unlink(missing_ok=True)
         self.read_revision = None
-        url = f"/tools/{report['project']}/{report['name']}"
         if report["preview_key"]:
             url = f"/preview/{report['preview_key']}?context={report['context']}"
+        else:
+            from service.files import tool_inputs
+            # A published tool is still saved in place, but manual retry belongs
+            # in this conversation's preview rather than navigating away.
+            preview = preview_service.create_temporary_preview(content)
+            if not preview.get("success"):
+                raise ValueError("Unable to prepare repair preview")
+            chat_id = report["chat_id"] or ai_chat.create_tool_chat(report["project"], report["name"], report["name"])
+            token = tool_inputs.create(chat_id, preview["key"], [], tool_key=f"tool:{report['project']}/{report['name']}")
+            url = f"{preview['preview_url']}?context={token}"
         return {"success": True, "requires_manual_run": True, "preview_url": url, "url": url}

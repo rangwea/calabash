@@ -22,6 +22,10 @@ def load_module(name, path):
 
 
 class TemplateContractTests(unittest.TestCase):
+    def test_cli_validator_checks_component_contracts(self):
+        source = self.source('from component.tool_results import ToolResults\ndef main():\n    results = ToolResults()\n    results.mount()')
+        self.assertTrue(any('remove mount()' in error for error in self.validator.validate_source(source)))
+
     def setUp(self):
         self.validator = load_module("calabash_validator", SKILL / "scripts/validate-tool.py")
         self.header = (SKILL / "references/simple-tool.py").read_text().split('"""', 2)[1]

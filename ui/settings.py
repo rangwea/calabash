@@ -4,6 +4,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from nicegui import ui
+from component.action_button import action_button
 from core.app_info import APP_NAME, APP_VERSION
 from core.i18n import t, language, set_language, LANGUAGES
 from core.local_paths import app_dir, database_path, tools_dir
@@ -32,9 +33,7 @@ def _render_diagnostics_view(
                 if value:
                     ui.label(value).classes("text-xs text-gray-500 break-all")
             if action:
-                ui.button(icon=icon, on_click=action).props(
-                    "flat dense round size=sm color=grey-7"
-                ).tooltip(tooltip or label)
+                action_button({"o_folder_open": "folder", "folder_open": "folder", "content_copy": "copy", "refresh": "refresh"}[icon], tooltip or label, action)
 
     with ui.column().classes("w-full max-w-3xl mx-auto px-6 sm:px-8 pt-7 pb-10 gap-7"):
         with ui.row().classes("w-full items-center justify-between gap-3"):

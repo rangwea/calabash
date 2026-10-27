@@ -6,6 +6,7 @@ from core.logger import get_logger
 from service.tools.tool_manage_service import delete_tool
 from service.tools.tool_activity import ToolBusyError
 from component.tool_transfer import export_tool
+from component.action_button import action_button
 
 logger = get_logger(__name__)
 _RECENT_TOOLS_FILE = app_dir() / "recent_tools.json"
@@ -134,27 +135,11 @@ def _render_tool_row(tool: dict, on_chat=None, on_delete=None) -> None:
                         _render_tool_tag(tag, project_name)
             with ui.row().classes("gap-1 items-center shrink-0"):
                 if on_chat:
-                    ui.button(
-                        icon="o_chat_bubble_outline",
-                        on_click=lambda _, t=tool: on_chat(t),
-                    ).props("flat dense round size=sm color=grey-7").classes(
-                        "tool-row-action"
-                    ).tooltip(t("对话修改工具"))
-                ui.button(
-                    icon="play_arrow", on_click=lambda _, t=tool: use_tool(t)
-                ).props("flat dense round size=sm color=grey-7").classes(
-                    "tool-row-action"
-                ).tooltip(t("运行工具"))
-                ui.button(icon="o_file_download", on_click=lambda: export_tool(tool)).props(
-                    "flat dense round size=sm color=grey-7"
-                ).classes("tool-row-action").tooltip(t("导出工具 ZIP"))
+                    action_button("chat", t("对话修改工具"), lambda _, item=tool: on_chat(item))
+                action_button("play", t("运行工具"), lambda _, item=tool: use_tool(item))
+                action_button("download", t("导出工具 ZIP"), lambda: export_tool(tool))
                 if on_delete:
-                    ui.button(
-                        icon="o_delete",
-                        on_click=lambda: _confirm_delete_tool(tool, on_delete),
-                    ).props("flat dense round size=sm color=grey-7").classes(
-                        "tool-row-action"
-                    ).tooltip(t("删除工具"))
+                    action_button("delete", t("删除工具"), lambda: _confirm_delete_tool(tool, on_delete))
 
 
 def _confirm_delete_tool(tool, on_deleted):

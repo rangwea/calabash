@@ -7,6 +7,7 @@ from uuid import uuid4
 import httpx
 from nicegui import ui
 
+from component.action_button import action_button as _toolbar_button
 from component.chat_attachments import ChatAttachments, NativeFileDrop, render_file
 from core.i18n import t
 from core.logger import get_logger
@@ -139,6 +140,7 @@ def _render_chat_session(chat_id=None, on_change=None):
     messages = chat.read_chat(chat_id) if chat_id else []
     task = None
     preview_state = {"url": "", "revision": 0}
+    publishing = {"busy": False}
     failure = {"message": chat.read_failure(selected["id"])}
 
     def files_changed(chat_id):
@@ -148,14 +150,21 @@ def _render_chat_session(chat_id=None, on_change=None):
     attachments = ChatAttachments(lambda: selected["id"], files_changed)
 
     def set_preview_visible(visible):
+        save_preview_button.set_enabled(bool(preview_state["url"]) and not publishing["busy"])
         preview_panel.set_visibility(visible)
         preview_divider.set_visibility(visible)
-        preview_toggle.props('icon=vertical_split')
         preview_toggle._props["aria-pressed"] = visible
         preview_toggle._props["aria-label"] = t("关闭预览") if visible else t("打开预览")
         preview_tip.set_text(t("关闭预览") if visible else t("打开预览"))
-        preview_toggle.classes(add="bg-gray-100" if visible else "", remove="" if visible else "bg-gray-100")
         preview_toggle.update()
+
+    def toggle_preview():
+        if preview_panel.visible:
+            set_preview_visible(False)
+        elif preview_state["url"]:
+            show_preview({"url": preview_state["url"]})
+        else:
+            set_preview_visible(True)
 
     def show_preview(result):
         from service.tools.tool_activity import active_count
@@ -166,9 +175,43 @@ def _render_chat_session(chat_id=None, on_change=None):
         if not url.startswith("/preview/") or url.startswith("//"):
             return
         preview_state["url"] = url
+        chat.remember_preview(selected["id"], url)
         preview_state["revision"] += 1
         set_preview_visible(True)
         preview_content.refresh()
+
+    async def save_preview_tool():
+        from service.tools import preview_publish
+        from service.tools.tool_activity import ToolBusyError
+        if publishing["busy"]:
+            return
+        publishing["busy"] = True
+        save_preview_button.disable()
+        try:
+            snapshot = preview_publish.prepare(selected["id"], preview_state["url"])
+            if snapshot.revision is not None:
+                with preview_panel, ui.dialog() as dialog, ui.card().classes("w-full max-w-md gap-3"):
+                    ui.label(t("覆盖已有工具？")).classes("text-lg font-semibold")
+                    ui.label(t("工具 {tool} 已存在，是否用当前预览版本覆盖？", tool=f"{snapshot.project}/{snapshot.name}"))
+                    with ui.row().classes("w-full justify-end"):
+                        ui.button(t("取消"), on_click=lambda: dialog.submit(False)).props("flat no-caps")
+                        ui.button(t("确认覆盖"), on_click=lambda: dialog.submit(True)).props("unelevated no-caps")
+                if not await dialog:
+                    return
+            if preview_state["url"] != snapshot.url:
+                raise ValueError('preview_changed')
+            preview_publish.save(snapshot, overwrite=snapshot.revision is not None)
+            ui.notify(t("已保存到工具列表"), type="positive")
+            if on_change:
+                on_change(selected["id"])
+        except ToolBusyError:
+            ui.notify(t("工具正在运行，暂时无法覆盖"), type="warning")
+        except (OSError, ValueError, SyntaxError):
+            logger.exception("Unable to publish selected preview")
+            ui.notify(t("无法保存预览，请刷新后重试；预览或目标工具可能已更改或过期"), type="warning")
+        finally:
+            publishing["busy"] = False
+            save_preview_button.enable()
 
     def assistant_markdown(content):
         element = ui.markdown(content).classes("chat-message w-full")
@@ -189,7 +232,9 @@ def _render_chat_session(chat_id=None, on_change=None):
 
     def restore_preview():
         set_preview_visible(False)
-        preview_state["url"] = ""
+        preview_state["url"] = chat.remembered_preview(selected["id"])
+        if preview_state["url"]:
+            return  # Opening the panel is an explicit run, including after repair.
         for message in reversed(messages):
             if message.get("role") != "tool":
                 continue
@@ -199,13 +244,14 @@ def _render_chat_session(chat_id=None, on_change=None):
                 continue
             if isinstance(result, dict) and result.get("success") and str(result.get("preview_url", "")).startswith("/preview/"):
                 if result.get("requires_manual_run"):
+                    preview_state["url"] = result["preview_url"]
                     break
                 show_preview(result)
                 break
 
     @ui.refreshable
     def preview_content():
-        if preview_state["url"]:
+        if preview_state["url"] and preview_panel.visible:
             separator = "&" if "?" in preview_state["url"] else "?"
             url = f"{preview_state['url']}{separator}embedded=1&revision={preview_state['revision']}"
             frame = ui.element("iframe").classes("w-full h-full border-0 bg-white")
@@ -269,7 +315,7 @@ def _render_chat_session(chat_id=None, on_change=None):
                     continue
                 if isinstance(result, dict) and result.get("requires_manual_run"):
                     if message.get("repair_completed") and not generation["running"] and not failure["message"]:
-                        ui.button(t("修复已保存，手动重试运行"), icon="o_restart_alt", on_click=lambda result=result: show_preview(result) if result["url"].startswith("/preview/") else ui.navigate.to(result["url"])).props("flat dense no-caps").classes("chat-repair-retry")
+                        ui.button(t("修复已保存，手动重试运行"), icon="o_restart_alt", on_click=lambda result=result: show_preview(result)).props("flat dense no-caps").classes("chat-repair-retry")
                     break
         if failure["message"]:
             with ui.row().classes("w-full items-center gap-2 px-3 py-2 bg-red-50 rounded-md"):
@@ -430,9 +476,7 @@ def _render_chat_session(chat_id=None, on_change=None):
             with ui.row().classes("w-full items-center justify-between px-5 py-2"):
                 ui.label(t("AI 对话")).classes("text-xs font-medium text-gray-500")
                 with ui.row().classes("items-center gap-1"):
-                    preview_toggle = ui.button(icon="vertical_split", on_click=lambda: set_preview_visible(not preview_panel.visible)).props("flat dense round data-tool-leave").classes("shrink-0")
-                    with preview_toggle:
-                        preview_tip = ui.tooltip(t("打开预览"))
+                    preview_toggle, preview_tip = _toolbar_button("preview", t("打开预览"), toggle_preview, leave=True)
             with ui.scroll_area().classes("w-full flex-1 min-h-0"), ui.column().classes("w-full max-w-3xl mx-auto px-6 py-4 gap-0") as feed:
                 timeline()
             with ui.column().classes("w-full max-w-3xl mx-auto px-5 pt-2 pb-5 gap-0"):
@@ -460,9 +504,10 @@ def _render_chat_session(chat_id=None, on_change=None):
             with ui.row().classes("w-full items-center justify-between px-3 py-2 gap-2 border-b border-gray-100"):
                 ui.label(t("工具预览")).classes("text-xs font-medium text-gray-600")
                 with ui.row().classes("items-center gap-1"):
-                    ui.button(icon="refresh", on_click=lambda: show_preview({"url": preview_state["url"]})).props("flat dense round data-tool-leave").tooltip(t("刷新预览"))
-                    ui.button(icon="open_in_new", on_click=lambda: ui.navigate.to(preview_state["url"], new_tab=True)).props("flat dense round").tooltip(t("打开完整预览"))
-                    ui.button(icon="close", on_click=lambda: set_preview_visible(False)).props("flat dense round data-tool-leave").tooltip(t("关闭预览"))
+                    save_preview_button, _ = _toolbar_button("save", t("保存到工具列表"), save_preview_tool)
+                    _toolbar_button("refresh", t("刷新预览"), lambda: show_preview({"url": preview_state["url"]}), leave=True)
+                    _toolbar_button("open", t("打开完整预览"), lambda: ui.navigate.to(preview_state["url"], new_tab=True))
+                    _toolbar_button("close", t("关闭预览"), lambda: set_preview_visible(False), leave=True)
             with ui.column().classes("preview-body w-full flex-1 min-h-0 gap-0"):
                 preview_content()
         preview_panel.set_visibility(False)
