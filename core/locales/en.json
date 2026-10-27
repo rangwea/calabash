@@ -1,4 +1,11 @@
 {
+  "模型未返回可用内容，请重试或选择其他模型": "The model returned no usable content. Retry or choose another model.",
+  "模型输出达到长度限制，本次未完成的工具调用未执行，请重试": "The model output reached its length limit. Incomplete tool calls were not executed. Please retry.",
+  "模型响应超时，请重试或选择其他模型": "The model response timed out. Retry or choose another model.",
+  "正在生成工具代码…": "Generating tool code…",
+  "调整菜单宽度": "Resize sidebar",
+  "调整预览宽度": "Resize preview",
+  "切换侧边栏": "Toggle sidebar",
   "工具暂未运行": "Tool has not run",
   "能力声明格式无效，请让 Agent 修改工具代码。": "Invalid capability declaration. Ask the Agent to update the tool code.",
   "请先准备下列能力，再手动重试运行。": "Prepare the required capabilities, then retry manually.",

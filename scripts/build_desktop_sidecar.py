@@ -88,6 +88,8 @@ def main() -> None:
         "--add-data",
         f"{ROOT / 'component' / 'context_menu.js'}{os.pathsep}component",
         "--add-data",
+        f"{ROOT / 'component' / 'assets' / 'calabash.png'}{os.pathsep}component/assets",
+        "--add-data",
         f"{ROOT / 'agent' / 'skills' / 'calabash'}{os.pathsep}agent/skills/calabash",
         "--collect-all",
         "nicegui",

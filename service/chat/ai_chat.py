@@ -1,5 +1,6 @@
 """Local conversation storage and external-model tool-call streaming."""
 
+import asyncio
 import hashlib
 import json
 import re
@@ -12,6 +13,8 @@ import httpx
 from core.i18n import language, t
 from core.local_paths import app_dir, tools_dir
 from service.tools.tool_runtime import validate_tool_entrypoint
+
+MODEL_REQUEST_TIMEOUT = 300
 
 
 def connect():
@@ -228,12 +231,14 @@ async def respond(messages, chat_id=None, repair=None):
             calls = {}
             text = ""
             reasoning = ""
+            generating_tool = False
+            finish_reason = None
             from service.chat.chat_context import prepare
             available = schemas()
             if repair_session:
                 available = [s for s in available if s["function"]["name"] in {"read_tool", "write_tool", "validate_tool", "preview_tool"}]
-            url, headers, payload = model_providers.request(provider, model, connection, [{"role": "system", "content": prompt}, *(working if repair_session else prepare(messages, chat_id))], available)
-            async with client.stream("POST", url, headers=headers, json=payload) as response:
+            url, headers, payload = model_providers.request(provider, model, connection, [{"role": "system", "content": prompt}, *(working if repair_session else prepare(messages, chat_id, include_reasoning=False))], available)
+            async with asyncio.timeout(MODEL_REQUEST_TIMEOUT), client.stream("POST", url, headers=headers, json=payload) as response:
                 if response.status_code != 200:
                     if response.status_code == 400:
                         raise ValueError(t("模型拒绝了当前请求（400），请检查模型选择，或新建对话后重试"))
@@ -248,6 +253,7 @@ async def respond(messages, chat_id=None, repair=None):
                     if packet.get("error"):
                         raise ValueError(t("模型服务返回错误，请稍后重试"))
                     for choice in packet.get("choices", []):
+                        finish_reason = choice.get("finish_reason") or finish_reason
                         delta = choice.get("delta", {})
                         if delta.get("reasoning_content") and not reasoning:
                             yield ("activity", "thinking")
@@ -257,10 +263,17 @@ async def respond(messages, chat_id=None, repair=None):
                         if token:
                             yield ("text", token)
                         for call in delta.get("tool_calls", []):
+                            if not generating_tool:
+                                generating_tool = True
+                                yield ("activity", "generating_tool")
                             item = calls.setdefault(call["index"], {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
                             item["id"] += call.get("id", "")
                             for field in ("name", "arguments"):
                                 item["function"][field] += call.get("function", {}).get(field, "")
+            if finish_reason == "length":
+                raise ValueError(t("模型输出达到长度限制，本次未完成的工具调用未执行，请重试"))
+            if not calls and not text.strip():
+                raise ValueError(t("模型未返回可用内容，请重试或选择其他模型"))
             message = {"role": "assistant", "content": text or None}
             if reasoning:
                 message["reasoning_content"] = reasoning

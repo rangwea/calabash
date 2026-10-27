@@ -92,14 +92,15 @@ async def validate_connection(provider, connection):
 def request(provider, model, connection, messages, tools):
     # Conversation IDs and file references are local metadata, not model input.
     allowed = {"role", "content", "tool_calls", "tool_call_id", "name"}
-    if provider == "deepseek":
-        allowed.add("reasoning_content")
+    # Requests below explicitly disable DeepSeek thinking; hidden reasoning from
+    # earlier attempts is not input for this non-thinking authoring mode.
     messages = [{key: value for key, value in message.items() if key in allowed} for message in messages]
     base = connection["base_url"].rstrip("/")
     if provider != "anthropic":
         payload = {"model": model, "messages": messages, "tools": tools, "stream": True}
-        if provider == "deepseek" and any(message["role"] == "assistant" and "reasoning_content" not in message for message in messages):
-            # Current chats can switch from a non-reasoning model; do not fabricate reasoning.
+        if provider == "deepseek":
+            # Tool authoring uses non-thinking mode explicitly. Provider defaults
+            # can otherwise spend the request entirely on hidden reasoning.
             payload["thinking"] = {"type": "disabled"}
         return base + "/chat/completions", {"Authorization": f"Bearer {connection['key']}"}, payload
     system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")

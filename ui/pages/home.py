@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import Request
 from nicegui import ui
 from core.app_info import APP_NAME
@@ -99,6 +101,15 @@ def render_desktop_home(repair_id: str | None = None) -> None:
             create_tool_chat(tool["project"], tool["name"], _tool_display_name(tool))
         )
 
+    sidebar_state = {"expanded": True}
+
+    def toggle_sidebar() -> None:
+        sidebar_state["expanded"] = not sidebar_state["expanded"]
+        sidebar_container.set_visibility(sidebar_state["expanded"])
+        sidebar_divider.set_visibility(sidebar_state["expanded"])
+        if sidebar_button:
+            sidebar_button.props(f'aria-expanded={str(sidebar_state["expanded"]).lower()}')
+
     with ui.column().classes("w-full h-screen overflow-hidden bg-white gap-0"):
         render_app_frame(
             action=lambda: navigate_view("diagnostics"),
@@ -119,7 +130,30 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                     sidebar.refresh,
                 )
 
-            sidebar()
+            from component.panel_resize import resize_handle
+
+            with ui.element("div").classes("relative h-full flex-shrink-0"):
+                with ui.element("nav").props('id=desktop-sidebar data-testid=desktop-sidebar').classes(
+                    "w-56 h-full min-h-0 overflow-hidden pt-9 bg-gray-50"
+                ) as sidebar_container:
+                    with ui.row().classes(
+                        "absolute top-0 left-0 right-9 h-9 items-center gap-2 px-3 flex-nowrap overflow-hidden"
+                    ).props("data-testid=sidebar-brand"):
+                        ui.image(str(Path(__file__).resolve().parents[2] / "component/assets/calabash.png")).props(
+                            f'no-spinner fit=contain alt="{APP_NAME}"'
+                        ).classes("w-5 h-5 shrink-0")
+                        ui.label(APP_NAME).classes("text-sm font-medium text-gray-700 truncate")
+                    sidebar()
+                sidebar_button = ui.button(icon="o_view_sidebar", on_click=toggle_sidebar).props(
+                    'flat dense round size=sm color=grey-7 data-testid=sidebar-toggle '
+                    f'aria-expanded=true aria-controls=desktop-sidebar aria-label="{t("切换侧边栏")}"'
+                ).classes("absolute top-1 right-1 z-10").tooltip(t("切换侧边栏"))
+                # Keep a narrow, reachable expansion control when the menu is hidden.
+                ui.element("div").classes("w-8 h-9").bind_visibility_from(
+                    sidebar_state, "expanded", backward=lambda value: not value
+                )
+            sidebar_divider = resize_handle(label="调整菜单宽度", minimum=180, maximum=360)
+            sidebar_divider.props("data-panel=desktop-sidebar")
 
             with ui.column().classes("flex-1 min-w-0 h-full overflow-hidden gap-0"):
                 with ui.column().classes(_BODY_SCROLL):

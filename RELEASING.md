@@ -20,6 +20,20 @@ The [GitHub Release workflow](.github/workflows/release.yml) supports:
 
 It uses the automatically provided `GITHUB_TOKEN`, without an additional publishing token. Optional capability plugins are distributed separately from the main app.
 
+## Retrying a failed DMG bundle
+
+If compilation succeeded but DMG generation failed, retain the verbose output
+and retry only the installer step:
+
+```bash
+npm run desktop:bundle -- --bundles dmg
+```
+
+This reuses the compiled app and bundled Python backend. It does not rebuild
+Python or Rust, change security settings, or bypass signing and notarization.
+Do not run multiple packaging commands concurrently. A successful retry alone
+does not establish the cause of an earlier failure.
+
 ## Before publishing
 
 1. Align the version in root package.json, package-lock.json, pyproject.toml, uv.lock, src-tauri/Cargo.toml and Cargo.lock. Tauri reads the root package.json directly.

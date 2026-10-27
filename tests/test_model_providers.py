@@ -42,11 +42,12 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual("Bearer secret", headers["Authorization"])
             self.assertTrue(payload["stream"])
 
-    def test_deepseek_reasoning_is_replayed_only_for_deepseek(self):
+    def test_non_thinking_requests_omit_historical_reasoning(self):
         messages = [{"role": "assistant", "content": "done", "reasoning_content": "reasoning"}]
         connection = {"base_url": "https://example.test", "key": "secret"}
         _, _, payload = models.request("deepseek", "model", connection, messages, [])
-        self.assertEqual("reasoning", payload["messages"][0]["reasoning_content"])
+        self.assertNotIn("reasoning_content", payload["messages"][0])
+        self.assertEqual({"type": "disabled"}, payload["thinking"])
         _, _, payload = models.request("openai", "model", connection, messages, [])
         self.assertNotIn("reasoning_content", payload["messages"][0])
         # Switching from another current provider must not fabricate DeepSeek reasoning.

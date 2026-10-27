@@ -11,7 +11,8 @@
     "desktop:web:build": "vite build desktop-ui",
     "desktop:backend:build": "uv run --group desktop python scripts/build_desktop_sidecar.py",
     "desktop:dev": "tauri dev",
-    "desktop:build": "npm run desktop:backend:build && tauri build"
+    "desktop:build": "npm run desktop:backend:build && tauri build --verbose",
+    "desktop:bundle": "tauri bundle --verbose"
   },
   "dependencies": {},
   "devDependencies": {

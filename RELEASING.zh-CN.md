@@ -20,6 +20,18 @@ npm run desktop:build
 
 使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外发布令牌。可选能力插件独立分发，不打进主 App。
 
+## DMG 打包失败后的重试
+
+若编译已成功，仅 DMG 生成失败，保留详细日志后可以单独重试安装包步骤：
+
+```bash
+npm run desktop:bundle -- --bundles dmg
+```
+
+此命令复用已编译的应用和 Python 后端，不重新构建 Python 或 Rust，
+不修改安全设置，也不绕过签名或公证。不要同时运行多个打包命令。
+重试成功本身并不能证明之前失败的根因。
+
 ## 发布前检查
 
 1. 将版本同步到根 package.json、package-lock.json、pyproject.toml、uv.lock、src-tauri/Cargo.toml 和 Cargo.lock。Tauri 配置直接读取根 package.json。

@@ -23,6 +23,7 @@ _COMPOSER_KEYDOWN_JS = """(e) => {
 }"""
 
 ACTION_LABELS = {
+    "generating_tool": "正在生成工具代码…",
     "thinking": "正在思考",
     "list_tools": "检查现有工具",
     "read_tool": "读取工具代码",
@@ -114,6 +115,7 @@ def render_ai_chat(chat_id=None, on_change=None):
 
     def set_preview_visible(visible):
         preview_panel.set_visibility(visible)
+        preview_divider.set_visibility(visible)
         preview_toggle.props('icon=vertical_split')
         preview_toggle._props["aria-pressed"] = visible
         preview_toggle._props["aria-label"] = t("关闭预览") if visible else t("打开预览")
@@ -303,6 +305,10 @@ def render_ai_chat(chat_id=None, on_change=None):
             if partial:
                 messages.append({"role": "assistant", "content": partial})
             ui.notify(t("已停止"))
+        except TimeoutError:
+            del messages[original_count:]
+            failure["message"] = t("模型响应超时，请重试或选择其他模型")
+            ui.notify(failure["message"], type="negative")
         except (ValueError, httpx.HTTPError) as error:
             del messages[original_count:]
             failure["message"] = str(error) if isinstance(error, ValueError) else t("网络连接失败，请重试")
@@ -422,7 +428,10 @@ def render_ai_chat(chat_id=None, on_change=None):
                             send = ui.button(icon="arrow_upward", on_click=submit).props("dense round color=primary").classes("chat-send").tooltip(t("发送"))
                     ui.label(t("文件引用保存在本地；后续读取内容可能发送至所选模型服务")).classes("text-xs text-gray-400 break-words")
                 attachments.connect_drop(compose)
-        with ui.column().classes("w-1/2 min-w-0 h-full gap-0 border-l border-gray-100 bg-white") as preview_panel:
+        from component.panel_resize import resize_handle
+
+        preview_divider = resize_handle(label="调整预览宽度", minimum=280, maximum=1400, direction=-1)
+        with ui.column().classes("w-1/2 flex-shrink-0 min-w-0 h-full gap-0 border-l border-gray-100 bg-white") as preview_panel:
             with ui.row().classes("w-full items-center justify-between px-3 py-2 gap-2 border-b border-gray-100"):
                 ui.label(t("工具预览")).classes("text-xs font-medium text-gray-600")
                 with ui.row().classes("items-center gap-1"):
@@ -432,5 +441,6 @@ def render_ai_chat(chat_id=None, on_change=None):
             with ui.column().classes("preview-body w-full flex-1 min-h-0 gap-0"):
                 preview_content()
         preview_panel.set_visibility(False)
+        preview_divider.props(f"data-panel=c{preview_panel.id}").set_visibility(False)
         restore_preview()
     return switch
