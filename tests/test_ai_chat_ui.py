@@ -16,6 +16,64 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.container = ui.column()
 
+    async def test_two_conversations_run_independently_and_keep_drafts(self):
+        started = {key: asyncio.Event() for key in ("one", "two")}
+        released = {key: asyncio.Event() for key in started}
+        changes = []
+
+        async def respond(messages, chat_id=None):
+            started[chat_id].set()
+            yield "activity", "thinking"
+            await released[chat_id].wait()
+            messages.append({"role": "assistant", "content": f"Finished {chat_id}"})
+            yield "text", f"Finished {chat_id}"
+
+        async def settle():
+            for _ in range(12):
+                await asyncio.sleep(0)
+
+        def pane(chat_id):
+            return next(item for item in self.container.descendants() if item._props.get("data-chat-session") == chat_id)
+
+        def composer(chat_id):
+            return next(item for item in pane(chat_id).descendants() if isinstance(item, ui.textarea))
+
+        def send(chat_id):
+            button = next(item for item in pane(chat_id).descendants() if "chat-send" in item._classes)
+            with pane(chat_id):
+                next(iter(button._event_listeners.values())).handler(None)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(core, "loop", asyncio.get_running_loop()), patch.object(ai_chat, "app_dir", return_value=root), patch.object(i18n, "app_dir", return_value=root), patch.object(model_providers, "selected", return_value="test::model"), patch.object(model_providers, "options", return_value={"test::model": "Test"}), patch.object(ai_chat, "respond", respond):
+                with self.container:
+                    switch = render_ai_chat("one", on_change=changes.append)
+                composer("one").set_value("First request")
+                send("one")
+                await settle()
+                switch("two")
+                composer("two").set_value("Second request")
+                send("two")
+                await settle()
+                self.assertTrue(all(event.is_set() for event in started.values()))
+                self.assertFalse(pane("one").visible)
+                self.assertTrue(pane("two").visible)
+                composer("two").set_value("Unsent draft")
+                released["one"].set()
+                await settle()
+                self.assertEqual(changes[-1], "two")
+                self.assertEqual(ai_chat.read_chat("one")[-1]["content"], "Finished one")
+                self.assertFalse(any(m.get("content") == "Finished one" for m in ai_chat.read_chat("two")))
+                switch("one")
+                switch("two")
+                self.assertEqual(composer("two").value, "Unsent draft")
+                stop = next(item for item in pane("two").descendants() if isinstance(item, ui.button) and item.icon == "stop")
+                with pane("two"):
+                    next(iter(stop._event_listeners.values())).handler(None)
+                await settle()
+                self.assertEqual(ai_chat.read_chat("one")[-1]["content"], "Finished one")
+                self.assertEqual(ai_chat.read_chat("two")[-1]["content"], "Second request")
+
     async def test_repaired_preview_is_not_restored_automatically(self):
         import json
 

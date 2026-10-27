@@ -37,6 +37,40 @@ logger = get_logger(__name__)
 
 
 def render_ai_chat(chat_id=None, on_change=None):
+    """Keep each conversation's UI and generation task alive while switching."""
+    host = ui.column().classes("w-full h-full min-h-0 gap-0")
+    sessions = {}
+    active = {"id": None}
+
+    def changed(_chat_id):
+        # A background completion refreshes history without selecting that chat.
+        if on_change and active["id"]:
+            on_change(active["id"])
+
+    def switch(target=None):
+        target = target or uuid4().hex
+        if active["id"] in sessions:
+            sessions[active["id"]].set_visibility(False)
+        active["id"] = target
+        if target not in sessions:
+            with host:
+                pane = ui.column().classes("w-full h-full min-h-0 gap-0").props(
+                    f'data-chat-session="{target}"'
+                )
+                sessions[target] = pane
+                with pane:
+                    _render_chat_session(target, on_change=changed)
+        sessions[target].set_visibility(True)
+        changed(target)
+
+    switch(chat_id)
+    return switch
+
+
+def _render_chat_session(chat_id=None, on_change=None):
+    client = ui.context.client
+    if not hasattr(client, "calabash_running_chats"):
+        client.calabash_running_chats = set()
     generation = {"running": False}
     ui.add_css("""
         .calabash-chat .chat-repair-retry.q-btn {
@@ -184,19 +218,6 @@ def render_ai_chat(chat_id=None, on_change=None):
     def connection():
         ui.notify(t("请在右上角设置中的「模型配置」添加服务商与模型"), type="info")
 
-    def switch(chat_id=None):
-        if task and not task.done():
-            return
-        selected["id"] = chat_id or uuid4().hex
-        messages[:] = chat.read_chat(chat_id) if chat_id else []
-        failure["message"] = chat.read_failure(selected["id"])
-        composer.set_value("")
-        if on_change:
-            on_change(selected["id"])
-        timeline.refresh()
-        attachments.render.refresh()
-        restore_preview()
-
     @ui.refreshable
     def timeline():
         for message in messages:
@@ -272,6 +293,9 @@ def render_ai_chat(chat_id=None, on_change=None):
 
     async def generate_in_slot(repair=None):
         generation["running"] = True
+        client.calabash_running_chats.add(selected["id"])
+        if on_change:
+            on_change(selected["id"])
         completed = False
         failure["message"] = ""
         timeline.refresh()
@@ -320,6 +344,7 @@ def render_ai_chat(chat_id=None, on_change=None):
             ui.notify(failure["message"], type="negative")
         finally:
             generation["running"] = False
+            client.calabash_running_chats.discard(selected["id"])
             if completed:
                 for message in messages[original_count:]:
                     if message.get("role") == "tool":
@@ -443,4 +468,3 @@ def render_ai_chat(chat_id=None, on_change=None):
         preview_panel.set_visibility(False)
         preview_divider.props(f"data-panel=c{preview_panel.id}").set_visibility(False)
         restore_preview()
-    return switch

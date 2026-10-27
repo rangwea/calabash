@@ -80,18 +80,26 @@ def render_desktop_home(repair_id: str | None = None) -> None:
 
     def navigate_view(view_name: str) -> None:
         active_view["name"] = view_name
+        chat_host.set_visibility(view_name == "chat")
+        workspace_host.set_visibility(view_name != "chat")
         sidebar.refresh()
-        workspace.refresh()
+        if view_name != "chat":
+            workspace.refresh()
 
     def chat_changed(chat_id):
         chat_state["id"] = chat_id
         sidebar.refresh()
 
     def open_chat(chat_id=None):
-        if active_view["name"] == "chat" and chat_state["switch"]:
+        if chat_state["switch"]:
             chat_state["switch"](chat_id)
+            navigate_view("chat")
         else:
             chat_state["id"] = chat_id
+            from component.ai_chat import render_ai_chat
+
+            with chat_host:
+                chat_state["switch"] = render_ai_chat(chat_id, on_change=chat_changed)
             navigate_view("chat")
 
     def discuss_tool(tool):
@@ -156,18 +164,14 @@ def render_desktop_home(repair_id: str | None = None) -> None:
             sidebar_divider.props("data-panel=desktop-sidebar")
 
             with ui.column().classes("flex-1 min-w-0 h-full overflow-hidden gap-0"):
-                with ui.column().classes(_BODY_SCROLL):
+                chat_host = ui.column().classes("w-full flex-1 min-h-0 overflow-hidden gap-0")
+                chat_host.set_visibility(active_view["name"] == "chat")
+                with ui.column().classes(_BODY_SCROLL) as workspace_host:
+                    workspace_host.set_visibility(active_view["name"] != "chat")
 
                     @ui.refreshable
                     def workspace():
                         if active_view["name"] == "chat":
-                            from component.ai_chat import render_ai_chat
-
-                            with ui.column().classes("w-full h-full min-h-0 gap-0"):
-                                chat_state["switch"] = render_ai_chat(
-                                    chat_state["id"],
-                                    on_change=chat_changed,
-                                )
                             return
                         if active_view["name"] == "diagnostics":
                             _render_diagnostics_view(
@@ -221,6 +225,12 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                             render_tools()
 
                     workspace()
+
+                if active_view["name"] == "chat":
+                    from component.ai_chat import render_ai_chat
+
+                    with chat_host:
+                        chat_state["switch"] = render_ai_chat(chat_state["id"], on_change=chat_changed)
 
         def refresh_tool_data(*, notify: bool = True, force: bool = False) -> None:
             nonlocal tools_data, project_names

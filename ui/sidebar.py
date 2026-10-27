@@ -124,7 +124,10 @@ def _render_desktop_sidebar(
                     "sidebar-entry w-full min-w-0 px-2 py-1.5 cursor-pointer flex items-center gap-2 "
                     + ("sidebar-selected" if selected else "text-gray-600")
                 ):
-                    ui.icon("push_pin" if pinned else "o_chat_bubble_outline")
+                    if chat_id in getattr(ui.context.client, "calabash_running_chats", set()):
+                        ui.spinner(size="14px", color="grey-6").tooltip(t("正在生成回复"))
+                    else:
+                        ui.icon("push_pin" if pinned else "o_chat_bubble_outline")
                     ui.label(title).props("data-tool-leave").classes(
                         "text-xs truncate min-w-0 flex-1"
                     ).tooltip(title).on("click", lambda _, cid=chat_id: on_chat(cid))
