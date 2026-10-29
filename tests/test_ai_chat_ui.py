@@ -36,11 +36,13 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
                 await toggle(self.container)
                 self.assertTrue(any(e.tag == 'iframe' for e in self.container.descendants()), 'first open')
                 self.assertEqual('/preview/one?context=synthetic', ai_chat.remembered_preview('one'))
+                original = next(e for e in self.container.descendants() if e.tag == 'iframe')
                 await toggle(self.container)  # Close, then switch away and back.
                 switch('two')
                 switch('one')
                 await toggle(self.container)
                 frame = next(e for e in self.container.descendants() if e.tag == 'iframe')
+                self.assertIs(original, frame)
                 self.assertIn('/preview/one?', frame._props['src'])
                 with self.container:
                     with ui.column() as recreated:
@@ -105,7 +107,7 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
                 switch("one")
                 switch("two")
                 self.assertEqual(composer("two").value, "Unsent draft")
-                stop = next(item for item in pane("two").descendants() if isinstance(item, ui.button) and item.icon == "stop")
+                stop = next(item for item in pane("two").descendants() if isinstance(item, ui.button) and item._props.get("aria-label") == i18n.t("停止生成"))
                 with pane("two"):
                     next(iter(stop._event_listeners.values())).handler(None)
                 await settle()

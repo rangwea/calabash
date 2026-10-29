@@ -5,24 +5,33 @@ from nicegui import ui
 ACTION_CSS = """
 .calabash-action.q-btn {
     width: 30px; height: 30px; min-width: 30px; min-height: 30px;
-    padding: 6px; border-radius: 6px; color: #818b98;
+    padding: 6px; border-radius: 6px; color: var(--app-icon);
 }
 .calabash-action svg { display: block; width: 18px; height: 18px; }
 .calabash-action.calabash-action-text { width: auto; padding: 4px 8px; }
 .calabash-action-text .q-btn__content { gap: 6px; }
 .calabash-action:hover, .calabash-action[aria-pressed="true"] {
-    background: #f3f4f6; color: #66717f;
+    background: var(--app-hover); color: var(--app-text);
 }
-.calabash-action:focus-visible { outline: 2px solid #b6c3d0; outline-offset: 2px; }
+.calabash-action:focus-visible { outline: 2px solid var(--app-primary); outline-offset: 2px; }
 .calabash-action.calabash-action-compact {
     width: 28px; height: 28px; min-width: 28px; min-height: 28px;
-    padding: 7px; color: #969faa;
+    padding: 7px; color: var(--app-icon);
 }
 .calabash-action-compact svg { width: 14px; height: 14px; }
-.calabash-action.calabash-action-compact:hover { color: #7b8591; background: #eceff3; }
+.calabash-action.calabash-action-compact:hover { color: var(--app-text); background: var(--app-hover); }
 """
 
 ICONS = {
+    "send": '<path d="M12 21V3m-7 7 7-7 7 7"/>',
+    "stop": '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+
+    "more": '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    "edit": '<path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14Z"/>',
+    "pin": '<path d="m9 3 12 12-5 1-3 5-4-7-7-4 5-3ZM9 15l-6 6"/>',
+    "settings": '<path d="m9 3-1 3-3 1-2 4 2 2 1 4 3 1 2 3 4-2 3-1 1-4 2-3-2-3-1-3-4-1Z"/><circle cx="12" cy="12" r="3"/>',
+    "back": '<path d="m10 5-7 7 7 7M3 12h18"/>',
+
     "grid": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     "folder": '<path d="M3 8V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
     "copy": '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
@@ -56,3 +65,15 @@ def action_button(icon, label, callback, *, leave=False, text=False, compact=Fal
         tip = ui.tooltip(label)
     return button, tip
 
+
+
+def app_icon(name):
+    return ui.html('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[name] + '</svg>').classes('app-icon shrink-0')
+
+
+def menu_item(icon, label, callback, *, danger=False):
+    with ui.menu_item(on_click=callback).props('role=menuitem').classes('app-menu-item ' + ('menu-danger' if danger else '')) as item:
+        with ui.item_section().props('avatar'):
+            app_icon(icon)
+        ui.item_section(label)
+    return item

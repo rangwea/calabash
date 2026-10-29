@@ -1,5 +1,7 @@
 import '../../component/context_menu.js';
 
+document.documentElement.classList.toggle('platform-macos', navigator.platform.startsWith('Mac'));
+
 const statusEl = document.querySelector('#status');
 
 async function applyLanguage() {

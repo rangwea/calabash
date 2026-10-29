@@ -84,10 +84,10 @@ class ChatAttachments:
         self.busy = False
         self.render = ui.refreshable(self._render)
         ui.add_css("""
-            .calabash-chat .chat-attachment { border: 1px solid #e5e7eb; border-radius: 6px;
-                padding: 7px 9px; width: 220px; max-width: 100%; background: #fafbfc; }
+            .calabash-chat .chat-attachment { border: 1px solid var(--app-border); border-radius: 6px;
+                padding: 7px 9px; width: 220px; max-width: 100%; background: var(--app-surface-subtle); }
             .calabash-chat .chat-file-list { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; min-width: 0; }
-            .calabash-chat .chat-compose.file-hover { outline: 2px solid #7796b8; background: #f6f9fc; }
+            .calabash-chat .chat-compose.file-hover { outline: 2px solid var(--app-primary); background: var(--app-primary-light); }
         """)
 
     def _render(self):

@@ -1,5 +1,6 @@
 from nicegui import ui
-from component.action_button import action_button
+from component.action_button import action_button, app_icon, menu_item
+from component.interaction import activate_row
 from core.i18n import t
 from ui.tool_list import _get_recent_tools, _tool_display_name, use_tool
 
@@ -15,38 +16,38 @@ def _render_desktop_sidebar(
 ) -> None:
     recent_tools = _get_recent_tools(tools_data)
     ui.add_css("""
-        .calabash-sidebar { background: #f7f8fa; color: #525965; }
+        .calabash-sidebar { background: var(--app-sidebar); color: var(--app-muted); }
         .calabash-sidebar .sidebar-entry {
             min-height: 32px; border-radius: 6px; transition: background .15s, color .15s;
         }
         .calabash-sidebar .sidebar-conversation { height: 32px; min-height: 32px; }
-        .calabash-sidebar .sidebar-entry:hover { background: #eceef1; color: #252a33; }
-        .calabash-sidebar .sidebar-entry:focus-visible { outline: 2px solid #b9c7da; outline-offset: -2px; }
-        .calabash-sidebar .sidebar-selected { background: #e8ebef; color: #252a33; }
-        .calabash-sidebar .sidebar-section-label { font-size: 11px; font-weight: 500; color: #969da7; }
-        .calabash-sidebar .sidebar-entry .q-icon { flex-shrink: 0; font-size: 16px; color: #8b929d; }
-        .calabash-sidebar .sidebar-selected .q-icon { color: #535c69; }
+        .calabash-sidebar .sidebar-entry:hover { background: var(--app-hover); color: var(--app-text); }
+        .calabash-sidebar .sidebar-entry:focus-visible { outline: 2px solid var(--app-primary); outline-offset: -2px; }
+        .calabash-sidebar .sidebar-selected { background: var(--app-primary-soft); color: var(--app-primary); box-shadow: inset 3px 0 var(--app-primary); }
+        .calabash-sidebar .sidebar-section-label { font-size: 12px; font-weight: 600; color: var(--app-muted); }
+        .calabash-sidebar .sidebar-entry .q-icon { flex-shrink: 0; font-size: 16px; color: var(--app-icon); }
+        .calabash-sidebar .sidebar-selected .q-icon { color: var(--app-primary); }
         .conversation-menu.q-menu {
             width: 190px; min-width: 0; max-width: calc(100vw - 16px);
             box-sizing: border-box; overflow-x: hidden;
             padding: 5px; border-radius: 8px;
-            background: #fcfcfd; border: 1px solid #dddfe3;
-            box-shadow: 0 8px 28px rgb(0 0 0 / 13%), 0 1px 3px rgb(0 0 0 / 5%);
+            background: var(--app-surface); border: 1px solid var(--app-border);
+            box-shadow: var(--app-shadow-float);
         }
         .conversation-menu .q-item {
             width: 100%; min-width: 0; box-sizing: border-box;
             min-height: 32px; padding: 5px 9px; border-radius: 4px;
-            font-size: 13px; color: #30343b;
+            font-size: 13px; color: var(--app-text);
         }
         .conversation-menu .q-item__section--main {
             min-width: 0; white-space: normal; overflow-wrap: anywhere;
         }
-        .conversation-menu .q-item:hover { background: #e9edf2; }
+        .conversation-menu .q-item:hover { background: var(--app-hover); }
         .conversation-menu .q-item__section--avatar { min-width: 26px; padding-right: 8px; }
-        .conversation-menu .q-icon { font-size: 17px; color: #626873; }
-        .conversation-menu .q-separator { margin: 4px 6px; background: #e1e3e6; }
-        .conversation-menu .menu-danger, .conversation-menu .menu-danger .q-icon { color: #c44545; }
-        .conversation-menu .menu-danger:hover { background: #fbeeee; }
+        .conversation-menu .q-icon { font-size: 17px; color: var(--app-icon); }
+        .conversation-menu .q-separator { margin: 4px 6px; background: var(--app-border); }
+        .conversation-menu .menu-danger, .conversation-menu .menu-danger .q-icon { color: var(--app-danger); }
+        .conversation-menu .menu-danger:hover { background: var(--app-danger-soft); }
     """)
     with ui.column().classes(
         "calabash-sidebar w-56 h-full flex-shrink-0 border-r border-gray-100 gap-0 overflow-y-auto pb-4"
@@ -54,13 +55,13 @@ def _render_desktop_sidebar(
         with ui.column().classes("w-full px-2 pt-2 gap-0.5"):
             _sidebar_item(
                 t("新对话"),
-                "edit_square",
+                "edit",
                 False,
                 lambda: on_chat(),
             )
             _sidebar_item(
                 t("工具"),
-                "folder_open",
+                "folder",
                 active_view in {"tools", "tool"},
                 lambda: on_select("tools"),
             )
@@ -99,11 +100,14 @@ def _render_desktop_sidebar(
                     "text-sm text-gray-500"
                 )
 
-                def remove():
+                async def remove():
                     delete_chat(chat_id)
                     dialog.close()
                     if active_view == "chat" and chat_id == active_chat:
-                        on_chat()
+                        import inspect
+                        result = on_chat()
+                        if inspect.isawaitable(result):
+                            await result
                     if on_refresh:
                         on_refresh()
 
@@ -124,51 +128,31 @@ def _render_desktop_sidebar(
                 pinned = chat_is_pinned(chat_id)
                 selected = active_view == "chat" and chat_id == active_chat
                 with ui.element("div").classes(
-                    "sidebar-entry sidebar-conversation w-full min-w-0 px-2 py-0 cursor-pointer flex items-center gap-2 "
+                    "sidebar-entry sidebar-conversation relative w-full min-w-0 px-2 py-0 cursor-pointer flex items-center gap-2 "
                     + ("sidebar-selected" if selected else "text-gray-600")
-                ).props('role=button tabindex=0').on(
-                    "click", lambda _, cid=chat_id: on_chat(cid),
-                    js_handler="(event) => { if (event.target.closest('.calabash-action, .q-menu')) return; emit(); }",
-                ).on(
-                    "keydown", lambda _, cid=chat_id: on_chat(cid),
-                    js_handler="(event) => { if (event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return; event.preventDefault(); emit(); }",
-                ):
+                ).props('role=group'):
+                    opener = ui.button(on_click=lambda _, cid=chat_id: on_chat(cid), color=None).props("flat dense").classes("row-open-target absolute inset-0 w-full h-full")
+                    opener._props["aria-label"] = title
                     if chat_id in getattr(ui.context.client, "calabash_running_chats", set()):
                         ui.spinner(size="14px", color="grey-6").tooltip(t("正在生成回复"))
                     else:
-                        ui.icon("push_pin" if pinned else "o_chat_bubble_outline")
+                        app_icon("pin" if pinned else "chat").classes("pointer-events-none")
                     ui.label(title).classes(
-                        "text-xs truncate min-w-0 flex-1"
+                        "text-xs truncate min-w-0 flex-1 pointer-events-none"
                     ).tooltip(title)
-                    action_button("delete", t("删除对话"), lambda _, cid=chat_id: remove_dialog(cid), compact=True)
-                    with (
-                        ui.context_menu()
-                        .props("auto-close")
-                        .classes("conversation-menu")
-                    ):
-                        with ui.menu_item(
-                            on_click=lambda _, cid=chat_id, text=title: rename_dialog(
-                                cid, text
-                            )
-                        ):
-                            with ui.item_section().props("avatar"):
-                                ui.icon("o_edit")
-                            ui.item_section(t("重命名"))
-                        with ui.menu_item(
-                            on_click=lambda _, cid=chat_id, value=pinned: toggle_pin(
-                                cid, value
-                            )
-                        ):
-                            with ui.item_section().props("avatar"):
-                                ui.icon("o_push_pin")
-                            ui.item_section(t("取消置顶") if pinned else t("置顶"))
+                    def chat_menu(cid=chat_id, text=title, value=pinned):
+                        menu_item("edit", t("重命名"), lambda: rename_dialog(cid, text))
+                        menu_item("pin", t("取消置顶") if value else t("置顶"), lambda: toggle_pin(cid, value))
                         ui.separator()
-                        with ui.menu_item(
-                            on_click=lambda _, cid=chat_id: remove_dialog(cid)
-                        ).classes("menu-danger"):
-                            with ui.item_section().props("avatar"):
-                                ui.icon("o_delete")
-                            ui.item_section(t("删除对话"))
+                        menu_item("delete", t("删除对话"), lambda: remove_dialog(cid), danger=True)
+
+                    more, _ = action_button("more", t("更多操作"), None, compact=True)
+                    more.classes("relative")
+                    with more, ui.menu().props("auto-close").classes("conversation-menu app-action-menu"):
+                        chat_menu()
+                    with ui.context_menu().props("auto-close").classes("conversation-menu app-action-menu"):
+                        chat_menu()
+
             if not recent_chats:
                 ui.label(t("暂无对话")).classes("px-2 py-1 text-xs text-gray-400")
 
@@ -189,15 +173,16 @@ def _sidebar_item(label: str, icon: str, active: bool, on_click) -> None:
         + (
             "sidebar-selected"
             if active
-            else "text-gray-600 hover:bg-[#ececea] hover:text-gray-950"
+            else "text-gray-600"
         )
     )
     with (
         ui.element("div")
         .classes(classes)
-        .on("click", on_click)
-    ):
-        ui.icon(icon).classes("text-[16px]")
+        .props("role=button tabindex=0")
+    ) as entry:
+        activate_row(entry, on_click, label)
+        app_icon(icon)
         ui.label(label).classes("text-[13px] font-medium flex-1")
 
 
@@ -208,9 +193,9 @@ def _sidebar_tool_item(tool: dict, on_tool=None) -> None:
         .classes(
             "sidebar-entry w-full min-w-0 flex items-center gap-2 px-2 py-1.5 cursor-pointer text-gray-600"
         )
-        .on("click", lambda t=tool: (on_tool or use_tool)(t))
-    ):
-        ui.icon("terminal").classes("text-[15px] text-gray-400")
-        ui.label(label).classes("text-xs truncate min-w-0 flex-1").tooltip(
+        ) as entry:
+        activate_row(entry, lambda: (on_tool or use_tool)(tool), label)
+        app_icon("grid")
+        ui.label(label).classes("text-xs truncate min-w-0 flex-1 pointer-events-none").tooltip(
             f"{label} · {tool.get('project', '')}"
         )

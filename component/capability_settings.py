@@ -5,6 +5,7 @@ from pathlib import Path
 from nicegui import run, ui
 
 from component.file_access import choose_path
+from component.action_button import app_icon
 from core.i18n import t
 from core.logger import get_logger
 from service.capabilities.capability_manifest import PackError
@@ -45,15 +46,19 @@ class CapabilitySettings:
 
     def render(self):
         with ui.column().classes("w-full gap-3") as self.container:
-            ui.label(t("能力插件")).classes("text-xs font-medium text-gray-400")
+            ui.label(t("能力插件")).classes("app-section-title")
             with ui.row().classes("w-full items-center gap-3 flex-nowrap"):
                 with ui.column().classes("flex-1 min-w-0 gap-1"):
                     ui.label(t("本地 ZIP")).classes("text-sm text-gray-800")
                     ui.label(str(self.manager.root)).classes("text-xs text-gray-500 break-all")
-                self.button = ui.button(t("导入 ZIP"), icon="o_file_upload", on_click=self.select).props(
-                    "flat dense no-caps color=grey-8"
+                self.button = ui.button(on_click=self.select).props(
+                    "outline no-caps color=primary"
                 ).classes("shrink-0")
-            self.progress = ui.linear_progress().props("indeterminate color=grey-6").classes("w-full")
+                self.button._props["aria-label"] = t("导入 ZIP")
+                with self.button:
+                    app_icon("upload")
+                    ui.label(t("导入 ZIP")).classes("ml-1")
+            self.progress = ui.linear_progress().props("indeterminate color=primary").classes("w-full")
             self.progress.set_visibility(False)
             self.message = ui.label(
                 "" if self.manager.configured else t("此版本尚未配置插件信任公钥，暂不可导入")
@@ -116,7 +121,7 @@ class CapabilitySettings:
             ui.label(t("插件包含可执行程序，请仅导入可信发布者提供的包。")).classes("text-xs text-gray-500")
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button(t("取消"), on_click=lambda: dialog.submit(False)).props("flat")
-                ui.button(t("导入 ZIP"), on_click=lambda: dialog.submit(True)).props("unelevated color=dark")
+                ui.button(t("导入 ZIP"), on_click=lambda: dialog.submit(True)).props("unelevated color=primary")
         try:
             return await dialog
         finally:

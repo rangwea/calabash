@@ -9,7 +9,7 @@ def resize_handle(*, label: str, minimum: int, maximum: int, direction: int = 1)
     ui.add_css("""
         .panel-resize {width:5px;flex:0 0 5px;cursor:col-resize;touch-action:none;
             background:transparent;position:relative;z-index:3;align-self:stretch;}
-        .panel-resize:hover,.panel-resize:focus-visible {background:#b8c8d7;outline:none;}
+        .panel-resize:hover,.panel-resize:focus-visible {background:var(--app-primary-soft);outline:none;}
         body.panel-resizing {cursor:col-resize!important;user-select:none!important;}
         body.panel-resizing iframe {pointer-events:none!important;}
         #desktop-sidebar .calabash-sidebar {width:100%;}

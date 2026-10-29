@@ -24,7 +24,7 @@ from ui.tool_list import (
 
 logger = get_logger(__name__)
 
-_BODY_SCROLL = "flex-1 min-h-0 w-full overflow-y-auto bg-white gap-0"
+_BODY_SCROLL = "flex-1 min-h-0 w-full overflow-y-auto app-canvas gap-0"
 _INPUT_PROPS = "outlined dense color=primary clearable"
 
 
@@ -81,7 +81,27 @@ def render_desktop_home(repair_id: str | None = None) -> None:
         if view_name in {"tools", "diagnostics"}:
             workspace.refresh()
 
-    def open_tool(tool):
+    client = ui.context.client
+
+    async def can_leave():
+        if active_view["name"] != "diagnostics":
+            return True
+        from component.model_settings import confirm_settings_leave
+        return await confirm_settings_leave(client)
+
+    async def request_view(view):
+        if view == active_view["name"]:
+            return
+        if await can_leave():
+            navigate_view(view)
+
+    async def request_chat(chat_id=None):
+        if await can_leave():
+            open_chat(chat_id)
+
+    async def open_tool(tool):
+        if not await can_leave():
+            return
         from ui.tool_list import _record_recent_tool
         _record_recent_tool(tool)
         tool_workspace.open(tool)
@@ -102,7 +122,9 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                 chat_state["switch"] = render_ai_chat(chat_id, on_change=chat_changed)
             navigate_view("chat")
 
-    def discuss_tool(tool):
+    async def discuss_tool(tool):
+        if not await can_leave():
+            return
         from service.chat.ai_chat import create_tool_chat
 
         open_chat(
@@ -118,9 +140,9 @@ def render_desktop_home(repair_id: str | None = None) -> None:
         if sidebar_button:
             sidebar_button.props(f'aria-expanded={str(sidebar_state["expanded"]).lower()}')
 
-    with ui.column().classes("w-full h-screen overflow-hidden bg-white gap-0"):
+    with ui.column().classes("app-shell w-full h-screen overflow-hidden gap-0"):
         render_app_frame(
-            action=lambda: navigate_view("diagnostics"),
+            action=lambda: request_view("diagnostics"),
         )
 
         with ui.row().classes(
@@ -132,8 +154,8 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                 _render_desktop_sidebar(
                     tools_data,
                     active_view["name"],
-                    navigate_view,
-                    open_chat,
+                    request_view,
+                    request_chat,
                     chat_state["id"],
                     sidebar.refresh,
                     open_tool,
@@ -143,7 +165,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
 
             with ui.element("div").classes("relative h-full flex-shrink-0"):
                 with ui.element("nav").props('id=desktop-sidebar data-testid=desktop-sidebar').classes(
-                    "w-56 h-full min-h-0 overflow-hidden pt-9 bg-gray-50"
+                    "app-sidebar-host w-56 h-full min-h-0 overflow-hidden pt-9"
                 ) as sidebar_container:
                     with ui.row().classes(
                         "absolute top-0 left-0 right-9 h-9 items-center gap-2 px-3 flex-nowrap overflow-hidden"
@@ -167,7 +189,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
 
             with ui.column().classes("flex-1 min-w-0 h-full overflow-hidden gap-0"):
                 from component.tool_workspace import ToolWorkspace
-                tool_workspace = ToolWorkspace(lambda: navigate_view("tool"), lambda: navigate_view("tools"), open_chat)
+                tool_workspace = ToolWorkspace(lambda: navigate_view("tool"), lambda: navigate_view("tools"), open_chat, before_navigate=can_leave)
                 chat_host = ui.column().classes("w-full flex-1 min-h-0 overflow-hidden gap-0")
                 chat_host.set_visibility(active_view["name"] == "chat")
                 with ui.column().classes(_BODY_SCROLL) as workspace_host:
@@ -186,20 +208,22 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                             return
 
                         with ui.column().classes(
-                            "w-full max-w-4xl mx-auto px-8 pt-2 pb-10 gap-6"
+                            "app-tool-list w-full max-w-5xl mx-auto px-6 sm:px-8 pt-6 pb-10 gap-6"
                         ):
                             with ui.row().classes("w-full items-center justify-between gap-3"):
                                 ui.label(t("工具")).classes(
-                                    "text-[26px] font-semibold text-gray-950"
+                                    "app-title"
                                 )
                                 transfer = ToolTransfer(lambda: refresh_tool_data(notify=False, force=True))
                                 transfer.render()
 
                             search = (
                                 ui.input(placeholder=t("搜索工具"))
-                                .props(_INPUT_PROPS + " prefix=search")
+                                .props(_INPUT_PROPS + " hide-bottom-space")
                                 .classes("w-full")
                             )
+
+                            search.add_slot("prepend", '<q-icon name="search" size="18px" />')
 
                             @ui.refreshable
                             def render_tools():
@@ -244,8 +268,10 @@ def render_desktop_home(repair_id: str | None = None) -> None:
             tools_data = load_tools()
             project_names = sorted({t.get("project", "未分组") for t in tools_data})
             sidebar.refresh()
-            if active_view["name"] in {"tools", "diagnostics"}:
-                workspace.refresh()
+            if active_view["name"] == "tools" or (active_view["name"] == "diagnostics" and force):
+                from component.model_settings import window_drafts
+                if not window_drafts(client).busy:
+                    workspace.refresh()
             if notify:
                 ui.notify(t("工具索引已刷新"), type="positive")
 

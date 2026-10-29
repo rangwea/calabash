@@ -15,8 +15,9 @@ WORKSPACES = WeakValueDictionary()
 
 
 class ToolWorkspace:
-    def __init__(self, on_activate, on_list, on_repair=None):
+    def __init__(self, on_activate, on_list, on_repair=None, before_navigate=None):
         self.on_activate, self.on_list = on_activate, on_list
+        self.before_navigate = before_navigate
         self.on_repair = on_repair
         self.id = uuid4().hex
         WORKSPACES[self.id] = self
@@ -26,7 +27,7 @@ class ToolWorkspace:
         self.status = {}
         self.client = ui.context.client
         self.parent = ui.context.slot.parent
-        self.bar = ui.row().classes('w-full min-w-0 shrink-0 flex-nowrap items-center gap-2 px-2 py-1 border-b border-gray-100 overflow-hidden')
+        self.bar = ui.row().classes('app-workspace-tabs w-full min-w-0 shrink-0 flex-nowrap items-center gap-2 px-2 py-1 border-b border-gray-100 overflow-hidden')
         self.pages = ui.column().classes('w-full flex-1 min-h-0 gap-0 overflow-hidden')
         self.bar.set_visibility(False)
         self.pages.set_visibility(False)
@@ -52,7 +53,22 @@ class ToolWorkspace:
             page.set_visibility(candidate == key)
         self.pages.set_visibility(True)
         self.render_tabs()
+        # Rebuilding tab chrome must not leave the newly selected tab off-screen.
+        # Scroll its own strip without stealing focus from the tool iframe.
+        self.client.run_javascript(
+            "requestAnimationFrame(() => document.querySelector('#c"
+            + str(self.bar.id)
+            + " .workspace-tab-active')?.scrollIntoView({block:'nearest', inline:'nearest'}));"
+        )
         self.on_activate()
+
+    async def request_activate(self, key):
+        if self.before_navigate is None or await self.before_navigate():
+            self.activate(key)
+
+    async def request_list(self):
+        if self.before_navigate is None or await self.before_navigate():
+            self.on_list()
 
     def hide(self):
         self.active = None
@@ -64,15 +80,15 @@ class ToolWorkspace:
         self.bar.clear()
         self.bar.set_visibility(bool(self.items))
         with self.bar:
-            entry, _ = action_button('grid', t('工具列表'), self.on_list, text=True)
-            entry.classes('bg-gray-50 border border-gray-200')
+            entry, _ = action_button('grid', t('工具列表'), self.request_list, text=True)
+            entry.classes('workspace-list-entry')
             ui.element('div').classes('h-5 w-px bg-gray-200 shrink-0 mx-1')
-            with ui.row().classes('flex-1 min-w-0 items-center gap-1 flex-nowrap overflow-x-auto'):
+            with ui.row().classes('workspace-tab-strip flex-1 min-w-0 items-center gap-1 flex-nowrap overflow-x-auto'):
                 for key, (title, _) in self.items.items():
-                    with ui.row().classes('items-center gap-0 flex-nowrap shrink-0 rounded-md ' + ('bg-gray-100' if self.active == key else '')):
+                    with ui.row().classes('workspace-tab items-center gap-0 flex-nowrap shrink-0 ' + ('workspace-tab-active' if self.active == key else '')):
                         if tool_activity.is_tool_running(*key):
                             ui.spinner(size='12px', color='grey-6').tooltip(t('正在运行'))
-                        ui.button(title, on_click=lambda _, target=key: self.activate(target), color=None).props('flat dense no-caps').classes('max-w-48 truncate text-xs text-gray-600').tooltip('/'.join(key))
+                        ui.button(title, on_click=lambda _, target=key: self.request_activate(target), color=None).props('flat dense no-caps aria-pressed=' + str(self.active == key).lower()).classes('workspace-tab-button max-w-40 min-w-0 truncate').tooltip(title)
                         button, _ = action_button('close', t('关闭工具'), lambda _, target=key: self.close(target), compact=True)
                         if key in self.closing:
                             button.disable()

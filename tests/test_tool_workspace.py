@@ -40,6 +40,22 @@ class ToolWorkspaceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual('list', self.calls[-1])
             workspace.dispose()
 
+    async def test_declining_navigation_preserves_current_workspace(self):
+        async def decline():
+            return False
+
+        with patch.object(core, 'loop', asyncio.get_running_loop()):
+            with self.container:
+                workspace = ToolWorkspace(lambda: self.calls.append('tool'), lambda: self.calls.append('list'), before_navigate=decline)
+            workspace.open(self.tool)
+            workspace.open({'project': 'demo', 'name': 'two'})
+            self.calls.clear()
+            await workspace.request_activate(('demo', 'one'))
+            await workspace.request_list()
+            self.assertEqual(('demo', 'two'), workspace.active)
+            self.assertEqual([], self.calls)
+            workspace.dispose()
+
     async def test_running_close_wait_or_safe_cancel_preserves_active_file(self):
         class Job:
             owner = 'tool:demo/one'

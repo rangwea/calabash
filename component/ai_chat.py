@@ -85,56 +85,56 @@ def _render_chat_session(chat_id=None, on_change=None):
     ui.add_css("""
         .calabash-chat .chat-repair-retry.q-btn {
             min-height: 30px; padding: 4px 8px; border-radius: 6px;
-            font-size: 13px; font-weight: 500; color: #525966; letter-spacing: 0;
+            font-size: 13px; font-weight: 500; color: var(--app-muted); letter-spacing: 0;
         }
         .calabash-chat .chat-repair-retry.q-btn .q-icon {
             width: 16px; height: 16px; font-size: 16px; margin-right: 6px;
         }
-        .calabash-chat { background: #fff; }
+        .calabash-chat { background: var(--app-surface); }
         .calabash-chat .q-btn--round {
             width: 30px; height: 30px; min-width: 30px; min-height: 30px;
-            padding: 0; border-radius: 6px; color: #737780;
+            padding: 0; border-radius: 6px; color: var(--app-icon);
         }
         .calabash-chat .q-btn--round .q-icon { font-size: 18px; }
-        .calabash-chat .q-btn--round:hover { background: #f1f2f3; color: #30353b; }
-        .calabash-chat .chat-send { background: #24282e !important; color: white !important; }
-        .calabash-chat .chat-send:hover { background: #3b4149 !important; }
-        .calabash-chat .chat-model { padding: 4px 7px; font-size: 12px; color: #737780; }
+        .calabash-chat .q-btn--round:hover { background: var(--app-hover); color: var(--app-text); }
+        .calabash-chat .chat-send { background: var(--app-primary) !important; color: white !important; }
+        .calabash-chat .chat-send:hover { background: var(--app-primary-hover) !important; }
+        .calabash-chat .chat-model { padding: 4px 7px; font-size: 12px; color: var(--app-icon); }
         .calabash-chat .chat-model .q-icon { font-size: 16px; margin-right: 6px; }
         .calabash-chat .preview-body > .nicegui-refreshable { width: 100%; height: 100%; }
-        .calabash-chat .chat-history { background: #fafafa; }
+        .calabash-chat .chat-history { background: var(--app-sidebar); }
         .calabash-chat .chat-session { border-radius: 6px; min-height: 32px; }
         .calabash-chat .chat-session .q-btn__content {
             display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
             text-align: left; font-size: 12px;
         }
         .calabash-chat .chat-user {
-            align-self: flex-end; max-width: 85%; background: #eaf3fc;
-            border-radius: 8px; padding: 10px 14px; color: #25384c;
+            align-self: flex-end; max-width: 85%; background: var(--app-primary-light);
+            border-radius: 8px; padding: 10px 14px; color: var(--app-text);
         }
-        .calabash-chat .chat-message { font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
-        .calabash-chat .chat-message { color: #303740; line-height: 1.75; }
+        .calabash-chat .chat-message { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+        .calabash-chat .chat-message { color: var(--app-text); line-height: 1.6; }
         .calabash-chat .chat-message h1,
         .calabash-chat .chat-message h2,
         .calabash-chat .chat-message h3 { font-size: 15px; line-height: 1.5; margin: 18px 0 8px; font-weight: 600; }
         .calabash-chat .chat-message ul,
         .calabash-chat .chat-message ol { padding-left: 22px; margin: 8px 0 14px; }
         .calabash-chat .chat-message li { margin: 4px 0; }
-        .calabash-chat .chat-message :not(pre) > code { font-size: 12px; background: #f3f4f5; padding: 2px 5px; border-radius: 4px; }
-        .calabash-chat .chat-message a { color: #32649a; text-decoration: none; border-bottom: 1px solid #d5e3f0; }
-        .calabash-chat .chat-message blockquote { border-left: 2px solid #dfe3e8; padding-left: 12px; margin: 12px 0; color: #767d86; }
+        .calabash-chat .chat-message :not(pre) > code { font-size: 12px; background: var(--app-background); padding: 2px 5px; border-radius: 4px; }
+        .calabash-chat .chat-message a { color: var(--app-primary); text-decoration: none; border-bottom: 1px solid var(--app-primary-soft); }
+        .calabash-chat .chat-message blockquote { border-left: 2px solid var(--app-border); padding-left: 12px; margin: 12px 0; color: var(--app-muted); }
         .calabash-chat .chat-process { border: 0; border-radius: 0; box-shadow: none; margin: 8px 0; }
-        .calabash-chat .chat-process .q-item { min-height: 30px; padding: 0; font-size: 12px; color: #8a9098; }
-        .calabash-chat .chat-process .q-expansion-item__content { padding: 8px 0 8px 12px; border-left: 1px solid #e5e7eb; }
-        .calabash-chat .chat-process .chat-message { font-size: 12px; color: #828993; }
+        .calabash-chat .chat-process .q-item { min-height: 30px; padding: 0; font-size: 12px; color: var(--app-muted); }
+        .calabash-chat .chat-process .q-expansion-item__content { padding: 8px 0 8px 12px; border-left: 1px solid var(--app-border); }
+        .calabash-chat .chat-process .chat-message { font-size: 12px; color: var(--app-muted); }
         .calabash-chat .chat-message p { margin: 0 0 12px; }
         .calabash-chat .chat-message p:last-child { margin-bottom: 0; }
         .calabash-chat .chat-message pre { max-width: 100%; overflow-x: auto; border-radius: 6px; }
         .calabash-chat .chat-compose {
-            border: 1px solid #e9e9e9; border-radius: 8px; background: #fff;
-            box-shadow: 0 3px 18px rgb(0 0 0 / 4%); padding: 10px 12px;
+            border: 1px solid var(--app-border-strong); border-radius: 8px; background: var(--app-surface);
+            box-shadow: 0 2px 6px rgb(28 42 62 / 4%); padding: 10px 12px;
         }
-        .calabash-chat .chat-compose:focus-within { border-color: #c9cdd2; }
+        .calabash-chat .chat-compose:focus-within { border-color: var(--app-primary); box-shadow: 0 0 0 1px var(--app-primary); }
         .calabash-chat .chat-compose .q-field__control { background: transparent; padding: 0; }
         .calabash-chat .chat-compose .q-field__control:before,
         .calabash-chat .chat-compose .q-field__control:after { display: none; }
@@ -148,7 +148,7 @@ def _render_chat_session(chat_id=None, on_change=None):
     selected = {"id": chat_id or uuid4().hex}
     messages = chat.read_chat(chat_id) if chat_id else []
     task = None
-    preview_state = {"url": "", "revision": 0}
+    preview_state = {"url": "", "revision": 0, "mounted_url": None}
     publishing = {"busy": False}
     failure = {"message": chat.read_failure(selected["id"])}
     last_user = next((m for m in reversed(messages) if m.get("role") == "user"), {})
@@ -163,6 +163,9 @@ def _render_chat_session(chat_id=None, on_change=None):
 
     def set_preview_visible(visible):
         save_preview_button.set_enabled(bool(preview_state["url"]) and not publishing["busy"])
+        refresh_preview_button.set_enabled(bool(preview_state["url"]))
+        open_preview_button.set_enabled(bool(preview_state["url"]))
+        chat_root.props('data-preview-open=' + str(bool(visible)).lower())
         preview_panel.set_visibility(visible)
         preview_divider.set_visibility(visible)
         preview_toggle._props["aria-pressed"] = visible
@@ -174,9 +177,12 @@ def _render_chat_session(chat_id=None, on_change=None):
         if preview_panel.visible:
             set_preview_visible(False)
         elif preview_state["url"]:
-            show_preview({"url": preview_state["url"]})
+            if preview_state["mounted_url"] == preview_state["url"]:
+                set_preview_visible(True)
+            else:
+                show_preview({"url": preview_state["url"]})
         else:
-            set_preview_visible(True)
+            ui.notify(t("生成工具后即可打开预览"), type="info")
 
     def show_preview(result):
         from service.tools.tool_activity import active_count
@@ -223,7 +229,7 @@ def _render_chat_session(chat_id=None, on_change=None):
             ui.notify(t("无法保存预览，请刷新后重试；预览或目标工具可能已更改或过期"), type="warning")
         finally:
             publishing["busy"] = False
-            save_preview_button.enable()
+            save_preview_button.set_enabled(bool(preview_state["url"]))
 
     def assistant_markdown(content):
         element = ui.markdown(content).classes("chat-message w-full")
@@ -268,6 +274,7 @@ def _render_chat_session(chat_id=None, on_change=None):
             url = f"{preview_state['url']}{separator}embedded=1&revision={preview_state['revision']}"
             frame = ui.element("iframe").classes("w-full h-full border-0 bg-white")
             frame._props.update(src=url, title=t("工具预览"))
+            preview_state["mounted_url"] = preview_state["url"]
         else:
             with ui.column().classes("w-full h-full items-center justify-center gap-2 p-6"):
                 ui.icon("preview").classes("text-2xl text-gray-300")
@@ -489,9 +496,9 @@ def _render_chat_session(chat_id=None, on_change=None):
         timeline.refresh()
         task = asyncio.create_task(generate())
 
-    with ui.row().classes("calabash-chat w-full h-full min-h-0 gap-0 flex-nowrap"):
-        with ui.column().classes("flex-1 min-w-0 h-full gap-0"):
-            with ui.row().classes("w-full items-center justify-between px-5 py-2"):
+    with ui.row().classes("calabash-chat w-full h-full min-h-0 gap-0 flex-nowrap") as chat_root:
+        with ui.column().classes("chat-main flex-1 min-w-0 h-full gap-0"):
+            with ui.row().classes("app-chat-toolbar w-full items-center justify-between px-5 py-2"):
                 ui.label(t("AI 对话")).classes("text-xs font-medium text-gray-500")
                 with ui.row().classes("items-center gap-1"):
                     preview_toggle, preview_tip = _toolbar_button("preview", t("打开预览"), toggle_preview, leave=True)
@@ -501,30 +508,37 @@ def _render_chat_session(chat_id=None, on_change=None):
                 with NativeFileDrop().classes("chat-compose w-full gap-1") as compose:
                     attachments.render()
                     composer = ui.textarea(placeholder=t("描述你想创建或修改的工具…")).props("borderless autogrow hide-bottom-space").classes("w-full")
+                    composer._props["aria-label"] = t("描述你想创建或修改的工具…")
                     composer.on("compositionstart", js_handler="(e) => { e.target.calabashComposing = true; }")
                     composer.on("compositionend", js_handler="(e) => { e.target.calabashComposing = false; e.target.calabashCompositionEnded = performance.now(); }")
                     composer.on("keydown.enter", submit, js_handler=_COMPOSER_KEYDOWN_JS)
                     with ui.row().classes("w-full items-center justify-between gap-2"):
                         with ui.row().classes("items-center min-w-0 gap-1"):
                             attachments.button()
-                            ui.select(model_providers.options(), value=model_providers.selected(), on_change=lambda event: model_providers.select(event.value) if event.value else None).props("borderless dense options-dense hide-bottom-space").classes("chat-model min-w-0 max-w-48").tooltip(t("选择模型"))
+                            ui.select(model_providers.options(), value=model_providers.selected(), on_change=lambda event: model_providers.select(event.value) if event.value else None).props("borderless dense options-dense hide-bottom-space").classes("chat-model min-w-0 max-w-48").props(f'aria-label="{t("选择模型")}"').tooltip(t("选择模型"))
                         with ui.row().classes("items-center gap-1"):
-                            stop = ui.button(icon="stop", on_click=lambda: task.cancel() if task else None).props("flat dense round").tooltip(t("停止生成"))
+                            stop, _ = _toolbar_button("stop", t("停止生成"), lambda: task.cancel() if task else None)
+                            stop._props["aria-label"] = t("停止生成")
                             stop.disable()
                             stop.set_visibility(False)
-                            send = ui.button(icon="arrow_upward", on_click=submit).props("dense round color=primary").classes("chat-send").tooltip(t("发送"))
+                            send, _ = _toolbar_button("send", t("发送"), submit)
+                            send.classes("chat-send")
+                            send._props["aria-label"] = t("发送")
                     ui.label(t("可选择、拖入或粘贴图片；发送图片会将图片内容提交给所选模型服务")).classes("text-xs text-gray-400 break-words")
                 attachments.connect_drop(compose)
         from component.panel_resize import resize_handle
 
         preview_divider = resize_handle(label="调整预览宽度", minimum=280, maximum=1400, direction=-1)
-        with ui.column().classes("w-1/2 flex-shrink-0 min-w-0 h-full gap-0 border-l border-gray-100 bg-white") as preview_panel:
-            with ui.row().classes("w-full items-center justify-between px-3 py-2 gap-2 border-b border-gray-100"):
+        preview_divider.classes("chat-preview-divider")
+        with ui.column().classes("chat-preview w-1/2 flex-shrink-0 min-w-0 h-full gap-0 border-l border-gray-100 bg-white") as preview_panel:
+            with ui.row().classes("app-preview-toolbar w-full items-center justify-between px-3 py-2 gap-2 border-b border-gray-100"):
+                back, _ = _toolbar_button("back", t("返回对话"), lambda: set_preview_visible(False))
+                back.classes("chat-preview-back")
                 ui.label(t("工具预览")).classes("text-xs font-medium text-gray-600")
                 with ui.row().classes("items-center gap-1"):
                     save_preview_button, _ = _toolbar_button("save", t("保存到工具列表"), save_preview_tool)
-                    _toolbar_button("refresh", t("刷新预览"), lambda: show_preview({"url": preview_state["url"]}), leave=True)
-                    _toolbar_button("open", t("打开完整预览"), lambda: ui.navigate.to(preview_state["url"], new_tab=True))
+                    refresh_preview_button, _ = _toolbar_button("refresh", t("刷新预览"), lambda: show_preview({"url": preview_state["url"]}), leave=True)
+                    open_preview_button, _ = _toolbar_button("open", t("打开完整预览"), lambda: ui.navigate.to(preview_state["url"], new_tab=True) if preview_state["url"] else None)
                     _toolbar_button("close", t("关闭预览"), lambda: set_preview_visible(False), leave=True)
             with ui.column().classes("preview-body w-full flex-1 min-h-0 gap-0"):
                 preview_content()

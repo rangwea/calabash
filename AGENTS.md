@@ -81,6 +81,7 @@ with db_manager.session_scope() as session:
 ## UI 和错误处理
 
 - 优先 `.classes()` 和 Quasar `.props()`，避免零散内联样式。
+- App 外壳遵循 Fluent 2 浅色办公规范；共享主题变量维护在 `component/assets/fluent_tokens.css`，由启动页和 Python UI 共用。侧栏、聊天、标签、设置通过语义类和变量复用样式；工具自己的主题由 `core/tool_theme.py` 独立限定作用域，不用 App 的样式覆盖工具。
 - 局部更新使用 `@ui.refreshable`；后台任务创建 UI 时显式进入目标容器上下文。
 - 页面路由通过 `@ui.page()` 定义，并在 `ui/pages/__init__.py` 导入注册。首页 `/`，工具 `/tools/{project}/{name}`，预览 `/preview/{key}` 或 `/preview/{project}/{name}`，不保留旧路由。
 - 页面/服务错误使用现有 `core.error_handler` 和 `core.logger.get_logger()` 模式。

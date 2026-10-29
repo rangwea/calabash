@@ -6,7 +6,7 @@ from core.logger import get_logger
 from service.tools.tool_manage_service import delete_tool
 from service.tools.tool_activity import ToolBusyError
 from component.tool_transfer import export_tool
-from component.action_button import action_button
+from component.action_button import action_button, app_icon, menu_item
 
 logger = get_logger(__name__)
 _RECENT_TOOLS_FILE = app_dir() / "recent_tools.json"
@@ -87,7 +87,7 @@ def _render_project_section(
     on_delete=None,
     on_open=None,
 ) -> None:
-    with ui.column().classes("w-full gap-3"):
+    with ui.column().classes("app-tool-group w-full gap-3"):
         with ui.row().classes(
             "w-full items-center justify-between border-b border-gray-100 pb-2"
         ):
@@ -101,7 +101,7 @@ def _render_project_section(
 
 def _render_tool_tag(label: str, project_name: str) -> None:
     ui.label(label).classes(
-        "text-[11px] text-gray-500 bg-gray-50 border border-gray-200 "
+        "app-tool-tag text-[11px] "
         "px-1.5 py-0.5 rounded max-w-32 truncate"
     )
 
@@ -114,18 +114,19 @@ def _render_tool_row(tool: dict, on_chat=None, on_delete=None, on_open=None) -> 
     project_name = tool.get("project") or "未分组"
 
     with ui.element("div").classes(
-        "w-full cursor-pointer border-b border-gray-100 py-3 "
+        "app-tool-row relative w-full cursor-pointer border-b border-gray-100 py-3 "
         "hover:bg-gray-50 transition-colors"
     ):
-        with ui.row().classes("w-full items-center gap-3 px-1"):
+        opener = ui.button(on_click=lambda: open_tool(tool), color=None).props("flat dense").classes("row-open-target absolute inset-0 w-full h-full")
+        opener._props["aria-label"] = t("打开工具") + " " + display_name
+        with ui.row().classes("w-full items-center gap-3 px-1 pointer-events-none"):
             with ui.element("div").classes(
-                "w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0"
+                "app-tool-icon w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
             ):
-                ui.icon("terminal").classes("text-[18px] text-gray-600")
+                app_icon("grid")
             with (
                 ui.column()
                 .classes("min-w-0 flex-1 gap-0")
-                .on("click", lambda t=tool: open_tool(t))
             ):
                 ui.label(display_name).classes(
                     "text-sm font-medium text-gray-950 truncate"
@@ -135,13 +136,17 @@ def _render_tool_row(tool: dict, on_chat=None, on_delete=None, on_open=None) -> 
                 with ui.row().classes("gap-1 flex-wrap shrink-0"):
                     for tag in tool_tags[:2]:
                         _render_tool_tag(tag, project_name)
-            with ui.row().classes("gap-1 items-center shrink-0"):
+            with ui.row().classes("gap-1 items-center shrink-0 pointer-events-auto relative"):
                 if on_chat:
                     action_button("chat", t("对话修改工具"), lambda _, item=tool: on_chat(item))
-                action_button("play", t("运行工具"), lambda _, item=tool: open_tool(item))
-                action_button("download", t("导出工具 ZIP"), lambda: export_tool(tool))
-                if on_delete:
-                    action_button("delete", t("删除工具"), lambda: _confirm_delete_tool(tool, on_delete))
+                action_button("open", t("打开工具"), lambda _, item=tool: open_tool(item))
+                more, _ = action_button("more", t("更多操作"), None)
+                with more, ui.menu().props("auto-close").classes("app-action-menu"):
+                    menu_item("download", t("导出工具 ZIP"), lambda: export_tool(tool))
+                    if on_delete:
+                        ui.separator()
+                        menu_item("delete", t("删除工具"), lambda: _confirm_delete_tool(tool, on_delete), danger=True)
+
 
 
 def _confirm_delete_tool(tool, on_deleted):

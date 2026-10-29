@@ -26,7 +26,7 @@ def _render_diagnostics_view(
 
     def setting_row(label, value, icon=None, action=None, tooltip=None):
         with ui.row().classes(
-            "w-full items-center gap-4 py-3 border-b border-gray-100 last:border-b-0 flex-nowrap"
+            "app-setting-row w-full items-center gap-4 py-3 border-b border-gray-100 last:border-b-0 flex-nowrap"
         ):
             with ui.column().classes("min-w-0 flex-1 gap-1"):
                 ui.label(label).classes("text-sm text-gray-800")
@@ -35,16 +35,20 @@ def _render_diagnostics_view(
             if action:
                 action_button({"o_folder_open": "folder", "folder_open": "folder", "content_copy": "copy", "refresh": "refresh"}[icon], tooltip or label, action)
 
-    with ui.column().classes("w-full max-w-3xl mx-auto px-6 sm:px-8 pt-7 pb-10 gap-7"):
+    with ui.column().classes("app-settings w-full max-w-3xl mx-auto px-5 sm:px-8 pt-6 pb-10 gap-4"):
         with ui.row().classes("w-full items-center justify-between gap-3"):
-            ui.label(t("设置")).classes("text-xl font-semibold text-gray-950")
+            ui.label(t("设置")).classes("app-title")
             ui.label(APP_NAME).classes("text-xs text-gray-400")
 
-        with ui.column().classes("w-full gap-0"):
-            ui.label(t("通用")).classes("text-xs font-medium text-gray-400 pb-2")
+        with ui.column().classes("app-settings-section w-full gap-0"):
+            ui.label(t("通用")).classes("app-section-title pb-3")
 
-            def change_language(event):
+            async def change_language(event):
                 if event.value == language():
+                    return
+                from component.model_settings import confirm_settings_leave
+                if not await confirm_settings_leave(ui.context.client, reload=True):
+                    event.sender.set_value(language())
                     return
                 set_language(event.value)
                 from nicegui import app
@@ -60,8 +64,8 @@ def _render_diagnostics_view(
                 LANGUAGES, value=language(), label=t("语言"), on_change=change_language
             ).props("outlined dense hide-bottom-space").classes("w-full max-w-xs mt-2")
 
-        with ui.column().classes("w-full gap-0"):
-            ui.label(t("存储与权限")).classes("text-xs font-medium text-gray-400 pb-2")
+        with ui.column().classes("app-settings-section w-full gap-0"):
+            ui.label(t("存储与权限")).classes("app-section-title pb-3")
             setting_row(
                 t("目录访问权限"),
                 t("管理已选择的目录与实际访问状态"),
@@ -85,8 +89,8 @@ def _render_diagnostics_view(
             )
             setting_row(t("SQLite 数据库"), diagnostics["SQLite 路径"])
 
-        with ui.column().classes("w-full gap-0"):
-            ui.label(t("工具索引")).classes("text-xs font-medium text-gray-400 pb-2")
+        with ui.column().classes("app-settings-section w-full gap-0"):
+            ui.label(t("工具索引")).classes("app-section-title pb-3")
             setting_row(
                 t("本地工具"),
                 t(
@@ -99,18 +103,18 @@ def _render_diagnostics_view(
                 t("刷新工具索引"),
             )
 
-        with ui.column().classes("w-full gap-0"):
+        with ui.column().classes("app-settings-section w-full gap-0"):
             from component.model_settings import render_model_settings
 
             render_model_settings()
 
-        with ui.column().classes("w-full gap-0"):
+        with ui.column().classes("app-settings-section w-full gap-0"):
             from component.capability_settings import render_capability_settings
 
             render_capability_settings()
 
-        with ui.column().classes("w-full gap-0"):
-            ui.label(t("诊断")).classes("text-xs font-medium text-gray-400 pb-2")
+        with ui.column().classes("app-settings-section w-full gap-0"):
+            ui.label(t("诊断")).classes("app-section-title pb-3")
             setting_row(
                 t("日志目录"),
                 diagnostics["日志目录"],

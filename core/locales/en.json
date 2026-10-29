@@ -341,5 +341,16 @@
   "请查看这些图片。": "Please look at these images.",
   "可选择、拖入或粘贴图片；发送图片会将图片内容提交给所选模型服务": "Select, drop or paste images. Sending images shares their contents with the selected model service.",
   "额外支持图片的模型 ID（每行一个，选填）": "Additional vision model IDs (one per line, optional)",
-  "常见视觉模型自动识别；自定义模型可在此声明图片能力。": "Common vision models are detected automatically. Declare custom vision models here."
+  "常见视觉模型自动识别；自定义模型可在此声明图片能力。": "Common vision models are detected automatically. Declare custom vision models here.",
+  "打开工具": "Open tool",
+  "更多操作": "More actions",
+  "正在验证连接，请稍候": "Validating the connection. Please wait.",
+  "有未保存的模型设置": "Unsaved model settings",
+  "切换语言将丢弃当前窗口的草稿。": "Changing language will discard drafts in this window.",
+  "草稿仅保留在当前窗口，返回设置可继续编辑。": "Drafts stay in this window only. Return to settings to continue editing.",
+  "继续编辑": "Keep editing",
+  "丢弃草稿并切换": "Discard drafts and switch",
+  "保留草稿并离开": "Keep drafts and leave",
+  "生成工具后即可打开预览": "Create a tool to open its preview.",
+  "返回对话": "Back to chat"
 }
