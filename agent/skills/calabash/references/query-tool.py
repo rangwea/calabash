@@ -4,7 +4,7 @@ name: query_tool_template
 description: 异步查询工具模板 - 筛选、稳定分页、完整状态和详情
 creator: auto-generator
 created_at: 2026-04-29
-updated_at: 2026-10-19
+updated_at: 2026-10-29
 tags: 查询, 分页, 详情
 requires:
 """
@@ -186,9 +186,9 @@ class DataQueryTool:
         )
 
     def create_ui(self) -> None:
-        with ui.column().classes("w-full gap-3"):
-            with ui.card().classes("w-full").props("flat"):  # noqa: SIM117
-                with ui.card_section().classes("w-full py-2 px-3"):
+        with ui.column().classes("w-full min-w-0 gap-4"):
+            with ui.card().classes("tool-panel w-full").props("flat"):  # noqa: SIM117
+                with ui.card_section().classes("w-full p-0"):
                     with ui.grid().classes("w-full grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)_auto] gap-3 items-center"):
                         self.keyword_input = (
                             ui.input("关键词")
@@ -212,7 +212,7 @@ class DataQueryTool:
                                 .mark("search-button")
                             )
 
-            with ui.card().classes("w-full").props("flat"):
+            with ui.card().classes("tool-panel w-full").props("flat"):
                 with ui.row().classes(
                     "w-full justify-center items-center gap-2 px-3 py-8"
                 ) as self.loading_row:
@@ -262,7 +262,7 @@ class DataQueryTool:
                         rows=[],
                         row_key="id",
                     )
-                    .props("flat dense color=primary")
+                    .props("flat color=primary")
                     .classes("w-full")
                     .mark("result-table")
                 )

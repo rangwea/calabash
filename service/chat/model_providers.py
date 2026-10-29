@@ -89,6 +89,40 @@ async def validate_connection(provider, connection):
     return ids
 
 
+def supports_images(provider, model, connection=None):
+    if model in (connection or {}).get('vision_models', []):
+        return True
+    value = model.lower()
+    if provider == 'deepseek':
+        return value == 'deepseek-flash'
+    if provider == 'anthropic':
+        return value.startswith(('claude-3', 'claude-sonnet-4', 'claude-opus-4', 'claude-haiku-4'))
+    if provider == 'qwen':
+        if value.startswith(('qwen-vl', 'qwen2-vl', 'qwen2.5-vl', 'qwen3-vl')):
+            return True
+        return value.startswith(('qwen3.5', 'qwen3.6', 'qwen3.7', 'qwen3.8')) and not any(word in value for word in ('coder', 'text', 'max'))
+    if provider == 'openai':
+        return value.startswith(('gpt-4o', 'gpt-4.1', 'gpt-5', 'gpt-6', 'o4-mini')) and not any(word in value for word in ('audio', 'realtime', 'transcribe', 'tts')) or value in {'o1', 'o3'}
+    return False
+
+
+def anthropic_content(content):
+    if not isinstance(content, list):
+        return [{'type': 'text', 'text': content}] if content else []
+    result = []
+    for block in content:
+        if block.get('type') == 'text':
+            result.append(block)
+        elif block.get('type') == 'image_url':
+            url = block['image_url']['url']
+            import re
+            match = re.fullmatch(r'data:(image/(?:png|jpeg));base64,([A-Za-z0-9+/=]+)', url)
+            if not match:
+                raise ValueError('Invalid image payload')
+            result.append({'type': 'image', 'source': {'type': 'base64', 'media_type': match[1], 'data': match[2]}})
+    return result
+
+
 def request(provider, model, connection, messages, tools):
     # Conversation IDs and file references are local metadata, not model input.
     allowed = {"role", "content", "tool_calls", "tool_call_id", "name"}
@@ -114,7 +148,7 @@ def request(provider, model, connection, messages, tools):
         if message["role"] == "tool":
             content = [{"type": "tool_result", "tool_use_id": message["tool_call_id"], "content": message["content"]}]
         else:
-            content = [{"type": "text", "text": message["content"]}] if message.get("content") else []
+            content = anthropic_content(message.get("content"))
             content += [{"type": "tool_use", "id": call["id"], "name": call["function"]["name"], "input": json.loads(call["function"]["arguments"])} for call in message.get("tool_calls", [])]
         if converted and converted[-1]["role"] == role:
             converted[-1]["content"].extend(content)

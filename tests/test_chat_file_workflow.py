@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+from nicegui import ui
 
 from service.chat import ai_chat, agent_model
 from service.chat import chat_context
@@ -118,7 +119,6 @@ class ChatFileWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(b"", requests[0].content)
 
     def test_shared_tool_input_checks_changed_files_and_expired_context(self):
-        from nicegui import ui
 
         from component.tool_files import ToolFileInput
         token = tool_inputs.create("one", "preview", self.messages)

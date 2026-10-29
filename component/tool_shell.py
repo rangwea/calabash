@@ -10,7 +10,7 @@ from core.i18n import t, language
 
 from component.app_frame import render_app_frame
 
-TOOL_SHELL_OUTER = "w-full min-h-screen flex flex-col gap-0 bg-[#fafafa]"
+TOOL_SHELL_OUTER = "calabash-tool-shell w-full min-h-screen flex flex-col gap-0"
 # 顶栏/侧栏：仅浅分割线，不用 shadow（与全站轻量表面一致）
 BORDER_SUBTLE = "border-gray-100"
 TOOL_SHELL_HEADER_BAR = f"w-full flex-shrink-0 gap-0 bg-white border-b {BORDER_SUBTLE}"
@@ -21,7 +21,7 @@ TOOL_SHELL_HEADER_INNER = (
     "items-center justify-between gap-3 min-h-[2.75rem]"
 )
 TOOL_SHELL_BODY_SCROLL = "flex-1 w-full overflow-y-auto gap-0"
-TOOL_SHELL_CONTENT = "w-full max-w-screen-2xl mx-auto px-4 sm:px-6 py-4"
+TOOL_SHELL_CONTENT = "calabash-tool w-full max-w-screen-2xl mx-auto px-4 sm:px-6 py-4"
 
 ToolShellMode = Literal["tool", "preview"]
 

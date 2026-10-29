@@ -27,16 +27,13 @@ if __name__ in {"__main__", "__mp_main__"}:
 
 ## UI Rules
 
-- Clear commands use compact text or icon+text buttons with `dense`; familiar icon-only actions need tooltips.
-- Keep the built-in file-selector, result and batch controls rather than reimplementing them.
-- Root layout uses `ui.column().classes("w-full gap-3")`.
-- Do not add full-page `px`, `max-w-*`, or centered landing-page containers.
-- Optional page header uses `text-lg font-semibold app-text-primary`.
-- Inputs and selects use `outlined dense hide-bottom-space color=primary`; control rows use a responsive grid and one explicit alignment rule.
-- Tables use `flat dense`.
-- Use semantic colors and `app-*` classes; avoid raw hex colors, gradients, and broad `.style()` usage.
-- Do not add repeated subtitles such as `查询条件` or `功能区域` inside already obvious cards.
-- Use ordinary NiceGUI controls for tool-local fixed choices; the desktop app no longer provides managed enum administration.
+- Follow `design.md`: Fluent-inspired office defaults, with tool-local themes and task-specific layouts. User reference images and explicit style requirements take priority.
+- Scope CSS to the tool root. Use local --tool-* variables and --q-primary; never change App-wide colors, default_* or global component selectors from generated tools.
+- Use form, list/detail, file, analytics or media skeletons as appropriate. Do not force all tools into a monochrome compact form.
+- Pick density deliberately. External labels with 36px controls are the default; dense tables and larger media controls are valid choices.
+- Show meaningful states, keyboard focus and readable contrast. Icon-only actions have tooltips.
+- Keep the built-in file selector, results and job lifecycle rather than reimplementing them.
+- Prevent page overflow; tables and editors may have their own scroll area.
 
 ## Runtime Robustness
 
@@ -67,9 +64,9 @@ if __name__ in {"__main__", "__mp_main__"}:
 ## Pre-Preview Checklist
 
 - Icon-only buttons have tooltips; shared component controls are preserved.
-- Root layout is compact and shell-compatible.
-- Inputs, selects, and tables use dense props.
-- Colors use theme or semantic classes.
+- Root layout is shell-compatible and appropriate for the task.
+- Control density and hierarchy match the task; labels and actions are aligned without clipping.
+- Theme and chart colors are intentional, readable, and scoped to the tool.
 - Tool-local choices use `ui.select` or similar ordinary NiceGUI controls.
 - Local configuration is handled deliberately and is not read during module import when failure would prevent the tool page from rendering.
 - Blocking operations do not run on the NiceGUI event loop.

@@ -86,3 +86,27 @@ class ChatAttachmentsTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(conversation_files, "store_upload", AsyncMock(side_effect=ValueError("limit"))), patch.object(ui, "notify"):
             await uploader._multi_upload_handlers[0](SimpleNamespace(files=[SmallFileUpload("office.txt", "text/plain", b"office")]))
         self.assertFalse(self.controls.busy)
+
+    async def test_pasted_images_upload_to_original_chat_and_render_thumbnail(self):
+        import io
+        from PIL import Image
+        buffer = io.BytesIO()
+        Image.new('RGB', (16, 12), 'red').save(buffer, format='PNG')
+        with self.container:
+            compose = chat_attachments.NativeFileDrop()
+            self.controls.connect_drop(compose)
+        uploader = next(element for element in reversed(list(self.container.client.elements.values())) if isinstance(element, ui.upload))
+        self.assertEqual(uploader._props['url'], compose._props['imageUploadUrl'])
+        self.selected = 'two'
+        uploader._begin_upload_handlers[0]()
+        with self.container, patch.object(compose, 'run_method') as done:
+            await uploader._multi_upload_handlers[0](SimpleNamespace(files=[SmallFileUpload('pasted.png', 'image/png', buffer.getvalue())]))
+        self.assertFalse(self.controls.busy)
+        done.assert_called_once_with('uploadDone')
+        item = conversation_files.list_files('one', pending=True)[0]
+        self.assertEqual('pasted.png', item['name'])
+        self.assertEqual([], conversation_files.list_files('two', pending=True))
+        with self.container:
+            chat_attachments.render_file(item, 'one')
+        thumbnails = [element for element in self.container.client.elements.values() if isinstance(element, ui.image)]
+        self.assertTrue(any(element._props['src'].startswith('data:image/png;base64,') for element in thumbnails))

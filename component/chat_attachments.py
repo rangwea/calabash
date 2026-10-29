@@ -7,6 +7,7 @@ from component.file_access import choose_chat_files
 from core.i18n import t
 from core.logger import get_logger
 from service.files import conversation_files as files
+from service.files import chat_images
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,14 @@ def file_size(size):
 
 
 def attachment_error(code):
+    if code == 'invalid_image':
+        return t('图片无法读取，仅支持 PNG、JPEG、WebP、GIF，且不能超过 1600 万像素')
+    if code == 'image_limit':
+        return t('单张图片不能超过 10 MB')
+    if code == 'image_count':
+        return t('每条消息最多添加 5 张图片')
+    if code in {'upload_busy', 'upload_failed'}:
+        return t('图片正在上传或上传失败，请稍后重试')
     if code == "picker_failed":
         return t("无法打开系统选择器，请重启应用后重试")
     if code == "limit":
@@ -44,7 +53,16 @@ def attachment_error(code):
 def render_file(item, chat_id, *, remove=None):
     status = files.check(chat_id, item["id"])
     with ui.row().classes("chat-attachment items-center flex-nowrap gap-2 min-w-0"):
-        ui.icon("description").classes("text-base shrink-0 text-gray-400")
+        thumbnail = None
+        if status == 'ready' and chat_images.is_image(item['name']):
+            try:
+                thumbnail = chat_images.encode(chat_id, item['id'], thumbnail=True)
+            except (ValueError, OSError):
+                pass
+        if thumbnail:
+            ui.image(thumbnail).classes('w-14 h-14 shrink-0 rounded object-contain').props('fit=contain no-spinner')
+        else:
+            ui.icon("description").classes("text-base shrink-0 text-gray-400")
         with ui.column().classes("min-w-0 flex-1 gap-0"):
             ui.label(item["name"]).classes("truncate w-full text-xs text-gray-700").tooltip(item["name"])
             details = file_size(item["size"])
@@ -73,6 +91,7 @@ class ChatAttachments:
         """)
 
     def _render(self):
+        ui.label(t('文件正在上传，请稍后发送')).classes('text-xs text-gray-400').bind_visibility_from(self, 'busy')
         with ui.element("div").classes("chat-file-list"):
             for item in files.list_files(self.chat_id(), pending=True):
                 def remove(_, file_id=item["id"]):
@@ -145,6 +164,35 @@ class ChatAttachments:
         dialog.open()
 
     def connect_drop(self, compose):
+        target_chat = self.chat_id()
+
+        async def uploaded(event):
+            try:
+                for file in event.files[:chat_images.MAX_IMAGES]:
+                    try:
+                        if not chat_images.is_image(file.name):
+                            raise ValueError('invalid_image')
+                        if file.size() > chat_images.MAX_BYTES:
+                            raise ValueError('image_limit')
+                        await files.store_upload(target_chat, file)
+                        self.on_change(target_chat)
+                    except (ValueError, OSError) as error:
+                        self.notify_error(error)
+                if len(event.files) > chat_images.MAX_IMAGES:
+                    self.notify_error('image_count')
+            finally:
+                self.busy = False
+                compose.run_method('uploadDone')
+                self.render.refresh()
+
+        # Reuse NiceGUI's scoped multipart upload route for clipboard/drop bytes.
+        with compose:
+            uploader = ui.upload(multiple=True, auto_upload=True, on_multi_upload=uploaded,
+                                 on_begin_upload=lambda: setattr(self, 'busy', True),
+                                 max_file_size=chat_images.MAX_BYTES,
+                                 max_files=chat_images.MAX_IMAGES).classes('hidden')
+        compose._props['imageUploadUrl'] = uploader._props['url']
+
         def dropped(event):
             data = event.args
             if data.get("ticket"):
@@ -153,6 +201,7 @@ class ChatAttachments:
                 self.notify_error(data["error"])
 
         compose.on("selection", dropped)
+        compose.on('imageUploading', lambda event: setattr(self, 'busy', bool(event.args.get('busy'))))
 
     def button(self):
         action_button("attach", t("添加文件"), self.select)

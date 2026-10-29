@@ -25,11 +25,13 @@ class CalabashChatModel(BaseChatModel):
     _provider: str = PrivateAttr()
     _model: str = PrivateAttr()
     _connection: dict = PrivateAttr()
+    _chat_id: str | None = PrivateAttr(default=None)
     _tools: list = PrivateAttr(default_factory=list)
 
-    def __init__(self, provider, model, connection):
+    def __init__(self, provider, model, connection, *, chat_id=None):
         super().__init__(cache=False)
         self._provider, self._model, self._connection = provider, model, dict(connection)
+        self._chat_id = chat_id
 
     @property
     def _llm_type(self):
@@ -53,6 +55,9 @@ class CalabashChatModel(BaseChatModel):
         from service.chat.ai_chat import MODEL_REQUEST_TIMEOUT
 
         wire = convert_to_openai_messages(messages)
+        from service.files.chat_images import hydrate
+        if any(isinstance(message.get('content'), list) and any(block.get('type') == 'image_url' for block in message['content']) for message in wire):
+            wire = await asyncio.to_thread(hydrate, wire, self._chat_id, self._provider, self._model, self._connection)
         url, headers, payload = model_providers.request(
             self._provider, self._model, self._connection, wire, self._tools,
         )

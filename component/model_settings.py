@@ -22,6 +22,9 @@ def render_model_settings():
         if name == "qwen":
             ui.label(t("API 地址需与密钥地域一致：北京 dashscope.aliyuncs.com；新加坡 dashscope-intl.aliyuncs.com。保留 /compatible-mode/v1 后缀。")).classes("text-xs text-gray-500 mt-2")
 
+        vision = ui.textarea(label=t('额外支持图片的模型 ID（每行一个，选填）'), value='\n'.join(connection.get('vision_models', []))).props('outlined dense autogrow hide-bottom-space').classes('w-full mt-3')
+        ui.label(t('常见视觉模型自动识别；自定义模型可在此声明图片能力。')).classes('text-xs text-gray-500 mt-1')
+
         async def fetch_models():
             import httpx
             if not (key.value or "").strip():
@@ -58,7 +61,7 @@ def render_model_settings():
             if not key.value.strip() or not enabled or parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
                 ui.notify(t("请填写密钥、HTTPS API 地址和至少一个模型"), type="warning")
                 return
-            connection_data = {"key": key.value.strip(), "base_url": address, "models": enabled}
+            connection_data = {"key": key.value.strip(), "base_url": address, "models": enabled, "vision_models": [value.strip() for value in vision.value.splitlines() if value.strip() in enabled]}
             save_button.disable()
             try:
                 await models.validate_connection(name, connection_data)

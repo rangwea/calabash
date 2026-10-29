@@ -121,7 +121,7 @@ async def respond(messages, chat_id, prompt, initial, provider, model, connectio
                 await saver.setup()
                 if os.name != "nt":
                     path.chmod(0o600)
-                graph = create_graph(CalabashChatModel(provider, model, connection), prompt,
+                graph = create_graph(CalabashChatModel(provider, model, connection, chat_id=chat_id), prompt,
                                      build_tools(chat_id, messages, run_id, repair_session), saver)
                 state = await graph.aget_state(config)
                 if state.values:

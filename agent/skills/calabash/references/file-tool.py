@@ -4,7 +4,7 @@ name: csv_file_tool_template
 description: CSV 批量清理示例：文件输入、安全导出、结果历史、取消与失败重试
 creator: auto-generator
 created_at: 2026-10-19
-updated_at: 2026-10-19
+updated_at: 2026-10-29
 tags: 文件处理,批量任务,导出
 requires:
 """
@@ -45,7 +45,7 @@ def export_csv(source: Path, destination: Path, drop_blank: bool) -> None:
 def main() -> None:
     ui.page_title("CSV 批量清理")
     jobs: ToolJobs | None = None
-    with ui.column().classes("w-full gap-3"):
+    with ui.column().classes("tool-theme-teal w-full min-w-0 gap-4"):
         inputs = ToolFileInput()
         with ui.row().classes("w-full items-center gap-3 flex-wrap"):
             drop_blank = ui.switch("删除空行", value=True).props("dense")

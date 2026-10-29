@@ -2,6 +2,8 @@
 
 from nicegui import app, ui
 
+from core.tool_theme import TOOL_THEME_CSS
+
 BRAND_COLORS = {
     "primary": "#1F2937",
     "secondary": "#3B82F6",
@@ -64,16 +66,16 @@ GLOBAL_CSS = """
         border-left: 4px solid var(--q-primary) !important;
     }
 
-    .nicegui-content .q-card {
+    .nicegui-content .q-card:not(:where(.calabash-tool *)) {
         border: 1px solid #F3F4F6;
         border-radius: 8px;
         background: var(--app-surface);
         box-shadow: none;
         transition: border-color 0.15s ease-in-out;
     }
-    .nicegui-content .q-card:hover { border-color: #E5E7EB; }
+    .nicegui-content .q-card:not(:where(.calabash-tool *)):hover { border-color: #E5E7EB; }
 
-    .nicegui-content .q-btn {
+    .nicegui-content .q-btn:not(:where(.calabash-tool *)) {
         border-radius: 6px;
         box-shadow: none;
         font-size: 0.875rem;
@@ -83,31 +85,31 @@ GLOBAL_CSS = """
         transition: background-color 0.15s ease-in-out,
             border-color 0.15s ease-in-out, color 0.15s ease-in-out;
     }
-    .nicegui-content .q-btn:hover,
-    .nicegui-content .q-btn:active { box-shadow: none; transform: none; }
+    .nicegui-content .q-btn:not(:where(.calabash-tool *)):hover,
+    .nicegui-content .q-btn:not(:where(.calabash-tool *)):active { box-shadow: none; transform: none; }
 
-    .nicegui-content .q-field--outlined .q-field__control {
+    .nicegui-content .q-field--outlined:not(:where(.calabash-tool *)) .q-field__control {
         border-radius: 6px;
         background: var(--app-surface);
     }
-    .nicegui-content .q-field--outlined .q-field__control::before {
+    .nicegui-content .q-field--outlined:not(:where(.calabash-tool *)) .q-field__control::before {
         border-color: #E5E7EB;
     }
-    .nicegui-content .q-field--outlined.q-field--focused .q-field__control::before {
+    .nicegui-content .q-field--outlined:not(:where(.calabash-tool *)).q-field--focused .q-field__control::before {
         border-color: var(--q-primary);
         border-width: 2px;
     }
 
-    .nicegui-content .q-avatar { background-color: inherit; color: inherit; }
-    .nicegui-content .q-avatar.bg-blue-100 { background: #DBEAFE; color: #1E40AF; }
-    .nicegui-content .q-avatar.bg-green-100 { background: #DCFCE7; color: #166534; }
-    .nicegui-content .q-avatar.bg-purple-100 { background: #F3E8FF; color: #7C2D12; }
-    .nicegui-content .q-avatar.bg-orange-100 { background: #FED7AA; color: #9A3412; }
-    .nicegui-content .q-avatar.bg-red-100 { background: #FEE2E2; color: #991B1B; }
-    .nicegui-content .q-avatar.bg-yellow-100 { background: #FEF3C7; color: #92400E; }
-    .nicegui-content .q-avatar.bg-pink-100 { background: #FCE7F3; color: #BE185D; }
-    .nicegui-content .q-avatar.bg-indigo-100 { background: #E0E7FF; color: #3730A3; }
-    .nicegui-content .q-avatar.bg-gray-100 { background: #F3F4F6; color: #374151; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)) { background-color: inherit; color: inherit; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-blue-100 { background: #DBEAFE; color: #1E40AF; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-green-100 { background: #DCFCE7; color: #166534; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-purple-100 { background: #F3E8FF; color: #7C2D12; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-orange-100 { background: #FED7AA; color: #9A3412; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-red-100 { background: #FEE2E2; color: #991B1B; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-yellow-100 { background: #FEF3C7; color: #92400E; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-pink-100 { background: #FCE7F3; color: #BE185D; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-indigo-100 { background: #E0E7FF; color: #3730A3; }
+    .nicegui-content .q-avatar:not(:where(.calabash-tool *)).bg-gray-100 { background: #F3F4F6; color: #374151; }
 
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: rgba(243, 244, 246, 0.5); }
@@ -136,30 +138,18 @@ def apply_app_styles() -> None:
     """应用固定品牌色、全局 CSS 和组件默认值。"""
     app.config.quasar_config["brand"].update(BRAND_COLORS)
 
-    field_props = 'outlined dense color="primary" bg-color="white"'
+    field_props = 'outlined hide-bottom-space color="primary"'
     for element in (ui.input, ui.textarea, ui.number, ui.select, ui.date_input):
         element.default_props(field_props)
-        element.default_classes("rounded-md transition-colors duration-150")
 
-    ui.button.default_props("unelevated no-caps")
-    ui.button.default_classes(
-        "rounded-md font-medium tracking-wide transition-colors duration-150"
-    )
-    ui.card.default_props("flat")
-    ui.card.default_classes("rounded-lg border border-gray-100 shadow-none")
+    ui.button.default_props("no-caps")
     ui.checkbox.default_props('color="primary"')
     ui.radio.default_props('color="primary"')
     ui.switch.default_props('color="primary"')
     ui.avatar.default_props('color=""')
-    ui.expansion.default_props(
-        'header-class="rounded-t-lg border-b border-gray-100" '
-        'expand-icon-class="text-primary"'
-    )
-    ui.expansion.default_classes(
-        "rounded-lg border border-gray-100 shadow-none overflow-hidden mb-4"
-    )
 
     ui.add_head_html(GLOBAL_CSS, shared=True)
+    ui.add_head_html("<style>" + TOOL_THEME_CSS + "</style>", shared=True)
     from pathlib import Path
     ui.add_head_html("<script>" + (Path(__file__).resolve().parents[1] / "component/context_menu.js").read_text(encoding="utf-8") + "</script>", shared=True)
     ui.add_head_html("<script>" + (Path(__file__).resolve().parents[1] / "component/tool_activity.js").read_text(encoding="utf-8") + "</script>", shared=True)

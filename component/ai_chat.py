@@ -15,6 +15,7 @@ from service.chat import ai_chat as chat
 from service.chat import model_providers
 
 _COMPOSER_KEYDOWN_JS = """(e) => {
+    if (e.target.closest?.('.chat-compose')?.dataset?.uploading === 'true') return;
     if (e.shiftKey || e.repeat || e.isComposing || e.keyCode === 229 ||
         e.target.calabashComposing ||
         (e.target.calabashCompositionEnded !== undefined &&
@@ -459,10 +460,20 @@ def _render_chat_session(chat_id=None, on_change=None):
             return
         text = (composer.value or "").strip()
         if not text:
-            return
+            from service.files import chat_images, conversation_files
+            if not any(chat_images.is_image(item['name']) for item in conversation_files.list_files(selected['id'], pending=True)):
+                return
         if not model_providers.selected():
             connection()
             return
+        from service.files import chat_images, conversation_files
+        image_files = [item for item in conversation_files.list_files(selected['id'], pending=True) if chat_images.is_image(item['name'])]
+        if image_files:
+            provider, model, connection_data = model_providers.active()
+            if not model_providers.supports_images(provider, model, connection_data):
+                ui.notify(t('当前模型不支持图片，请选择支持视觉的模型'), type='warning')
+                return
+        text = text or t('请查看这些图片。')
         message = {"id": uuid4().hex, "role": "user", "content": text, "attachments": attachments.ids()}
         try:
             chat.save_chat(selected["id"], [*messages, message])
@@ -502,7 +513,7 @@ def _render_chat_session(chat_id=None, on_change=None):
                             stop.disable()
                             stop.set_visibility(False)
                             send = ui.button(icon="arrow_upward", on_click=submit).props("dense round color=primary").classes("chat-send").tooltip(t("发送"))
-                    ui.label(t("文件引用保存在本地；后续读取内容可能发送至所选模型服务")).classes("text-xs text-gray-400 break-words")
+                    ui.label(t("可选择、拖入或粘贴图片；发送图片会将图片内容提交给所选模型服务")).classes("text-xs text-gray-400 break-words")
                 attachments.connect_drop(compose)
         from component.panel_resize import resize_handle
 

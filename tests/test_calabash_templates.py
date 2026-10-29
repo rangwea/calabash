@@ -22,6 +22,15 @@ def load_module(name, path):
 
 
 class TemplateContractTests(unittest.TestCase):
+    def test_agent_can_read_bundled_ui_references_but_not_arbitrary_paths(self):
+        schema = next(item['function'] for item in ai_chat.schemas() if item['function']['name'] == 'read_ui_reference')
+        for name in schema['parameters']['properties']['name']['enum']:
+            result = ai_chat.execute_tool('read_ui_reference', {'name': name})
+            self.assertFalse(result['executed'])
+            self.assertTrue(result['content'])
+        for name in ('../../package.json', '/etc/passwd', 'runtime-libraries.json', None):
+            self.assertIn('error', ai_chat.execute_tool('read_ui_reference', {'name': name}))
+
     def test_cli_validator_checks_component_contracts(self):
         source = self.source('from component.tool_results import ToolResults\ndef main():\n    results = ToolResults()\n    results.mount()')
         self.assertTrue(any('remove mount()' in error for error in self.validator.validate_source(source)))
@@ -34,7 +43,7 @@ class TemplateContractTests(unittest.TestCase):
         return f'"""{self.header}"""\n{body}\nif __name__ == "__main__":\n    main()\n    ui.run()\n'
 
     def test_all_shipped_templates_pass_without_executing_source(self):
-        for name in ("simple-tool.py", "query-tool.py", "file-tool.py"):
+        for name in ("simple-tool.py", "query-tool.py", "file-tool.py", "office-workspace.py", "media-workspace.py"):
             with self.subTest(name=name):
                 self.assertEqual([], self.validator.validate_source((SKILL / "references" / name).read_text()))
         source = self.source('from nicegui import ui\nraise RuntimeError("must not execute")\ndef main():\n    pass')
@@ -76,6 +85,33 @@ class FileTemplateTests(unittest.IsolatedAsyncioTestCase):
             patcher = patch.object(module, "app_dir", return_value=self.root)
             patcher.start()
             self.addCleanup(patcher.stop)
+
+    async def test_office_workspace_filters_and_resets_without_shared_mutation(self):
+        template = load_module("office_workspace", SKILL / "references/office-workspace.py")
+        with self.container:
+            template.main()
+        table = next(element for element in self.container.descendants() if isinstance(element, ui.table))
+        search = next(element for element in self.container.descendants() if isinstance(element, ui.input))
+        self.assertEqual(6, len(table.rows))
+        search.set_value('预算')
+        self.assertEqual(['月度预算复盘'], [row['name'] for row in table.rows])
+        search.set_value('no matching project')
+        self.assertEqual([], table.rows)
+        search.set_value('')
+        self.assertEqual(6, len(table.rows))
+        table.rows[0]['name'] = 'instance edit'
+        self.assertEqual('品牌素材整理', template.SAMPLE_ROWS[0]['name'])
+
+    async def test_media_workspace_renders_empty_state_and_switches_views(self):
+        template = load_module("media_workspace", SKILL / "references/media-workspace.py")
+        with self.container:
+            template.main()
+        buttons = [element for element in self.container.descendants() if isinstance(element, ui.button)]
+        play = next(button for button in buttons if button._props.get('round'))
+        self.assertFalse(play.enabled)
+        settings = next(button for button in buttons if button.text == '工作区设置')
+        next(iter(settings._event_listeners.values())).handler(None)
+        self.assertIn('media-selected', settings._classes)
 
     async def test_query_template_uses_shared_single_task_runner(self):
         template = load_module("calabash_query_lifecycle", SKILL / "references/query-tool.py")

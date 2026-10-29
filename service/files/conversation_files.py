@@ -86,12 +86,18 @@ def _snapshot(path):
 
 def register(chat_id, path, *, source="native", name=None):
     original, resolved, info = _snapshot(path)
+    from service.files import chat_images
+    display_name = name or original.name
+    if chat_images.is_image(display_name):
+        chat_images.validate(resolved, info.st_size)
     with database() as db:
         ensure_chat(db, chat_id)
         drafts = _records(db, chat_id, pending=True)
         for row in drafts:
             if row["original_path"] == str(original) and row["path"] == str(resolved) and row["mtime_ns"] == info.st_mtime_ns and row["size"] == info.st_size and row["inode"] == info.st_ino:
                 return _public(row)
+        if chat_images.is_image(display_name) and sum(chat_images.is_image(row['name']) for row in drafts) >= chat_images.MAX_IMAGES:
+            raise ValueError('image_count')
         if len(drafts) >= MAX_FILES:
             raise ValueError("limit")
         row = {"id": uuid4().hex, "chat_id": chat_id, "original_path": str(original), "path": str(resolved),

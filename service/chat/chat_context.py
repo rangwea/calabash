@@ -90,7 +90,7 @@ def prepare(messages, chat_id=None, *, include_reasoning=True):
             item.pop("reasoning_content", None)
         attached = [references[file_id] for file_id in message.get("attachments", []) if file_id in references]
         if attached:
-            item["content"] += "\n\nAttached local files (metadata only; use read_attachment for contents):\n" + json.dumps(attached, ensure_ascii=False)
+            item["content"] += "\n\nAttached local files (metadata only; image pixels may be supplied separately; use read_attachment for document contents):\n" + json.dumps(attached, ensure_ascii=False)
         turns[-1].append(item)
     kept = []
     budget = MAX_HISTORY_CHARACTERS

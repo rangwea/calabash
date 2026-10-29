@@ -329,5 +329,17 @@
   "错误记录已过期或代码已更改，请手动重试工具后重新发起修复。": "The error is stale or the code changed. Retry the tool manually, then request repair again.",
   "本次只修改预览版本；手动验证后请保存到工具列表。": "This changes only the preview. After manual verification, save it to the tool list.",
   "本次修改正式工具；保存后仍需手动运行验证。": "This changes the published tool. Run it manually after saving to verify it.",
-  "确认后，Agent 可查询当前工具的真实日志（含异常信息和调用栈），并读取、修改工具代码。日志可能包含业务信息；已知密钥会过滤。不会读取其他工具或附件，修复后请手动重试。": "After confirmation, Agent can query this tool’s actual logs (including exception messages and tracebacks) and read or edit its code. Logs may contain business information; known credentials are filtered. Other tools and attachments are excluded. Retry manually after changes are saved."
+  "确认后，Agent 可查询当前工具的真实日志（含异常信息和调用栈），并读取、修改工具代码。日志可能包含业务信息；已知密钥会过滤。不会读取其他工具或附件，修复后请手动重试。": "After confirmation, Agent can query this tool’s actual logs (including exception messages and tracebacks) and read or edit its code. Logs may contain business information; known credentials are filtered. Other tools and attachments are excluded. Retry manually after changes are saved.",
+  "图片无法读取，仅支持 PNG、JPEG、WebP、GIF，且不能超过 1600 万像素": "Cannot read image. Use PNG, JPEG, WebP or GIF, up to 16 megapixels.",
+  "单张图片不能超过 10 MB": "Each image must be 10 MB or smaller.",
+  "每条消息最多添加 5 张图片": "Attach up to 5 images per message.",
+  "每次最多发送 5 张图片": "Send up to 5 images at a time.",
+  "图片正在上传或上传失败，请稍后重试": "Image upload is in progress or failed. Please try again shortly.",
+  "当前模型不支持图片，请选择支持视觉的模型": "This model does not support images. Select a vision-capable model.",
+  "图片引用无效，请重新添加图片": "Invalid image reference. Please attach the image again.",
+  "图片不可用或已变化，请重新添加后发送": "Image is unavailable or has changed. Attach it again before sending.",
+  "请查看这些图片。": "Please look at these images.",
+  "可选择、拖入或粘贴图片；发送图片会将图片内容提交给所选模型服务": "Select, drop or paste images. Sending images shares their contents with the selected model service.",
+  "额外支持图片的模型 ID（每行一个，选填）": "Additional vision model IDs (one per line, optional)",
+  "常见视觉模型自动识别；自定义模型可在此声明图片能力。": "Common vision models are detected automatically. Declare custom vision models here."
 }

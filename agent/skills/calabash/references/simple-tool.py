@@ -4,7 +4,7 @@ name: simple_tool_template
 description: 异步简单工具模板 - 紧凑表单、完整状态和结果表格
 creator: auto-generator
 created_at: 2026-04-29
-updated_at: 2026-10-19
+updated_at: 2026-10-29
 tags: 表单, 异步任务, 结果展示
 requires:
 """
@@ -101,9 +101,9 @@ def main() -> None:
             submit_button.enable()
             reset_button.enable()
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.card().classes("w-full").props("flat"):  # noqa: SIM117
-            with ui.card_section().classes("w-full py-2 px-3"):
+    with ui.column().classes("w-full min-w-0 gap-4"):
+        with ui.card().classes("tool-panel w-full").props("flat"):  # noqa: SIM117
+            with ui.card_section().classes("w-full p-0"):
                 with ui.grid().classes("w-full grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)_auto] gap-3 items-center"):
                     name_input = (
                         ui.input(
@@ -132,7 +132,7 @@ def main() -> None:
                             .mark("submit-button")
                         )
 
-        with ui.card().classes("w-full").props("flat"):
+        with ui.card().classes("tool-panel w-full").props("flat"):
             initial_label = ui.label("填写信息并提交后显示处理结果").classes(
                 "w-full px-3 py-6 text-center text-sm text-gray-500"
             )
@@ -173,7 +173,7 @@ def main() -> None:
                     rows=[],
                     row_key="id",
                 )
-                .props("flat dense color=primary")
+                .props("flat color=primary")
                 .classes("w-full")
                 .mark("result-table")
             )
