@@ -6,6 +6,18 @@ from service.chat.chat_context import MAX_HISTORY_CHARACTERS, _compact_tool_sour
 
 
 class ChatContextCompactionTests(unittest.TestCase):
+    def test_long_virtual_draft_snapshots_are_compacted(self):
+        messages = [
+            {"role": "user", "content": "Create draft"},
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "write", "type": "function", "function": {"name": "write_file", "arguments": json.dumps({"file_path": "/draft.py", "content": "# source\n" * 12000})}}]},
+            {"role": "tool", "tool_call_id": "write", "content": "Updated file /draft.py"},
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "read", "type": "function", "function": {"name": "read_file", "arguments": '{"file_path":"/draft.py"}'}}]},
+            {"role": "tool", "tool_call_id": "read", "content": "# source\n" * 12000},
+        ]
+        result = prepare(messages)
+        self.assertLess(len(json.dumps(result)), MAX_HISTORY_CHARACTERS)
+        self.assertEqual(2, sum(m["role"] == "tool" for m in result))
+        self.assertEqual("# source\n" * 12000, messages[-1]["content"])
     def test_non_thinking_budget_does_not_count_large_hidden_reasoning(self):
         messages = [
             {"role": "user", "content": "Create a ledger"},

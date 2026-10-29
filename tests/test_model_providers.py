@@ -48,8 +48,13 @@ class ProviderTests(unittest.TestCase):
         _, _, payload = models.request("deepseek", "model", connection, messages, [])
         self.assertNotIn("reasoning_content", payload["messages"][0])
         self.assertEqual({"type": "disabled"}, payload["thinking"])
+
         _, _, payload = models.request("openai", "model", connection, messages, [])
         self.assertNotIn("reasoning_content", payload["messages"][0])
         # Switching from another current provider must not fabricate DeepSeek reasoning.
         _, _, payload = models.request("deepseek", "model", connection, [{"role": "assistant", "content": "answer from another model"}], [])
         self.assertEqual({"type": "disabled"}, payload["thinking"])
+
+    def test_anthropic_output_limit_is_not_silently_accepted(self):
+        packet = models.normalize({"type": "message_delta", "delta": {"stop_reason": "max_tokens"}}, "anthropic")
+        self.assertEqual("length", packet["choices"][0]["finish_reason"])

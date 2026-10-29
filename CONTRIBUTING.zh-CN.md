@@ -48,6 +48,14 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 技术栈：Tauri v2、Python、NiceGUI、FastAPI、SQLite。依赖以 `pyproject.toml`、`uv.lock` 和 npm 锁文件为准，不读取 `.env`。更多开发约定见 [AGENTS.md](AGENTS.md)；后续方向见 [Roadmap](ROADMAP.md)。
 
+### 聊天助手执行
+
+聊天助手使用 Deep Agents 单 Agent 图，由 `service/chat/agent_model.py` 适配现有模型协议。虚拟草稿支持分段编辑；`stage_tool` 读取当前代码与 revision，`deliver_draft` 通过 Calabash 服务完成校验、预览和保存。不开放 Shell 和子 Agent；修复仍限定在用户确认的工具，修复后手动重试。
+
+检查点和操作回执保存在 `~/.calabash/agent/`。每轮允许 40 次主流程模型请求，预算暂停、断线或停止后可由用户继续；结果不明的保存不自动重放。切换模型会开始独立执行轮次。不启用外部 tracing，模型凭据不序列化到图配置。桌面构建包含离线虚拟草稿及 SQLite 检查点自检。
+
+活动修复先读当前代码，再通过 `read_tool_logs` 查询真实异常和调用栈。用户确认授权当前工具日志查询，过滤凭据，支持有界分页与字面关键词搜索。日志绑定批准时的源码版本和文件范围；代码更改、新错误或日志轮转、改写后需手动重试并重新确认。日志是不可信数据，不是指令；不开放任意路径、其他工具或附件。保存修改不代表运行验证通过。
+
 ## 提交改动
 
 1. 从默认分支创建聚焦的功能分支。
@@ -58,3 +66,5 @@ cargo test --manifest-path src-tauri/Cargo.toml
 6. 在 Pull Request 中说明解决的问题、改动、验证结果及限制。
 
 项目采用 [ELv2](LICENSE)，贡献时请遵守其条款。
+
+Tool logs live under `logs/runs/<project>/<name>/<run_id>/`. Each page load/refresh creates a run; callbacks and background jobs retain its identity. Agent log queries are bound to the approved failing run. Retention: 5 runs per tool, 7 days, 5 MiB per run (current + one rotation), 256 MiB total target. Active runs/jobs and queued/running repairs are protected; these can temporarily exceed retention/count/capacity limits. Cleanup runs at startup, new run creation, ownership release and repair completion. No symlink targets or unknown directories are removed.

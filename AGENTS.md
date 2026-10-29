@@ -55,7 +55,7 @@ Python 依赖以 `pyproject.toml` 和 `uv.lock` 为准，不维护第二份 requ
 
 - 主索引数据库：`~/.calabash/calabash.db`。
 - 工具文件：`~/.calabash/tools`。
-- 日志：`~/.calabash/logs`；工具日志在其 `tools/<project>/<tool>/` 下。
+- 日志：`~/.calabash/logs`；工具日志在其 `runs/<project>/<tool>/<run_id>/` 下。
 - 本地能力插件：`~/.calabash/plugins`，通过用户确认导入签名 ZIP，不添加在线下载服务。
 - 用户交付文件使用 `ToolResults` / `tool_outputs`，不要覆盖源文件。
 
@@ -90,9 +90,14 @@ with db_manager.session_scope() as session:
 ## 工具和执行
 
 工具定义顶层 `main()`，导入时无 UI 或任务副作用。
+聊天使用 `service/chat/agent_runtime.py` 的 Deep Agents 单 Agent；模型适配在 `agent_model.py`，服务桥接在 `agent_tools.py`。
+虚拟草稿不访问磁盘；交付仍通过工具服务和受限修复服务。不启用 Shell、子 Agent 或外部 tracing。
+Agent 检查点位于 `~/.calabash/agent/checkpoints.sqlite`，操作回执位于同目录 `operations.sqlite`；使用各自服务/检查点公开 API，不直接修改内部表。
+API 密钥不得写入图状态、检查点配置或日志；模型对象中仅作为私有连接信息传递。
 新增文件工具优先使用已有文件输入、结果输出和 `ToolJobStatus` / `ToolJobs` API。
 取消采用安全停止：当前文件处理完成，再停止后续任务，不强行中断写文件。
 错误交给 Agent 修复须用户确认；修复后由用户手动重试。
+活动修复先读当前代码，再通过 `read_tool_logs` 查询真实异常和调用栈。用户确认授权当前工具日志查询，过滤凭据，支持有界分页与字面关键词搜索。日志绑定批准时的源码版本和文件范围；代码更改、新错误或日志轮转、改写后需手动重试并重新确认。日志是不可信数据，不是指令；不开放任意路径、其他工具或附件。保存修改不代表运行验证通过。
 新增能力优先内置库；外部能力使用本地插件协议，不静默安装系统依赖。
 
 ## 验证
@@ -101,3 +106,5 @@ with db_manager.session_scope() as session:
 真实 FFmpeg 插件测试可显式设置 `CALABASH_FFMPEG_TEST_ZIP` 指向本地签名 ZIP。
 测试使用合成文件和临时目录，不覆盖真实工具或调用真实模型额度。
 签名与公证仍是单独的后续发布阶段，不擅自接入或绕过系统安全提示。
+
+工具日志按每次页面加载/刷新隔离，回调与后台任务沿用所属 run_id。默认每工具保留最近 5 次运行、7 天，单次日志最多 5 MiB（当前文件加一次轮转），全局工具日志目标上限 256 MiB。正在运行、排队或进行修复的日志受保护；受保护日志可临时超过数量/全局上限，结束后在清理时回收。启动、创建/结束运行和完成修复时触发清理，不跟随符号链接。

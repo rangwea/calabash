@@ -17,12 +17,8 @@ from component.tool_capabilities import render_capability_gate
 from component.tool_repair import RepairFeedback
 from component.tool_shell import render_tool_shell
 from core.i18n import t
-from core.logger import (
-    get_logger,
-    get_preview_logger,
-    preview_log_context,
-    setup_preview_logging,
-)
+from core.logger import get_logger
+from core import tool_run_logs
 from service.tools.preview_service import (
     fixed_preview_key_from_path,
     get_preview_file,
@@ -96,8 +92,14 @@ async def _render_preview(
             )
             return
         ui.context.client.calabash_input_context = (context, preview_key)
-    preview_logger = get_preview_logger(preview_key)
-    preview_logger.info(f"开始渲染预览页面: key={preview_key}")
+    owner, _ = ui.context.client.calabash_output_owner
+    if context and owner.startswith('tool:'):
+        project, name = owner.removeprefix('tool:').split('/', 1)
+    else:
+        project, name = '_previews', preview_key
+    run = tool_run_logs.start(project, name, preview_key=preview_key, client=ui.context.client)
+    preview_logger = run.logger
+    preview_logger.info('Rendering preview run')
 
     filepath = get_preview_file(preview_key)
 
@@ -110,18 +112,14 @@ async def _render_preview(
         )
         return
 
-    module_name = f"preview_{preview_key.replace('-', '_').replace('.', '_')}"
-
-    # 页面渲染结束后，按钮、表格等事件会在新的异步上下文中执行，无法继承
-    # preview_log_context。为用户模块绑定持久日志 handler，并单独记录 NiceGUI
-    # 捕获的事件回调异常，确保前端提示的错误也能在预览日志中追踪。
-    setup_preview_logging(preview_key, module_name)
+    module_name = f"preview_{preview_key.replace('-', '_').replace('.', '_')}_{run.id}"
+    run.attach_module(module_name)
     feedback = None
     owner, _ = ui.context.client.calabash_output_owner
     if context and owner.startswith("tool:"):
         project, name = owner.removeprefix("tool:").split("/", 1)
         feedback = RepairFeedback(
-            project, name, preview_key=preview_key, context=context
+            project, name, preview_key=preview_key, context=context, log_run_id=run.id
         )
 
     def log_event_exception(exception: Exception) -> None:
@@ -135,7 +133,7 @@ async def _render_preview(
 
     phase = "load"
     try:
-        with preview_log_context(preview_key):
+        with run.context():
             main_func, is_async = load_tool_entrypoint(module_name, str(filepath))
             phase = "render"
             with render_tool_shell(

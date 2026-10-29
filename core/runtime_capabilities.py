@@ -124,6 +124,9 @@ def check_runtime() -> dict:
                 finally:
                     document.close()
                 checks.append("pdf_rendering")
+                from service.chat.agent_selfcheck import check_runtime as check_agent
+                check_agent()
+                checks.append("agent_checkpoint_roundtrip")
         except Exception as error:  # noqa: BLE001 - third-party codecs and renderers have different error types.
             errors["file_roundtrip"] = type(error).__name__
     return {"ok": not errors, "app": {"name": APP_NAME, "version": APP_VERSION}, "libraries": versions, "checks": checks, "errors": errors}

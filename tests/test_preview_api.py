@@ -18,7 +18,6 @@ class PreviewApiTests(unittest.TestCase):
         for name, value in {
             "_TMP_DIR": self.root,
             "_PREVIEW_META_DIR": self.root / "_meta",
-            "_PREVIEW_LOG_DIR": self.root / "_logs",
         }.items():
             patcher = patch.object(preview_service, name, value)
             patcher.start()
@@ -26,6 +25,11 @@ class PreviewApiTests(unittest.TestCase):
         patcher = patch.object(preview_service, "get_preview_logger")
         patcher.start()
         self.addCleanup(patcher.stop)
+        from core import tool_run_logs
+        for target, value in [('logs_dir', self.root / 'logs'), ('app_dir', self.root)]:
+            patcher = patch.object(tool_run_logs, target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         app = FastAPI()
         app.include_router(router)
         self.client = TestClient(app)
@@ -98,9 +102,10 @@ class PreviewApiTests(unittest.TestCase):
             "def main(): return 2",
             self.client.get("/api/tools/preview/code/fixed/demo/hello").text,
         )
-        logs = self.root / "_logs"
-        logs.mkdir()
-        (logs / f"{first['key']}.log").write_text("first\nlast\n")
+        from core import tool_run_logs
+        run = tool_run_logs.start('demo', 'hello', preview_key=first['key'])
+        self.addCleanup(run.close)
+        run.writer.write('first\nlast\n')
         # The API obtains the path through preview_service, whose globals are isolated above.
         response = self.client.get("/api/tools/preview/log/fixed/demo/hello?lines=1")
         self.assertEqual(200, response.status_code)

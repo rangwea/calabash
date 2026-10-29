@@ -45,15 +45,23 @@ class RepairFeedback:
         try:
             provider, model, connection = model_providers.active()
             fingerprint = tool_repairs.model_fingerprint()
-            report = tool_repairs.get(self.report_id)
         except ValueError:
             ui.notify(t("请先配置模型"), type="warning")
+            return
+        try:
+            report = tool_repairs.get(self.report_id)
+            from service.tools import tool_diagnostics
+            if not tool_diagnostics.is_latest(report) or tool_diagnostics.current_revision(report) != report["revision"]:
+                raise ValueError("Stale failure")
+        except (ValueError, OSError):
+            ui.notify(t('错误记录已过期或代码已更改，请手动重试工具后重新发起修复。'), type='warning')
             return
         with self.container, ui.dialog() as dialog, ui.card().classes("w-full max-w-lg gap-3"):
             ui.label(t("确认发送修复请求")).classes("text-lg font-semibold")
             ui.label(f"{model} · {urlsplit(connection['base_url']).hostname or provider}").classes("text-sm")
-            ui.code(tool_repairs.summary(report)).classes("w-full")
-            ui.label(t("将发送以上摘要，并允许模型读取、修改当前工具代码。不发送附件正文或完整日志。修复后不会自动运行，请手动重试。")).classes("text-sm text-gray-500")
+            ui.label(t('本次只修改预览版本；手动验证后请保存到工具列表。') if report.get('preview_key') else t('本次修改正式工具；保存后仍需手动运行验证。')).classes('text-sm text-gray-600')
+            ui.code(tool_repairs.summary(report)).classes("w-full max-h-64 overflow-auto")
+            ui.label(t("确认后，Agent 可查询当前工具的真实日志（含异常信息和调用栈），并读取、修改工具代码。日志可能包含业务信息；已知密钥会过滤。不会读取其他工具或附件，修复后请手动重试。")).classes("text-sm text-gray-500")
             with ui.row():
                 ui.button(t("取消"), on_click=lambda: dialog.submit(False)).props("flat")
                 ui.button(t("确认发送"), on_click=lambda: dialog.submit(True)).props("unelevated")

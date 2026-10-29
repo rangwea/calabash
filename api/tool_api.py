@@ -98,7 +98,7 @@ async def get_preview_log(
 
 async def _get_preview_log_by_key(preview_key: str, lines: int):
     log_file = get_preview_log_file(preview_key)
-    if not os.path.exists(log_file):
+    if log_file is None or not os.path.exists(log_file):
         return PlainTextResponse(
             content=f"日志文件不存在: {preview_key}",
             status_code=404,

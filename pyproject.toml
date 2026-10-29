@@ -23,6 +23,8 @@ dependencies = [
     "Pillow>=11.0.0",
     "reportlab>=4.0.0",
     "pypdfium2>=4.0.0",
+    "deepagents==0.7.32",
+    "langgraph-checkpoint-sqlite==3.1.2",
 ]
 
 [dependency-groups]

@@ -26,8 +26,16 @@ _COMPOSER_KEYDOWN_JS = """(e) => {
 ACTION_LABELS = {
     "generating_tool": "正在生成工具代码…",
     "thinking": "正在思考",
+    "resuming": "正在恢复生成进度…",
+    "write_file": "编辑工具草稿",
+    "edit_file": "编辑工具草稿",
+    "read_file": "读取工具草稿",
+    "stage_tool": "读取工具代码",
+    "deliver_draft": "处理工具草稿",
+    "write_todos": "更新执行计划",
     "list_tools": "检查现有工具",
     "read_tool": "读取工具代码",
+    "read_tool_logs": "查询当前工具日志",
     "validate_tool": "校验工具代码",
     "write_tool": "保存工具文件",
     "preview_tool": "准备工具预览",
@@ -142,6 +150,9 @@ def _render_chat_session(chat_id=None, on_change=None):
     preview_state = {"url": "", "revision": 0}
     publishing = {"busy": False}
     failure = {"message": chat.read_failure(selected["id"])}
+    last_user = next((m for m in reversed(messages) if m.get("role") == "user"), {})
+    if not failure["message"] and last_user.get("agent_run_id") and not last_user.get("agent_completed") and not last_user.get("repair_id"):
+        failure["message"] = t("生成尚未完成，进度已保存；点击继续生成")
 
     def files_changed(chat_id):
         if on_change and chat_id == selected["id"]:
@@ -315,7 +326,8 @@ def _render_chat_session(chat_id=None, on_change=None):
                     continue
                 if isinstance(result, dict) and result.get("requires_manual_run"):
                     if message.get("repair_completed") and not generation["running"] and not failure["message"]:
-                        ui.button(t("修复已保存，手动重试运行"), icon="o_restart_alt", on_click=lambda result=result: show_preview(result)).props("flat dense no-caps").classes("chat-repair-retry")
+                        ui.button(t("修改已保存，手动重试运行"), icon="o_restart_alt", on_click=lambda result=result: show_preview(result)).props("flat dense no-caps").classes("chat-repair-retry")
+                        ui.label(t("尚未运行验证；保存修改不代表问题已解决。")).classes("text-xs text-gray-500")
                     break
         if failure["message"]:
             with ui.row().classes("w-full items-center gap-2 px-3 py-2 bg-red-50 rounded-md"):
@@ -330,7 +342,7 @@ def _render_chat_session(chat_id=None, on_change=None):
                     feedback.report_id = report["id"]
                     feedback.container.set_visibility(True)
                 else:
-                    ui.button(icon="refresh", on_click=retry).props("flat dense round").tooltip(t("重试回复"))
+                    ui.button(t("继续生成"), icon="o_play_arrow", on_click=retry, color=None).props("flat dense no-caps").classes("text-xs text-gray-500").tooltip(t("继续生成"))
 
     async def generate():
         # asyncio tasks do not inherit NiceGUI's active slot stack.
@@ -370,21 +382,16 @@ def _render_chat_session(chat_id=None, on_change=None):
                         partial += "\n\n"
             completed = True
         except asyncio.CancelledError:
-            # Discard incomplete tool-call turns while keeping visible partial prose.
-            del messages[original_count:]
-            if partial:
-                messages.append({"role": "assistant", "content": partial})
+            # Completed graph turns survive errors and cancellation for safe resume.
+            failure["message"] = t("生成已暂停，进度已保存；点击继续生成")
             ui.notify(t("已停止"))
         except TimeoutError:
-            del messages[original_count:]
             failure["message"] = t("模型响应超时，请重试或选择其他模型")
             ui.notify(failure["message"], type="negative")
         except (ValueError, httpx.HTTPError) as error:
-            del messages[original_count:]
             failure["message"] = str(error) if isinstance(error, ValueError) else t("网络连接失败，请重试")
             ui.notify(failure["message"], type="negative")
         except Exception as error:  # noqa: BLE001 - restore controls after unexpected response failures
-            del messages[original_count:]
             logger.error(f"Chat response failed ({type(error).__name__})")
             failure["message"] = t("回复失败，请重试或新建对话")
             ui.notify(failure["message"], type="negative")

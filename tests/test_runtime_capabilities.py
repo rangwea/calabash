@@ -27,7 +27,7 @@ class RuntimeCapabilitiesTests(unittest.TestCase):
     def test_real_offline_library_roundtrips(self):
         result = runtime.check_runtime()
         self.assertTrue(result["ok"], result)
-        self.assertEqual(["office_roundtrip", "image_roundtrip", "pdf_generation", "pdf_rendering"], result["checks"])
+        self.assertEqual(["office_roundtrip", "image_roundtrip", "pdf_generation", "pdf_rendering", "agent_checkpoint_roundtrip"], result["checks"])
 
     def test_missing_library_fails_closed(self):
         original = runtime.import_module

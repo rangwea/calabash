@@ -22,6 +22,8 @@ class ToolJobs:
         self.status = "queued"
         self.item_progress = 0.0
         self._changed = None
+        from core import tool_run_logs
+        self.log_run_id = tool_run_logs.current_id()
 
     @property
     def counts(self):
@@ -66,6 +68,11 @@ class ToolJobs:
         if not candidates:
             return
         tool_activity.acquire(self)
+        from core import tool_run_logs
+        log_run = tool_run_logs.retain_current(self.log_run_id)
+        log_context = log_run.context() if log_run else None
+        if log_context:
+            log_context.__enter__()
         self.running = True
         self.cancelling = False
         self.status = "running"
@@ -115,6 +122,10 @@ class ToolJobs:
             finally:
                 self._changed = None
                 tool_activity.release(self)
+                if log_context:
+                    log_context.__exit__(None, None, None)
+                if log_run:
+                    log_run.close()
         if interrupted:
             raise asyncio.CancelledError
 

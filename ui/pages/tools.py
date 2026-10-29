@@ -12,7 +12,8 @@ from component.tool_repair import RepairFeedback
 from component.tool_shell import render_tool_shell
 from core.i18n import t
 from core.local_paths import logs_dir
-from core.logger import get_logger, setup_tool_logging, tool_log_context
+from core.logger import get_logger
+from core import tool_run_logs
 from service.capabilities.tool_capabilities import ToolCapabilityError
 from service.tools.tool_service import get_tool_by_name, load_and_execute_project_tool
 
@@ -28,25 +29,21 @@ async def tools_handler(request: Request, project_name: str, tool_name: str, emb
         parent = WORKSPACES.get(workspace)
         if parent and (project_name, tool_name) in parent.items:
             ui.context.client.calabash_parent_repair = parent.repair
-    feedback = RepairFeedback(project_name, tool_name)
+    run = tool_run_logs.start(project_name, tool_name, client=ui.context.client)
+    module_name = f'tools_{project_name}_{tool_name}_{run.id}'
+    run.attach_module(module_name)
+    feedback = RepairFeedback(project_name, tool_name, log_run_id=run.id)
     ui.on_exception(lambda error: feedback.capture(error, "callback"))
     phase = "load"
 
     try:
         # 动态加载项目工具
-        result = load_and_execute_project_tool(project_name, tool_name)
+        with run.context():
+            result = load_and_execute_project_tool(project_name, tool_name, module_name=module_name)
 
         if result and len(result) == 2:
             phase = "render"
             tool_func, is_async = result
-
-            # 为用户代码的标准 logging 设置文件 handler（回调场景也生效）
-            module_name = f"tools_{project_name}_{tool_name}"
-            setup_tool_logging(project_name, tool_name, module_name)
-            # 也为 tools.{project_name}.{tool_name} 设置（exec 路径使用的模块名）
-            setup_tool_logging(
-                project_name, tool_name, f"tools.{project_name}.{tool_name}"
-            )
 
             tool_meta = get_tool_by_name(tool_name, project_name) or {}
             shell_title = tool_meta.get("title") or tool_name
@@ -62,7 +59,7 @@ async def tools_handler(request: Request, project_name: str, tool_name: str, emb
                     mode="tool",
                     show_header=not embedded,
                 ),
-                tool_log_context(project_name, tool_name),
+                run.context(),
             ):
                 if is_async:
                     await tool_func()
@@ -78,7 +75,7 @@ async def tools_handler(request: Request, project_name: str, tool_name: str, emb
             render_capability_gate(error)
     except Exception as e:
         error_msg = str(e)
-        with tool_log_context(project_name, tool_name):
+        with run.context():
             logger.exception(f"工具渲染失败: {project_name}/{tool_name}")
 
         _render_tool_error(error_msg, project_name, tool_name, embedded=embedded)
@@ -98,7 +95,7 @@ def _render_tool_error(error_msg: str, project_name: str, tool_name: str, *, emb
         icon, title, message, tone = (
             "build_circle",
             "工具无法加载",
-            "工具代码需要定义可执行的 main() 函数。",
+            "工具入口或组件调用未通过检查，请在修复摘要中查看具体原因。",
             "text-orange-600",
         )
     else:

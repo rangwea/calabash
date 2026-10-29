@@ -22,7 +22,7 @@ def _validate_tool_identity(project_name: str, tool_name: str) -> None:
 
 
 def load_and_execute_project_tool(
-    project_name: str, tool_name: str
+    project_name: str, tool_name: str, *, module_name: str | None = None
 ) -> Optional[callable]:
     """动态加载并执行指定项目的工具"""
     _validate_tool_identity(project_name, tool_name)
@@ -54,7 +54,7 @@ def load_and_execute_project_tool(
         filepath = os.path.join(project_dir, tool_file)
 
         tool_logger.info(f"Loading main function from {project_name}/{tool_file}")
-        return load_tool_entrypoint(f"tools_{project_name}_{tool_name}", filepath)
+        return load_tool_entrypoint(module_name or f"tools_{project_name}_{tool_name}", filepath)
 
     except ToolCapabilityError:
         raise

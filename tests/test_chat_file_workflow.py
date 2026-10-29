@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import httpx
 
-from service.chat import ai_chat
+from service.chat import ai_chat, agent_model
 from service.chat import chat_context
 from service.files import conversation_files
 from service.chat import model_providers
@@ -46,10 +46,10 @@ class ChatFileWorkflowTests(unittest.IsolatedAsyncioTestCase):
             data = "data: " + json.dumps({"choices": [{"delta": delta}]}) + "\n\ndata: [DONE]\n\n"
             return httpx.Response(200, text=data, headers={"content-type": "text/event-stream"})
 
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+        client_class = httpx.AsyncClient
         from service.tools import preview_service
         preview_result = {"success": True, "key": "preview-key", "preview_url": "/preview/preview-key"}
-        with patch.object(model_providers, "active", return_value=("deepseek", "model", {"key": "secret", "base_url": "https://example.test"})), patch.object(ai_chat.httpx, "AsyncClient", return_value=client), patch.object(preview_service, "create_fixed_preview", return_value=preview_result):
+        with patch.object(model_providers, "active", return_value=("deepseek", "model", {"key": "secret", "base_url": "https://example.test"})), patch.object(agent_model.httpx, "AsyncClient", side_effect=lambda **kwargs: client_class(transport=httpx.MockTransport(handle))), patch.object(preview_service, "create_fixed_preview", return_value=preview_result):
             events = [event async for event in ai_chat.respond(self.messages, chat_id="one")]
         self.assertEqual(5, len(requests))
         from core.runtime_capabilities import agent_guidance

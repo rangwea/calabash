@@ -17,16 +17,19 @@ class PreviewErrorLoggingTest(unittest.TestCase):
 
             preview_logger = MagicMock()
             callback_handlers = []
+            run = MagicMock()
+            run.id = 'a' * 32
+            run.logger = preview_logger
+            run.context.return_value = nullcontext()
 
             with (
                 patch.object(
                     preview, "get_preview_file", return_value=str(preview_file)
                 ),
                 patch.object(
-                    preview, "get_preview_logger", return_value=preview_logger
+                    preview.tool_run_logs, "start", return_value=run
                 ),
                 patch.object(preview, "render_tool_shell", return_value=nullcontext()),
-                patch.object(preview, "setup_preview_logging") as setup_logging,
                 patch.object(
                     preview.ui,
                     "on_exception",
@@ -42,9 +45,7 @@ class PreviewErrorLoggingTest(unittest.TestCase):
 
                 asyncio.run(render())
 
-            setup_logging.assert_called_once_with(
-                "fixed.demo.chart", "preview_fixed_demo_chart"
-            )
+            run.attach_module.assert_called_once_with('preview_fixed_demo_chart_' + 'a' * 32)
             self.assertEqual(len(callback_handlers), 1)
 
             error = RuntimeError("button failed")

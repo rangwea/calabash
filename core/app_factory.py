@@ -52,6 +52,8 @@ def create_app() -> FastAPI:
     apply_app_styles()
     from service.capabilities.capability_packs import recover_existing
     from service.files.conversation_files import cleanup_uploads
+    from core.tool_run_logs import cleanup as cleanup_run_logs
+    cleanup_run_logs()
     cleanup_uploads()
     recover_existing()
     start_tool_index_watcher()

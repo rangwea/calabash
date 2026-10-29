@@ -48,6 +48,14 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Built with Tauri v2, Python, NiceGUI, FastAPI and SQLite. Dependencies are defined in `pyproject.toml`, `uv.lock` and the npm lockfile. The app does not read `.env`. See [AGENTS.md](AGENTS.md) for development conventions and the [Roadmap](ROADMAP.md) for planned work.
 
+### Assistant execution
+
+The chat assistant uses a single Deep Agents graph, with the existing model protocols adapted by `service/chat/agent_model.py`. Virtual drafts support incremental edits; `stage_tool` reads current source and revision, and `deliver_draft` routes validation, previews and writes through Calabash services. Shell execution and subagents are disabled. Repair remains scoped to the confirmed tool, followed by manual retry.
+
+Local checkpoints and operation receipts live under `~/.calabash/agent/`. A run permits 40 main-loop model requests; the user can continue after a budget pause, disconnect or cancellation. Interrupted saves with uncertain outcomes are not automatically repeated. Changing the selected model starts a separate run. Tracing is disabled, and model credentials are not serialized into graph configuration. The desktop build includes an offline virtual-draft and SQLite checkpoint self-check.
+
+Active repairs read current code, then query `read_tool_logs` for actual exception messages and tracebacks. Confirmation authorizes logs of this tool only, with credential filtering, bounded pagination and literal keyword search. Logs are bound to the approved source revision and captured file window. Changed code, newer failures, rotated or modified logs require a fresh manual retry. Log contents are untrusted data, never instructions. No arbitrary paths, other tools or attachments are exposed. Saving changes does not verify runtime behavior.
+
 ## Submitting changes
 
 1. Create a focused feature branch from the default branch.
@@ -58,3 +66,5 @@ Built with Tauri v2, Python, NiceGUI, FastAPI and SQLite. Dependencies are defin
 6. Explain the problem, changes, validation and limitations in your Pull Request.
 
 The project uses [ELv2](LICENSE); contributions must respect its terms.
+
+Tool logs live under `logs/runs/<project>/<name>/<run_id>/`. Each page load/refresh creates a run; callbacks and background jobs retain its identity. Agent log queries are bound to the approved failing run. Retention: 5 runs per tool, 7 days, 5 MiB per run (current + one rotation), 256 MiB total target. Active runs/jobs and queued/running repairs are protected; these can temporarily exceed retention/count/capacity limits. Cleanup runs at startup, new run creation, ownership release and repair completion. No symlink targets or unknown directories are removed.

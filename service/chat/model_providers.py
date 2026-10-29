@@ -102,6 +102,8 @@ def request(provider, model, connection, messages, tools):
             # Tool authoring uses non-thinking mode explicitly. Provider defaults
             # can otherwise spend the request entirely on hidden reasoning.
             payload["thinking"] = {"type": "disabled"}
+            if model in {"deepseek-flash", "deepseek-v4-pro"}:
+                payload["max_tokens"] = 32768
         return base + "/chat/completions", {"Authorization": f"Bearer {connection['key']}"}, payload
     system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
     converted = []
@@ -138,4 +140,9 @@ def normalize(packet, provider):
             delta = {"content": value["text"]}
         elif value["type"] == "input_json_delta":
             delta = {"tool_calls": [{"index": packet["index"], "function": {"arguments": value["partial_json"]}}]}
+    elif packet.get("type") == "message_delta":
+        reason = packet.get("delta", {}).get("stop_reason")
+        return {"choices": [{"delta": {}, "finish_reason": {"max_tokens": "length", "tool_use": "tool_calls", "end_turn": "stop"}.get(reason, reason)}]}
+    elif packet.get("type") == "message_stop":
+        return {"choices": [{"delta": {}, "finish_reason": "stop"}]}
     return {"choices": [{"delta": delta}], **({"error": packet["error"]} if "error" in packet else {})}

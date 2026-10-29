@@ -129,6 +129,14 @@ def main() -> None:
     for item in catalog["libraries"]:
         for module in item.get("collect_all", []):
             command[-1:-1] = ["--collect-all", module]
+    # Agent profiles are discovered dynamically and Pydantic/LangChain inspect
+    # distribution metadata at runtime. Keep these out of the user-tool library
+    # catalog: they implement the assistant, not generated tool dependencies.
+    for module in ("deepagents", "langchain", "langchain_core", "langgraph", "langsmith", "langchain_anthropic"):
+        command[-1:-1] = ["--collect-all", module]
+    for distribution in ("deepagents", "langchain", "langchain-core", "langgraph", "langgraph-checkpoint", "langgraph-prebuilt", "langgraph-checkpoint-sqlite", "langsmith"):
+        command[-1:-1] = ["--copy-metadata", distribution]
+    command[-1:-1] = ["--hidden-import", "service.chat.agent_selfcheck", "--hidden-import", "langgraph.checkpoint.sqlite.aio"]
     _run(command)
 
     if not base_binary.exists():

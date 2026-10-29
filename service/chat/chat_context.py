@@ -18,7 +18,7 @@ def _compact_tool_sources(turn, budget):
         for call in item.get("tool_calls", []):
             function = call.get("function", {})
             if call.get("id") not in results or function.get("name") not in {
-                "write_tool", "validate_tool", "preview_tool"
+                "write_tool", "validate_tool", "preview_tool", "write_file", "edit_file"
             }:
                 continue
             try:
@@ -31,9 +31,16 @@ def _compact_tool_sources(turn, budget):
                 outcome = None
             if isinstance(outcome, dict) and ("error" in outcome or outcome.get("success") is False):
                 continue  # Failed code may be the only draft; keep it for correction.
-            if not isinstance(arguments, dict) or not isinstance(arguments.get("content"), str):
+            if results[call["id"]].startswith("Error:"):
                 continue
-            arguments["content"] = "[Executed source snapshot omitted to save context. Use read_tool for current code before editing.]"
+            if not isinstance(arguments, dict):
+                continue
+            fields = ("old_string", "new_string") if function.get("name") == "edit_file" else ("content",)
+            if not any(isinstance(arguments.get(field), str) for field in fields):
+                continue
+            for field in fields:
+                if isinstance(arguments.get(field), str):
+                    arguments[field] = "[Executed source snapshot omitted. Read current tool or virtual draft before editing.]"
             function["arguments"] = json.dumps(arguments, ensure_ascii=False)
             omitted = True
     # Retain the newest source read whenever it fits. Older reads can be stale
@@ -55,6 +62,16 @@ def _compact_tool_sources(turn, budget):
         if item.get("tool_call_id") in read_ids and isinstance(result, dict) and isinstance(result.get("content"), str):
             result["content"] = "[Source snapshot omitted. Read this tool again before editing.]"
             item["content"] = json.dumps(result, ensure_ascii=False)
+            omitted = True
+    # Draft reads may contain a full source snapshot as plain text. The current
+    # virtual file is restored from the conversation checkpoint, not this copy.
+    draft_reads = {call.get("id") for item in compact for call in item.get("tool_calls", [])
+                   if call.get("function", {}).get("name") == "read_file"}
+    for item in compact:
+        if len(json.dumps(compact, ensure_ascii=False)) <= budget:
+            break
+        if item.get("role") == "tool" and item.get("tool_call_id") in draft_reads and not item.get("content", "").startswith("Error:"):
+            item["content"] = "[Virtual draft read omitted. Use read_file for its current content.]"
             omitted = True
     return compact, omitted
 

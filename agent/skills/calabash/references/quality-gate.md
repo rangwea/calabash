@@ -41,7 +41,7 @@ if __name__ in {"__main__", "__mp_main__"}:
 ## Runtime Robustness
 
 - Use the documented component APIs, not guessed lifecycle methods. `ToolResults()` renders immediately in the current UI container; it has no `mount()`. Call `results.refresh()` after publishing outputs. `ui.echart(...).options` is a read-only property: mutate the options dictionary in place and call `chart.update()` instead of assigning a new dictionary.
-- During repairs, use the supplied safe API diagnosis and read the current failing line before changing code. An exception type alone does not identify the root cause; do not claim a cause that the evidence does not establish.
+- During repairs, query read_tool_logs for the current tool’s actual exception message and traceback, then read the failing code; paginate/search logs and query component APIs only as needed. An exception type alone does not identify the root cause; do not claim a cause that the evidence does not establish.
 
 - Use type annotations for helper functions and classes.
 - Add docstrings where they clarify non-obvious behavior.

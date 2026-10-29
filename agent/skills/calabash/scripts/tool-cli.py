@@ -470,19 +470,33 @@ def cmd_prelog(args) -> None:
 
 
 def cmd_toollog(args) -> None:
-    base = logs_dir() / "tools"
-    if args.project and args.name:
-        path = base / normalize_name(args.project) / normalize_name(args.name) / "tool.log"
-        if not path.is_file():
-            raise FileNotFoundError(f"日志文件不存在: {path}")
-        lines = args.lines or 50
-        print("\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]))
-        return
+    base = logs_dir() / 'runs'
     rows = []
-    if base.is_dir():
-        for path in sorted(base.glob("*/*/tool.log")):
-            rows.append([path.parent.parent.name, path.parent.name, str(path)])
-    print_table(["项目", "名称", "日志"], rows)
+    for marker in base.glob('*/*/*/run.json'):
+        if any(item.is_symlink() for item in (marker, marker.parent, marker.parent.parent, marker.parent.parent.parent, base)):
+            continue
+        try:
+            metadata = json.loads(marker.read_text(encoding='utf-8'))
+            if metadata.get('preview_key') is not None:
+                continue
+            if (metadata['project'], metadata['name'], metadata['id']) != (marker.parents[2].name, marker.parents[1].name, marker.parent.name):
+                continue
+            if not re.fullmatch(r'[a-f0-9]{32}', metadata['id']):
+                continue
+            path = marker.parent / 'tool.log'
+            if path.is_symlink() or not path.is_file():
+                continue
+            rows.append((float(metadata['created']), metadata['project'], metadata['name'], metadata['id'], path))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    rows.sort(reverse=True)
+    if args.project and args.name:
+        matches = [row for row in rows if row[1:3] == (normalize_name(args.project), normalize_name(args.name)) and (not args.run or row[3] == args.run)]
+        if not matches:
+            raise FileNotFoundError('No matching published tool run log')
+        print('\n'.join(matches[0][4].read_text(encoding='utf-8', errors='replace').splitlines()[-(args.lines or 50):]))
+        return
+    print_table(['Project', 'Name', 'Run'], [[project, name, run_id] for _, project, name, run_id, _ in rows])
 
 
 def add_content_args(parser: argparse.ArgumentParser) -> None:
@@ -557,6 +571,7 @@ def main() -> None:
     toollog_parser = subparsers.add_parser("toollog", help="查看工具日志")
     toollog_parser.add_argument("project", nargs="?")
     toollog_parser.add_argument("name", nargs="?")
+    toollog_parser.add_argument("--run", help="Read a specific published run; defaults to latest")
     toollog_parser.add_argument("--lines", "-n", type=int)
     toollog_parser.set_defaults(func=cmd_toollog)
 

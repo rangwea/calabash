@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from core.logger import _PREVIEW_LOG_DIR, _TMP_DIR, get_preview_logger
+from core.logger import _TMP_DIR, get_preview_logger
 from service.tools.tool_runtime import ToolEntryPointError, validate_tool_entrypoint
 
 _PREVIEW_META_DIR = _TMP_DIR / "_meta"
@@ -214,7 +214,7 @@ def list_previews() -> list[dict]:
         _TMP_DIR.glob("*.py"), key=lambda p: p.stat().st_mtime, reverse=True
     ):
         preview_key = code_file.stem
-        log_file = _PREVIEW_LOG_DIR / f"{preview_key}.log"
+        log_file = get_preview_log_file(preview_key)
 
         try:
             py_stat = code_file.stat()
@@ -237,8 +237,8 @@ def list_previews() -> list[dict]:
                     "created_at": datetime.fromtimestamp(py_stat.st_mtime).strftime(
                         "%Y-%m-%d %H:%M:%S"
                     ),
-                    "has_log": log_file.exists(),
-                    "log_size": log_file.stat().st_size if log_file.exists() else 0,
+                    "has_log": bool(log_file and log_file.exists()),
+                    "log_size": log_file.stat().st_size if log_file and log_file.exists() else 0,
                 }
             )
         except Exception:
@@ -255,8 +255,9 @@ def read_preview_code(preview_key: str) -> str | None:
         return f.read()
 
 
-def get_preview_log_file(preview_key: str) -> Path:
-    return _PREVIEW_LOG_DIR / f"{preview_key}.log"
+def get_preview_log_file(preview_key: str) -> Path | None:
+    from core.tool_run_logs import latest_preview
+    return latest_preview(preview_key)
 
 
 def fixed_preview_key_from_path(username: str, tool_name: str) -> str:

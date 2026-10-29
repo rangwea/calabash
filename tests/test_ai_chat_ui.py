@@ -187,7 +187,7 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
                             switch("repair")
                         for _ in range(5):
                             await asyncio.sleep(0)
-                    buttons = [element for element in self.container.descendants() if isinstance(element, ui.button) and element.text == i18n.t("修复已保存，手动重试运行")]
+                    buttons = [element for element in self.container.descendants() if isinstance(element, ui.button) and element.text == i18n.t("修改已保存，手动重试运行")]
                     self.assertEqual(1, len(buttons))
                     self.assertEqual("o_restart_alt", buttons[0]._props["icon"])
                     self.assertIn("chat-repair-retry", buttons[0]._classes)
@@ -225,8 +225,9 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
                 for _ in range(10):
                     await asyncio.sleep(0)
                 self.assertTrue(send.enabled)
+
                 notify.assert_called_with("test rejected request", type="negative")
-                retry = next(element for element in container.descendants() if isinstance(element, ui.button) and element._props.get("icon") == "refresh")
+                retry = next(element for element in container.descendants() if isinstance(element, ui.button) and element.text == i18n.t("继续生成"))
                 with container:
                     next(iter(retry._event_listeners.values())).handler(None)
                 for _ in range(10):
@@ -235,3 +236,13 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(1, sum(message["role"] == "user" for message in saved))
                 self.assertEqual("success", saved[-1]["content"])
                 self.assertTrue(send.enabled)
+
+    async def test_unfinished_saved_request_offers_continue_after_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(core, "loop", asyncio.get_running_loop()), patch.object(ai_chat, "app_dir", return_value=root), patch.object(i18n, "app_dir", return_value=root), patch.object(model_providers, "options", return_value={}):
+                ai_chat.save_chat("unfinished", [{"role": "user", "content": "Create tool", "agent_run_id": "synthetic-run", "agent_completed": False}])
+                with self.container:
+                    render_ai_chat("unfinished")
+                buttons = [element for element in self.container.descendants() if isinstance(element, ui.button) and element.text == i18n.t("继续生成")]
+                self.assertEqual(1, len(buttons))

@@ -11,7 +11,7 @@
 | 本地生成或修改 | 编辑 → 静态校验；无需读取本文件其余流程 |
 | 已有预览报错 | `--json prelog <project> <name> --lines 60`，已有 token 则 `prelog <token>` |
 | 本地工具运行报错或要求验证 | 校验 → `--json preview <project> <name> --file <file>` |
-| 正式工具报错 | `toollog <project> <name> --lines 60`；它只读本机 `logs/tools`，远端日志不可用时获取用户提供的错误证据，不拿预览日志冒充正式日志 |
+| 正式工具报错 | `toollog <project> <name> --lines 60`；默认只读本机 `logs/runs` 中最近一次正式运行，`--run` 可选择运行，远端日志不可用时获取用户提供的错误证据，不拿预览日志冒充正式日志 |
 | 授权发布/保存 | 校验待发布文件 → `--json publish <project> <name> --file <file> --yes` |
 | 授权删除 | 明确环境和目标 → `--json delete <project> <name> --yes` |
 
