@@ -125,12 +125,13 @@ def render_desktop_home(repair_id: str | None = None) -> None:
     async def discuss_tool(tool):
         if not await can_leave():
             return
-        from service.chat.ai_chat import create_tool_chat
+        from service.chat.ai_chat import get_or_create_tool_chat
 
         open_chat(
-            create_tool_chat(tool["project"], tool["name"], _tool_display_name(tool))
+            get_or_create_tool_chat(tool["project"], tool["name"], _tool_display_name(tool))
         )
 
+    tool_workspace = None
     sidebar_state = {"expanded": True}
 
     def toggle_sidebar() -> None:
@@ -159,6 +160,9 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                     chat_state["id"],
                     sidebar.refresh,
                     open_tool,
+                    opened_count=len(tool_workspace.items) if tool_workspace else 0,
+                    on_opened=lambda: tool_workspace.request_resume(),
+                    opened_busy=bool(tool_workspace and any(tool_workspace.status.values())),
                 )
 
             from component.panel_resize import resize_handle
@@ -189,7 +193,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
 
             with ui.column().classes("flex-1 min-w-0 h-full overflow-hidden gap-0"):
                 from component.tool_workspace import ToolWorkspace
-                tool_workspace = ToolWorkspace(lambda: navigate_view("tool"), lambda: navigate_view("tools"), open_chat, before_navigate=can_leave)
+                tool_workspace = ToolWorkspace(lambda: navigate_view("tool"), lambda: navigate_view("tools"), open_chat, before_navigate=can_leave, on_change=sidebar.refresh, on_edit=discuss_tool)
                 chat_host = ui.column().classes("w-full flex-1 min-h-0 overflow-hidden gap-0")
                 chat_host.set_visibility(active_view["name"] == "chat")
                 with ui.column().classes(_BODY_SCROLL) as workspace_host:
@@ -267,6 +271,7 @@ def render_desktop_home(repair_id: str | None = None) -> None:
                 return
             tools_data = load_tools()
             project_names = sorted({t.get("project", "未分组") for t in tools_data})
+            tool_workspace.update_tools(tools_data)
             sidebar.refresh()
             if active_view["name"] == "tools" or (active_view["name"] == "diagnostics" and force):
                 from component.model_settings import window_drafts

@@ -61,7 +61,7 @@ class RepairFeedback:
             ui.label(f"{model} · {urlsplit(connection['base_url']).hostname or provider}").classes("text-sm")
             ui.label(t('本次只修改预览版本；手动验证后请保存到工具列表。') if report.get('preview_key') else t('本次修改正式工具；保存后仍需手动运行验证。')).classes('text-sm text-gray-600')
             ui.code(tool_repairs.summary(report)).classes("w-full max-h-64 overflow-auto")
-            ui.label(t("确认后，Agent 可查询当前工具的真实日志（含异常信息和调用栈），并读取、修改工具代码。日志可能包含业务信息；已知密钥会过滤。不会读取其他工具或附件，修复后请手动重试。")).classes("text-sm text-gray-500")
+            ui.label(t("确认后会在原对话中追加修复请求，保留已有上下文。Agent 可按需查询当前工具本次失败的日志并修改对应版本；日志可能包含业务信息，已知密钥会过滤。不会自动附加日志全文，修复后请手动重试。")).classes("text-sm text-gray-500")
             with ui.row():
                 ui.button(t("取消"), on_click=lambda: dialog.submit(False)).props("flat")
                 ui.button(t("确认发送"), on_click=lambda: dialog.submit(True)).props("unelevated")

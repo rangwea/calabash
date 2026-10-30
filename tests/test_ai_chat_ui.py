@@ -114,6 +114,41 @@ class ChatResponseUITests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(ai_chat.read_chat("one")[-1]["content"], "Finished one")
                 self.assertEqual(ai_chat.read_chat("two")[-1]["content"], "Second request")
 
+    async def test_repair_appends_a_normal_followup_to_latest_saved_history(self):
+        from service.tools import tool_repairs
+
+        callbacks, received = [], []
+        report = {'id': 'failure-id', 'attempt': 'attempt-id', 'project': 'demo',
+                  'name': 'example', 'log_run_id': 'current-run', 'preview_key': None}
+
+        async def respond(messages, chat_id=None, repair=None):
+            received.append((chat_id, list(messages), repair))
+            yield 'text', 'Changes saved; retry manually.'
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(core, 'loop', asyncio.get_running_loop()), patch.object(ai_chat, 'app_dir', return_value=root), patch.object(i18n, 'app_dir', return_value=root), patch.object(model_providers, 'options', return_value={}), patch.object(ai_chat, 'respond', respond), patch.object(ui, 'timer', side_effect=lambda interval, callback, **kwargs: callbacks.append(callback)), patch.object(tool_repairs, 'claim', side_effect=[report, None]), patch.object(tool_repairs, 'finish') as finish:
+                ai_chat.save_chat('original', [{'role': 'user', 'content': 'Keep the blue sidebar'}])
+                with self.container:
+                    render_ai_chat('original')
+                # A saved update after this UI was created must not be lost.
+                ai_chat.save_chat('original', ai_chat.read_chat('original') + [{'role': 'assistant', 'content': 'New UI saved'}])
+                await callbacks[0]()
+                for _ in range(15):
+                    await asyncio.sleep(0)
+                await callbacks[0]()
+                self.assertEqual(1, len(received))
+                chat_id, history, bound_report = received[0]
+                self.assertEqual('original', chat_id)
+                self.assertEqual(report, bound_report)
+                self.assertEqual(['Keep the blue sidebar', 'New UI saved'], [m['content'] for m in history[:2]])
+                self.assertEqual('attempt-id', history[-1]['id'])
+                self.assertEqual('user', history[-1]['role'])
+                self.assertIn('current-run', history[-1]['content'])
+                self.assertNotIn('```json', history[-1]['content'])
+                self.assertEqual(3, len(ai_chat.read_chat('original')))
+                finish.assert_called_once_with('failure-id', True, 'attempt-id')
+
     async def test_repaired_preview_is_not_restored_automatically(self):
         import json
 

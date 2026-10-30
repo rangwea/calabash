@@ -40,14 +40,6 @@ GLOBAL_CSS = """
         height: 40px; min-height: 40px; max-height: 40px; padding: 3px 8px;
         background: var(--app-background); border-color: var(--app-border);
     }
-    .app-workspace-tabs .workspace-list-entry.q-btn {
-        height: 32px; min-height: 32px; border: 0; padding: 4px 8px;
-        color: var(--app-muted); background: transparent;
-    }
-    .app-workspace-tabs .workspace-list-entry .text-sm { font-size: 13px; }
-    .app-workspace-tabs .workspace-list-entry svg { width: 16px; height: 16px; }
-    .app-workspace-tabs .workspace-list-entry.q-btn:hover { background: var(--app-hover); color: var(--app-text); }
-    /* Keep tab overflow scrollable without a second visual baseline under the active indicator. */
     .app-workspace-tabs .workspace-tab-strip { scrollbar-width: none; }
     .app-workspace-tabs .workspace-tab-strip::-webkit-scrollbar { display: none; }
     .app-workspace-tabs .workspace-tab {

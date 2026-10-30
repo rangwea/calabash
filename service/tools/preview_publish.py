@@ -69,4 +69,6 @@ def save(snapshot, *, overwrite=False):
             temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+    from service.tools.tool_metadata import parse_tool_metadata
+    ai_chat.bind_tool_chat(current.project, current.name, current.chat_id, parse_tool_metadata(current.content.decode('utf-8')).get('name'))
     return {'project': current.project, 'name': current.name}

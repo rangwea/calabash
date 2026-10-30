@@ -49,6 +49,7 @@ class AIChatTests(unittest.TestCase):
                         {
                             "chats",
                             "chat_previews",
+                            "tool_chats",
                             "chat_files",
                             "message_files",
                             "tool_input_contexts",

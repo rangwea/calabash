@@ -11,7 +11,7 @@ from langchain_core.tools import StructuredTool
 from service.chat import agent_store
 
 SIDE_EFFECTS = {"write_tool", "preview_tool"}
-REPAIR_TOOLS = {"read_tool", "write_tool", "validate_tool", "preview_tool", "read_component_api", "read_tool_logs"}
+REPAIR_ACCESS_TOOLS = {"read_tool", "write_tool", "validate_tool", "preview_tool", "read_tool_logs"}
 
 
 def build_tools(chat_id, messages, run_id, repair_session=None):
@@ -29,7 +29,7 @@ def build_tools(chat_id, messages, run_id, repair_session=None):
                 emit_result(name, receipt, runtime)
                 return receipt
         try:
-            result = repair_session.execute(name, parameters) if repair_session else await ai_chat.execute_chat_tool(name, parameters, chat_id, messages)
+            result = repair_session.execute(name, parameters) if repair_session and name in REPAIR_ACCESS_TOOLS else await ai_chat.execute_chat_tool(name, parameters, chat_id, messages)
         except Exception as error:  # noqa: BLE001 - never pass arbitrary repair exception text to the model.
             result = {"error": type(error).__name__}
             from service.tools.tool_runtime import ToolEntryPointError
@@ -62,7 +62,7 @@ def build_tools(chat_id, messages, run_id, repair_session=None):
         )
 
     result = [wrap(schema) for schema in ai_chat.schemas()
-              if (schema['function']['name'] in REPAIR_TOOLS if repair_session else schema['function']['name'] != 'read_tool_logs')]
+              if repair_session or schema['function']['name'] != 'read_tool_logs']
 
     @tool
     async def stage_tool(project: str, name: str, runtime: ToolRuntime) -> str:

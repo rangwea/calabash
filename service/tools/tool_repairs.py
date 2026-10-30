@@ -100,6 +100,12 @@ def summary(report):
                        'source': 'preview' if report.get('preview_key') else 'published'}, ensure_ascii=False, indent=2)
 
 
+def request_message(report):
+    from core.i18n import t
+    target = t('预览版本') if report.get('preview_key') else t('正式版本')
+    return t('请修复工具 {project}/{name} 的{target}。先读取最新代码并查询本次失败日志（运行 ID：{run_id}），保留当前 UI 和已有功能，仅修复本次问题；完成后由我手动重试。', project=report['project'], name=report['name'], target=target, run_id=report['log_run_id'])
+
+
 def model_fingerprint():
     from service.chat.model_providers import active
     return hashlib.sha256(json.dumps(active(), sort_keys=True).encode()).hexdigest()
@@ -115,7 +121,7 @@ def approve(report_id, fingerprint):
     from service.tools import tool_diagnostics
     if not report.get('log_window') or not tool_diagnostics.is_latest(report) or tool_diagnostics.current_revision(report) != report['revision']:
         raise ValueError('The failure is stale; retry the tool and confirm its new error')
-    chat_id = report["chat_id"] or ai_chat.create_tool_chat(report["project"], report["name"], report["name"])
+    chat_id = report["chat_id"] or ai_chat.get_or_create_tool_chat(report["project"], report["name"], report["name"])
     with closing(ai_chat.connect()) as db, db:
         db.execute("BEGIN IMMEDIATE")
         if not db.execute("SELECT 1 FROM chats WHERE id=? AND deleted=0", (chat_id,)).fetchone():
@@ -160,7 +166,7 @@ def finish(report_id, success, attempt=None):
 
 
 class RepairSession:
-    """A repair cannot read attachments, change targets or execute code."""
+    """Consent-bound access to current target code and logs within a normal chat turn."""
 
     def __init__(self, report):
         self.report = report
@@ -272,7 +278,7 @@ class RepairSession:
             preview = preview_service.create_temporary_preview(content)
             if not preview.get("success"):
                 raise ValueError("Unable to prepare repair preview")
-            chat_id = report["chat_id"] or ai_chat.create_tool_chat(report["project"], report["name"], report["name"])
+            chat_id = report["chat_id"] or ai_chat.get_or_create_tool_chat(report["project"], report["name"], report["name"])
             token = tool_inputs.create(chat_id, preview["key"], [], tool_key=f"tool:{report['project']}/{report['name']}")
             url = f"{preview['preview_url']}?context={token}"
         return {"success": True, "requires_manual_run": True, "validation": "static_only", "executed": False, "runtime_verified": False, "source": "preview" if report['preview_key'] else "published", "preview_url": url, "url": url}

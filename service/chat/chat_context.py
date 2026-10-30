@@ -97,8 +97,9 @@ def prepare(messages, chat_id=None, *, include_reasoning=True):
     compacted = False
     for turn in reversed(turns):
         cost = len(json.dumps(turn, ensure_ascii=False))
-        if cost > budget and not kept:
-            turn, compacted = _compact_tool_sources(turn, budget)
+        if cost > budget:
+            turn, omitted = _compact_tool_sources(turn, budget)
+            compacted = compacted or omitted
             cost = len(json.dumps(turn, ensure_ascii=False))
         if cost > budget:
             if not kept:

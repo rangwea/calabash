@@ -13,6 +13,9 @@ def _render_desktop_sidebar(
     active_chat=None,
     on_refresh=None,
     on_tool=None,
+    opened_count=0,
+    on_opened=None,
+    opened_busy=False,
 ) -> None:
     recent_tools = _get_recent_tools(tools_data)
     ui.add_css("""
@@ -62,9 +65,18 @@ def _render_desktop_sidebar(
             _sidebar_item(
                 t("工具"),
                 "folder",
-                active_view in {"tools", "tool"},
+                active_view == "tools",
                 lambda: on_select("tools"),
             )
+
+            if opened_count and on_opened:
+                _sidebar_item(
+                    t("已打开工具") + f" · {opened_count}",
+                    "preview",
+                    active_view == "tool",
+                    on_opened,
+                    busy=opened_busy,
+                )
 
         from service.chat.ai_chat import (
             conversations,
@@ -133,13 +145,11 @@ def _render_desktop_sidebar(
                 ).props('role=group'):
                     opener = ui.button(on_click=lambda _, cid=chat_id: on_chat(cid), color=None).props("flat dense").classes("row-open-target absolute inset-0 w-full h-full")
                     opener._props["aria-label"] = title
-                    if chat_id in getattr(ui.context.client, "calabash_running_chats", set()):
-                        ui.spinner(size="14px", color="grey-6").tooltip(t("正在生成回复"))
-                    else:
-                        app_icon("pin" if pinned else "chat").classes("pointer-events-none")
                     ui.label(title).classes(
                         "text-xs truncate min-w-0 flex-1 pointer-events-none"
                     ).tooltip(title)
+                    if chat_id in getattr(ui.context.client, "calabash_running_chats", set()):
+                        ui.spinner(size="12px", color="grey-6").classes("pointer-events-none").tooltip(t("正在生成回复"))
                     def chat_menu(cid=chat_id, text=title, value=pinned):
                         menu_item("edit", t("重命名"), lambda: rename_dialog(cid, text))
                         menu_item("pin", t("取消置顶") if value else t("置顶"), lambda: toggle_pin(cid, value))
@@ -166,7 +176,7 @@ def _render_desktop_sidebar(
         ui.element("div").classes("flex-1")
 
 
-def _sidebar_item(label: str, icon: str, active: bool, on_click) -> None:
+def _sidebar_item(label: str, icon: str, active: bool, on_click, *, busy=False) -> None:
     classes = (
         "sidebar-entry w-full flex items-center gap-2 px-2 py-1.5 cursor-pointer "
         "transition-colors min-h-[2rem] "
@@ -184,6 +194,8 @@ def _sidebar_item(label: str, icon: str, active: bool, on_click) -> None:
         activate_row(entry, on_click, label)
         app_icon(icon)
         ui.label(label).classes("text-[13px] font-medium flex-1")
+        if busy:
+            ui.spinner(size="12px", color="primary").classes("pointer-events-none").tooltip(t("正在运行"))
 
 
 def _sidebar_tool_item(tool: dict, on_tool=None) -> None:
@@ -195,7 +207,6 @@ def _sidebar_tool_item(tool: dict, on_tool=None) -> None:
         )
         ) as entry:
         activate_row(entry, lambda: (on_tool or use_tool)(tool), label)
-        app_icon("grid")
         ui.label(label).classes("text-xs truncate min-w-0 flex-1 pointer-events-none").tooltip(
             f"{label} · {tool.get('project', '')}"
         )

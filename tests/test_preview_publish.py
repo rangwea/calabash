@@ -35,6 +35,7 @@ class PreviewPublishTests(unittest.TestCase):
         snapshot = preview_publish.prepare('chat', self.url)
         preview_publish.save(snapshot)
         self.assertEqual(self.draft.read_bytes(), self.target.read_bytes())
+        self.assertEqual("chat", ai_chat.get_or_create_tool_chat("demo", "example", "Example"))
 
     def test_overwrite_requires_confirmation_and_preserves_cancelled_target(self):
         self.target.parent.mkdir(parents=True)

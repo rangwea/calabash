@@ -436,10 +436,10 @@ def _render_chat_session(chat_id=None, on_change=None):
         from service.tools import tool_repairs
         report = tool_repairs.claim(selected["id"])
         if report:
-            if not any(m.get("repair_id") == report["id"] for m in messages):
-                messages.append({"id": report["id"], "role": "user", "repair_id": report["id"], "content": t("请修复当前工具，完成后由我手动重试。") + "\n\n```json\n" + tool_repairs.summary(report) + "\n```"})
-                chat.save_chat(selected["id"], messages)
-                timeline.refresh()
+            messages[:] = chat.read_chat(selected["id"])
+            messages.append({"id": report["attempt"], "role": "user", "repair_id": report["id"], "content": tool_repairs.request_message(report)})
+            chat.save_chat(selected["id"], messages)
+            timeline.refresh()
             async def repair_turn():
                 with feed:
                     await generate_in_slot(repair=report)
@@ -498,8 +498,10 @@ def _render_chat_session(chat_id=None, on_change=None):
 
     with ui.row().classes("calabash-chat w-full h-full min-h-0 gap-0 flex-nowrap") as chat_root:
         with ui.column().classes("chat-main flex-1 min-w-0 h-full gap-0"):
-            with ui.row().classes("app-chat-toolbar w-full items-center justify-between px-5 py-2"):
-                ui.label(t("AI 对话")).classes("text-xs font-medium text-gray-500")
+            with ui.row().classes("app-chat-toolbar w-full items-center justify-between px-5 py-2 flex-nowrap min-w-0"):
+                reference = chat.tool_chat_reference(selected["id"])
+                heading = t("修改工具：{title}", title=reference['title']) if reference else t("AI 对话")
+                ui.label(heading).classes("text-xs font-medium text-gray-500 min-w-0 flex-1 truncate").tooltip(heading)
                 with ui.row().classes("items-center gap-1"):
                     preview_toggle, preview_tip = _toolbar_button("preview", t("打开预览"), toggle_preview, leave=True)
             with ui.scroll_area().classes("w-full flex-1 min-h-0"), ui.column().classes("w-full max-w-3xl mx-auto px-6 py-4 gap-0") as feed:

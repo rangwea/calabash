@@ -352,5 +352,18 @@
   "丢弃草稿并切换": "Discard drafts and switch",
   "保留草稿并离开": "Keep drafts and leave",
   "生成工具后即可打开预览": "Create a tool to open its preview.",
-  "返回对话": "Back to chat"
+  "返回对话": "Back to chat",
+  "已打开工具": "Open tools",
+  "对话修改": "Edit in chat",
+  "修改工具：{title}": "Editing: {title}",
+  "代码已更新，刷新后生效": "Code updated. Refresh to apply.",
+  "刷新工具": "Refresh tool",
+  "工具正在执行，请等待任务结束后再刷新": "Wait for the running task to finish before refreshing.",
+  "刷新工具“{title}”？": "Refresh “{title}”?",
+  "刷新会重新加载工具，并清除尚未保存的界面输入。已保存的数据不受影响。": "Refreshing reloads the tool and clears unsaved interface input. Saved data is kept.",
+  "工具不可用，请检查工具列表或修复后再试": "The tool is unavailable. Check the tool list or repair it before retrying.",
+  "预览版本": "preview version",
+  "正式版本": "published version",
+  "请修复工具 {project}/{name} 的{target}。先读取最新代码并查询本次失败日志（运行 ID：{run_id}），保留当前 UI 和已有功能，仅修复本次问题；完成后由我手动重试。": "Repair the {target} of {project}/{name}. Read its latest code and query this failed run’s logs (run ID: {run_id}). Preserve the current UI and existing features, fix only this issue, and let me retry manually afterwards.",
+  "确认后会在原对话中追加修复请求，保留已有上下文。Agent 可按需查询当前工具本次失败的日志并修改对应版本；日志可能包含业务信息，已知密钥会过滤。不会自动附加日志全文，修复后请手动重试。": "Confirmation adds a repair request to the original conversation and keeps its context. The Agent can query this tool’s current failed-run logs and edit the corresponding version. Logs may contain business information; known keys are filtered. Full logs are not attached automatically. Retry manually afterwards."
 }

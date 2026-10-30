@@ -230,7 +230,7 @@ class DeepAgentTests(unittest.IsolatedAsyncioTestCase):
             execute.assert_not_called()
         self.assertIn("Previous response was truncated", self.requests[-1]["messages"][0]["content"])
 
-    async def test_repair_restricted_and_manual_retry_preserved(self):
+    async def test_repair_target_guard_and_regular_tools_preserved(self):
         from service.tools.tool_repairs import model_fingerprint
         target = self.root / ".calabash/tools/demo/music.py"
         target.parent.mkdir(parents=True)
@@ -256,7 +256,8 @@ class DeepAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((self.root / ".calabash/tools/other/blocked.py").exists())
         self.assertTrue(any(kind == "manual_preview" for kind, _ in events))
         offered = {t["function"]["name"] for t in self.requests[0]["tools"]}
-        self.assertNotIn("read_attachment", offered)
+        self.assertIn("read_attachment", offered)
+        self.assertIn("read_ui_reference", offered)
         self.assertNotIn("execute", offered)
 
     async def test_operation_receipts_do_not_repeat_unknown_side_effect(self):

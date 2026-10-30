@@ -139,6 +139,19 @@ class RepairTests(RepairFixture, unittest.TestCase):
         tool_repairs.finish(report_id, False)
         self.assertEqual("failed", tool_repairs.get(report_id)["state"])
 
+    def test_published_repair_reuses_existing_edit_conversation(self):
+        chat_id = ai_chat.get_or_create_tool_chat('demo', 'example', 'Example')
+        history = ai_chat.read_chat(chat_id) + [{'role': 'user', 'content': 'Keep my new blue UI'}]
+        ai_chat.save_chat(chat_id, history)
+        report_id = self.report()
+        self.assertEqual(chat_id, tool_repairs.approve(report_id, tool_repairs.model_fingerprint()))
+        self.assertEqual(history, ai_chat.read_chat(chat_id))
+        report = tool_repairs.claim(chat_id)
+        message = tool_repairs.request_message(report)
+        self.assertIn(report['log_run_id'], message)
+        self.assertNotIn('secret business body', message)
+        self.assertNotIn('```', message)
+
     def test_repair_restricts_target_redacts_credentials_and_requires_read(self):
         session = tool_repairs.RepairSession(tool_repairs.get(self.report()))
         api = session.execute('read_component_api', {'component': 'ToolResults'})
@@ -190,7 +203,7 @@ class RepairTests(RepairFixture, unittest.TestCase):
         from service.files import tool_inputs
         draft = self.root / "draft.py"
         draft.write_text("def main(): pass\n")
-        chat_id = ai_chat.create_tool_chat("demo", "example", "Example")
+        chat_id = ai_chat.get_or_create_tool_chat("demo", "example", "Example")
         token = tool_inputs.create(chat_id, "preview", [], tool_key="tool:demo/example")
         with patch.object(preview_service, "get_preview_file", return_value=draft):
             report = tool_repairs.get(tool_repairs.capture(RuntimeError(), "demo", "example", preview_key="preview", context=token))
@@ -261,6 +274,7 @@ class DiagnosticTests(RepairFixture, unittest.TestCase):
         self.assertIn('error', session.execute('read_tool_logs', self.args))
         session.execute('read_tool', self.args)
         self.assertEqual('code_changed', session.execute('read_tool_logs', self.args)['status'])
+        tool_repairs.finish(report_id, False, session.report['attempt'])
         from core import tool_run_logs
         self.path.write_text('def main(): pass\n')
         run = tool_run_logs.start('demo', 'example')
@@ -369,9 +383,22 @@ class DiagnosticTests(RepairFixture, unittest.TestCase):
 
 
 class RepairModelTests(RepairFixture, unittest.IsolatedAsyncioTestCase):
-    async def test_isolated_model_context_and_manual_preview_event(self):
+    async def test_repair_preserves_normal_context_and_manual_preview_event(self):
+        import hashlib
+        chat_id = 'ui-edit-conversation'
+        history = [
+            {"role": "user", "content": "Keep the new blue sidebar and compact cards"},
+            {"role": "assistant", "content": "The new UI has been saved."},
+        ]
+        ai_chat.save_chat(chat_id, history)
+        revised = self.path.read_text().replace('    pass', '    layout = "new-blue-sidebar-compact-cards"\n    broken = True')
+        saved = await ai_chat.execute_chat_tool('write_tool', {
+            'project': 'demo', 'name': 'example', 'content': revised,
+            'revision': hashlib.sha256(self.path.read_bytes()).hexdigest(),
+        }, chat_id, history)
+        self.assertIn('saved', saved)
         report_id = self.report()
-        chat_id = tool_repairs.approve(report_id, tool_repairs.model_fingerprint())
+        self.assertEqual(chat_id, tool_repairs.approve(report_id, tool_repairs.model_fingerprint()))
         report = tool_repairs.claim(chat_id)
         requests = []
 
@@ -391,21 +418,27 @@ class RepairModelTests(RepairFixture, unittest.IsolatedAsyncioTestCase):
                 read = json.loads(next(m['content'] for m in payload['messages'] if m.get('tool_call_id') == 'call1'))
                 name = "write_tool"
                 args.update(read)
+                args['content'] = args['content'].replace('broken = True', 'broken = False')
             else:
                 return httpx.Response(200, text='data: {"choices":[{"delta":{"content":"Saved. Retry manually."}}]}\n\ndata: [DONE]\n\n')
             packet = {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": f"call{count}", "function": {"name": name, "arguments": json.dumps(args)}}]}}]}
             return httpx.Response(200, text="data: " + json.dumps(packet) + "\n\ndata: [DONE]\n\n")
 
         client_class = httpx.AsyncClient
-        history = [{"role": "user", "content": "OLD PRIVATE ATTACHMENT BODY"}]
+        history = ai_chat.read_chat(chat_id)
+        history.append({"role": "user", "repair_id": report_id, "content": tool_repairs.request_message(report)})
         with patch.object(agent_model.httpx, "AsyncClient", side_effect=lambda **kwargs: client_class(transport=httpx.MockTransport(handle))):
             events = [event async for event in ai_chat.respond(history, chat_id=chat_id, repair=report)]
         serialized = json.dumps(requests)
-        self.assertNotIn("OLD PRIVATE ATTACHMENT BODY", serialized)
+        self.assertIn("Keep the new blue sidebar and compact cards", serialized)
+        self.assertIn("The new UI has been saved.", serialized)
         self.assertIn("secret business body", serialized)
         self.assertNotIn("private-tool-key", serialized)
-        self.assertNotIn("read_attachment", serialized)
+        self.assertIn("read_attachment", serialized)
+        self.assertIn("read_ui_reference", serialized)
         self.assertIn('read_component_api', serialized)
         self.assertTrue(any(kind == "manual_preview" for kind, _ in events))
         self.assertFalse(any(kind == "preview" for kind, _ in events))
         self.assertIn("private-tool-key", self.path.read_text())
+        self.assertIn('new-blue-sidebar-compact-cards', self.path.read_text())
+        self.assertIn('broken = False', self.path.read_text())

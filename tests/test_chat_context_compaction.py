@@ -66,6 +66,22 @@ class ChatContextCompactionTests(unittest.TestCase):
         self.assertEqual(result[-2]["reasoning_content"], "Read first")
         self.assertEqual(result[-1]["tool_call_id"], result[-2]["tool_calls"][0]["id"])
 
+    def test_followup_repair_keeps_ui_request_by_compacting_prior_code(self):
+        requirement = 'Use the new blue sidebar and compact cards; preserve this UI.'
+        messages = [
+            {'role': 'user', 'content': requirement},
+            {'role': 'assistant', 'content': None, 'tool_calls': [{'id': 'save', 'type': 'function', 'function': {'name': 'write_tool', 'arguments': json.dumps({'project': 'demo', 'name': 'ui', 'content': '# source\n' * 15000})}}]},
+            {'role': 'tool', 'tool_call_id': 'save', 'content': json.dumps({'saved': 'synthetic'})},
+            {'role': 'assistant', 'content': 'The new UI is saved.'},
+            {'role': 'user', 'content': 'Repair the current error without changing the UI.'},
+        ]
+        original = copy.deepcopy(messages)
+        compacted = prepare(messages, include_reasoning=False)
+        self.assertIn(requirement, [m.get('content') for m in compacted])
+        self.assertIn('The new UI is saved.', [m.get('content') for m in compacted])
+        self.assertEqual(messages, original)
+        self.assertLess(len(json.dumps(compacted)), MAX_HISTORY_CHARACTERS)
+
     def test_small_context_unchanged_and_oversize_user_still_bounded(self):
         messages = [{"role": "user", "content": "Hello"}]
         self.assertEqual(prepare(messages), messages)
