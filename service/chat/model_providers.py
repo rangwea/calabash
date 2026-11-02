@@ -132,6 +132,8 @@ def request(provider, model, connection, messages, tools):
     base = connection["base_url"].rstrip("/")
     if provider != "anthropic":
         payload = {"model": model, "messages": messages, "tools": tools, "stream": True}
+        if provider in {"openai", "deepseek"}:
+            payload["stream_options"] = {"include_usage": True}
         if provider == "deepseek":
             # Tool authoring uses non-thinking mode explicitly. Provider defaults
             # can otherwise spend the request entirely on hidden reasoning.

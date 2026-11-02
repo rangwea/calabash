@@ -16,6 +16,8 @@ REPAIR_ACCESS_TOOLS = {"read_tool", "write_tool", "validate_tool", "preview_tool
 
 def build_tools(chat_id, messages, run_id, repair_session=None):
     from service.chat import ai_chat
+    from service.chat.code_target import CodeTarget
+    targets = CodeTarget(run_id, chat_id)
 
     async def dispatch(name, parameters, runtime):
         runtime.stream_writer({"kind": "activity", "value": name})
@@ -29,7 +31,14 @@ def build_tools(chat_id, messages, run_id, repair_session=None):
                 emit_result(name, receipt, runtime)
                 return receipt
         try:
-            result = repair_session.execute(name, parameters) if repair_session and name in REPAIR_ACCESS_TOOLS else await ai_chat.execute_chat_tool(name, parameters, chat_id, messages)
+            if repair_session and name in REPAIR_ACCESS_TOOLS:
+                result = repair_session.execute(name, parameters)
+            else:
+                result = targets.execute(name, parameters) if name in REPAIR_ACCESS_TOOLS - {'read_tool_logs'} else None
+                if result is None:
+                    result = await ai_chat.execute_chat_tool(name, parameters, chat_id, messages)
+                    if name == 'read_tool' and isinstance(result, dict):
+                        result['source'] = 'published'
         except Exception as error:  # noqa: BLE001 - never pass arbitrary repair exception text to the model.
             result = {"error": type(error).__name__}
             from service.tools.tool_runtime import ToolEntryPointError
@@ -74,7 +83,7 @@ def build_tools(chat_id, messages, run_id, repair_session=None):
         ai_chat.tool_path(project, name)
         path = f"/drafts/{project}/{name}.py"
         StateBackend().write(path, data["content"])
-        return json.dumps({"file_path": path, "revision": data["revision"]})
+        return json.dumps({"file_path": path, "revision": data["revision"], "source": data.get("source", "preview" if repair_session and repair_session.report.get("preview_key") else "published")})
 
     @tool
     async def deliver_draft(project: str, name: str, file_path: str, action: str, runtime: ToolRuntime, revision: str = "") -> str:
@@ -89,4 +98,33 @@ def build_tools(chat_id, messages, run_id, repair_session=None):
             return json.dumps({"error": "Draft is too large"})
         return json.dumps(await dispatch(action, {"project": project, "name": name, "content": content, "revision": revision}, runtime), ensure_ascii=False)
 
-    return [*result, stage_tool, deliver_draft]
+    async def inspect(operation, project, name, file_path, runtime, **options):
+        from service.chat.code_inspection import inspect_source
+        if file_path:
+            data = runtime.state.get('files', {}).get(file_path)
+            if data is None:
+                return json.dumps({'error': 'Virtual draft not found'})
+            content, source = file_data_to_string(data), 'draft'
+        else:
+            data = await dispatch('read_tool', {'project': project, 'name': name}, runtime)
+            if not isinstance(data, dict) or 'content' not in data:
+                return json.dumps(data, ensure_ascii=False)
+            content, source = data['content'], data.get('source', 'preview' if repair_session and repair_session.report.get('preview_key') else 'published')
+        return json.dumps({**inspect_source(content, operation, **options), 'source': source}, ensure_ascii=False)
+
+    @tool
+    async def outline_code(project: str, name: str, runtime: ToolRuntime, file_path: str = '', offset: int = 0, limit: int = 80) -> str:
+        """List qualified Python functions/classes and line ranges without execution. file_path optionally selects this conversation's virtual draft; otherwise read the bound tool source."""
+        return await inspect('outline_code', project, name, file_path, runtime, offset=offset, limit=limit)
+
+    @tool
+    async def read_code_symbol(project: str, name: str, symbol: str, runtime: ToolRuntime, file_path: str = '', offset: int = 0, limit: int = 80) -> str:
+        """Read one qualified symbol from outline_code, at most 120 lines/16000 characters. Includes source identity and revision. Never executes code."""
+        return await inspect('read_code_symbol', project, name, file_path, runtime, symbol=symbol, offset=offset, limit=limit)
+
+    @tool
+    async def search_code(project: str, name: str, query: str, runtime: ToolRuntime, file_path: str = '', offset: int = 0, limit: int = 30) -> str:
+        """Find literal text with line numbers in the bound source or a conversation virtual draft. query max 200 characters, limit max 120. Not regex or shell."""
+        return await inspect('search_code', project, name, file_path, runtime, query=query, offset=offset, limit=limit)
+
+    return [*result, stage_tool, deliver_draft, outline_code, read_code_symbol, search_code]

@@ -97,8 +97,3 @@ def main() -> None:
                 )
 
         switch("媒体库")
-
-
-if __name__ in {"__main__", "__mp_main__"}:
-    main()
-    ui.run(title="媒体工作区骨架", port=8080, show=True)

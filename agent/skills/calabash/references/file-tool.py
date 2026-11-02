@@ -119,8 +119,3 @@ def main() -> None:
             inputs.set_enabled(not jobs.running)
 
     start.on_click(submit)
-
-
-if __name__ in {"__main__", "__mp_main__"}:
-    main()
-    ui.run(title="CSV 批量清理", port=8080, show=True)

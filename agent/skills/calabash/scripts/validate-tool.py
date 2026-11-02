@@ -45,6 +45,8 @@ class _ModuleStateCheck(ast.NodeVisitor):
 
     def visit_Call(self, node):
         name = self._name(node.func)
+        if name == 'nicegui.ui.run':
+            self.errors.append(f"第 {node.lineno} 行：Calabash 管理运行，不调用 ui.run()")
         if name in _PAGE_HELPERS:
             self.errors.append(f"第 {node.lineno} 行：{name.rsplit('.', 1)[1]} 必须在 main()/UI 回调内创建，不能作为模块共享状态")
         self.generic_visit(node)
@@ -57,32 +59,6 @@ class _ModuleStateCheck(ast.NodeVisitor):
 
     def visit_Lambda(self, node):
         return
-
-    def visit_If(self, node):
-        if is_run_guard(node.test):
-            for statement in node.orelse:
-                self.visit(statement)
-        else:
-            self.generic_visit(node)
-
-
-def is_run_guard(node: ast.AST) -> bool:
-    """接受模板的双入口 guard 或常见的 __main__ 等值 guard。"""
-    if not isinstance(node, ast.Compare) or len(node.ops) != 1:
-        return False
-    if not isinstance(node.left, ast.Name) or node.left.id != "__name__":
-        return False
-    target = node.comparators[0]
-    if isinstance(node.ops[0], ast.Eq):
-        return isinstance(target, ast.Constant) and target.value == "__main__"
-    if isinstance(node.ops[0], ast.In) and isinstance(
-        target, (ast.Set, ast.Tuple, ast.List)
-    ):
-        return all(isinstance(item, ast.Constant) for item in target.elts) and {
-            item.value for item in target.elts
-        } == {"__main__", "__mp_main__"}
-    return False
-
 
 def validate_source(source: str) -> list[str]:
     """返回静态契约错误；通过不代表工具能够运行。"""
@@ -162,35 +138,9 @@ def validate_source(source: str) -> list[str]:
                 break
             pending.extend(ast.iter_child_nodes(node))
 
-    guards = [
-        node
-        for node in tree.body
-        if isinstance(node, ast.If) and is_run_guard(node.test)
-    ]
-    if not guards:
-        errors.append("缺少本地 run guard（参照 quality-gate.md）")
-    else:
-        for guard in guards:
-            calls = [
-                stmt.value
-                for stmt in guard.body
-                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call)
-            ]
-            has_main = any(
-                isinstance(call.func, ast.Name) and call.func.id == "main"
-                for call in calls
-            )
-            has_run = any(
-                isinstance(call.func, ast.Attribute)
-                and isinstance(call.func.value, ast.Name)
-                and call.func.value.id == "ui"
-                and call.func.attr == "run"
-                for call in calls
-            )
-            if has_main and has_run:
-                break
-        else:
-            errors.append("本地 run guard 必须包含 main() 与 ui.run(...) 调用")
+    for node in tree.body:
+        if isinstance(node, ast.If) and any(isinstance(value, ast.Name) and value.id == '__name__' for value in ast.walk(node.test)):
+            errors.append("由 Calabash 调用 main()，不要添加独立运行入口或 ui.run()")
     return errors
 
 

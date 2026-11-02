@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import sqlite3
+import time
 from uuid import uuid4
 
 import httpx
@@ -52,6 +54,37 @@ class CalabashChatModel(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=message_chunk_to_message(combined.message))])
 
     async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
+        from service.chat import agent_usage
+        observation = {'usage': {}, 'first_token_ms': None}
+        started = time.monotonic()
+        observation['started'] = started
+        status = 'failed'
+        try:
+            async for chunk in self._stream_request(messages, stop, run_manager, observation=observation, **kwargs):
+                if observation['first_token_ms'] is None:
+                    observation['first_token_ms'] = int((time.monotonic() - started) * 1000)
+                yield chunk
+            status = 'completed'
+        except asyncio.CancelledError:
+            status = 'cancelled'
+            raise
+        finally:
+            from langchain_core.runnables.config import ensure_config
+            metadata = {**ensure_config().get('metadata', {}), **(getattr(run_manager, 'metadata', None) or {})}
+            try:
+                from service.chat import agent_store
+                run_id = agent_usage.current_run.get()
+                if run_id and self._chat_id and not agent_store.owned(run_id, self._chat_id):
+                    run_id = None  # Deleted chats must not recreate usage rows after an in-flight request.
+                agent_usage.record(uuid4().hex, run_id,
+                    'summary' if metadata.get('lc_source') == 'summarization' else 'model',
+                    self._provider, self._model, status, int((time.monotonic() - started) * 1000),
+                    observation['first_token_ms'], observation['usage'])
+            except (OSError, sqlite3.Error):
+                from core.logger import get_logger
+                get_logger(__name__).warning('Local agent usage recording unavailable')
+
+    async def _stream_request(self, messages, stop=None, run_manager=None, *, observation, **kwargs):
         from service.chat.ai_chat import MODEL_REQUEST_TIMEOUT
 
         wire = convert_to_openai_messages(messages)
@@ -78,10 +111,15 @@ class CalabashChatModel(BaseChatModel):
                     if data == "[DONE]":
                         done = True
                         break
-                    packet = model_providers.normalize(json.loads(data), self._provider)
+                    raw_packet = json.loads(data)
+                    from service.chat.agent_usage import observe
+                    observe(raw_packet, observation['usage'])
+                    packet = model_providers.normalize(raw_packet, self._provider)
                     if packet.get("error"):
                         raise ValueError(t("模型服务返回错误，请稍后重试"))
                     for choice in packet.get("choices", []):
+                        if observation['first_token_ms'] is None and (choice.get('delta', {}).get('content') or choice.get('delta', {}).get('tool_calls')):
+                            observation['first_token_ms'] = int((time.monotonic() - observation['started']) * 1000)
                         # Anthropic emits message_stop after max_tokens. A later
                         # generic stop must not turn truncation into success.
                         if finish != "length":

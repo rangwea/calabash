@@ -22,7 +22,8 @@ class PreviewSave:
     revision: str | None
 
 
-def prepare(chat_id, url):
+def resolve(chat_id, url):
+    """Resolve a conversation-owned preview without parsing or executing source."""
     parsed = urlsplit(url)
     parts = [unquote(part) for part in parsed.path.split('/')]
     if parsed.scheme or parsed.netloc or parsed.fragment or parts[1:2] != ['preview']:
@@ -40,10 +41,19 @@ def prepare(chat_id, url):
     if bound_chat != chat_id or not owner.startswith('tool:'):
         raise ValueError('invalid_preview')
     project, name = owner.removeprefix('tool:').split('/', 1)
-    path = ai_chat.tool_path(project, name)
+    ai_chat.tool_path(project, name)
     raw_path = ai_chat.tools_dir() / project / f'{name}.py'
     if raw_path.is_symlink() or raw_path.parent.is_symlink():
         raise ValueError('invalid_target')
+    preview_path = preview_service.get_preview_file(key)
+    if preview_path.is_symlink() or preview_path.parent.is_symlink():
+        raise ValueError('invalid_preview')
+    return project, name, key
+
+
+def prepare(chat_id, url):
+    project, name, key = resolve(chat_id, url)
+    path = ai_chat.tool_path(project, name)
     if tool_activity.is_tool_running(project, name):
         raise tool_activity.ToolBusyError()
     content = preview_service.get_preview_file(key).read_bytes()

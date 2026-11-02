@@ -179,8 +179,3 @@ def main() -> None:
             )
             show_state("initial")
         task_status = ToolJobStatus(task, controls=(name_input, category_select, submit_button, reset_button))
-
-
-if __name__ in {"__main__", "__mp_main__"}:
-    main()
-    ui.run(title="简单工具示例", port=8080, show=True)

@@ -99,9 +99,13 @@ async def respond(messages, chat_id, prompt, initial, provider, model, connectio
     from service.chat import ai_chat
 
     repair = repair_session.report if repair_session else None
+    from service.chat.agent_policy import task_anchor
+    prompt += task_anchor(messages, repair)
     run_id = run_identity(messages, chat_id, provider, model, connection, repair)
     if run_id in _active_runs or (chat_id and chat_id in _active_chats):
         raise ValueError(t("当前对话正在生成，请等待完成"))
+    from service.chat import agent_usage
+    usage_scope = agent_usage.current_run.set(run_id)
     _active_runs.add(run_id)
     if chat_id:
         _active_chats.add(chat_id)
@@ -184,6 +188,7 @@ async def respond(messages, chat_id, prompt, initial, provider, model, connectio
                     if chat_id and ai_chat.chat_exists(chat_id):
                         ai_chat.save_chat(chat_id, messages)
     finally:
+        agent_usage.current_run.reset(usage_scope)
         _active_runs.discard(run_id)
         if chat_id:
             _active_chats.discard(chat_id)

@@ -40,7 +40,7 @@ class TemplateContractTests(unittest.TestCase):
         self.header = (SKILL / "references/simple-tool.py").read_text().split('"""', 2)[1]
 
     def source(self, body):
-        return f'"""{self.header}"""\n{body}\nif __name__ == "__main__":\n    main()\n    ui.run()\n'
+        return f'"""{self.header}"""\n{body}\n'
 
     def test_all_shipped_templates_pass_without_executing_source(self):
         for name in ("simple-tool.py", "query-tool.py", "file-tool.py", "office-workspace.py", "media-workspace.py"):
@@ -48,6 +48,11 @@ class TemplateContractTests(unittest.TestCase):
                 self.assertEqual([], self.validator.validate_source((SKILL / "references" / name).read_text()))
         source = self.source('from nicegui import ui\nraise RuntimeError("must not execute")\ndef main():\n    pass')
         self.assertEqual([], self.validator.validate_source(source))
+
+    def test_host_owns_execution_without_standalone_run_guard(self):
+        source = self.source('from nicegui import ui\ndef main():\n    pass')
+        self.assertEqual([], self.validator.validate_source(source))
+        self.assertTrue(self.validator.validate_source(source + '\nif __name__ == "__main__":\n    main()\n    ui.run()\n'))
 
     def test_shared_state_at_import_time_is_rejected_even_with_aliases(self):
         for statement in [

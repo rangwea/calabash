@@ -309,8 +309,3 @@ def main() -> None:
     """构建每个访问者独立的查询工具。"""
     ui.page_title("数据查询工具")
     DataQueryTool().create_ui()
-
-
-if __name__ in {"__main__", "__mp_main__"}:
-    main()
-    ui.run(title="数据查询工具", port=8080, show=True)

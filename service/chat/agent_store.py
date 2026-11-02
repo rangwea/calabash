@@ -23,6 +23,7 @@ def connect():
         path.chmod(0o600)
     db.execute("CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, chat_id TEXT NOT NULL)")
     db.execute("CREATE TABLE IF NOT EXISTS receipts(run_id TEXT, call_id TEXT, arguments TEXT NOT NULL, result TEXT, PRIMARY KEY(run_id,call_id))")
+    db.execute("CREATE TABLE IF NOT EXISTS code_targets(run_id TEXT,project TEXT,name TEXT,binding TEXT NOT NULL,PRIMARY KEY(run_id,project,name))")
     db.commit()
     return db
 
@@ -58,6 +59,7 @@ def finish(run_id, call_id, result):
 def delete_chat(chat_id):
     # Use the checkpointer's public API rather than editing its internal tables.
     from langgraph.checkpoint.sqlite import SqliteSaver
+    from service.chat.agent_usage import delete_runs
     with closing(connect()) as db, db:
         runs = [row[0] for row in db.execute("SELECT id FROM runs WHERE chat_id=?", (chat_id,))]
         path = root() / "checkpoints.sqlite"
@@ -65,6 +67,19 @@ def delete_chat(chat_id):
             with SqliteSaver.from_conn_string(str(path)) as saver:
                 for run_id in runs:
                     saver.delete_thread(run_id)
+        delete_runs(runs)
         for run_id in runs:
             db.execute("DELETE FROM receipts WHERE run_id=?", (run_id,))
+            db.execute("DELETE FROM code_targets WHERE run_id=?", (run_id,))
         db.execute("DELETE FROM runs WHERE chat_id=?", (chat_id,))
+
+
+def target(run_id, project, name):
+    with closing(connect()) as db:
+        row = db.execute('SELECT binding FROM code_targets WHERE run_id=? AND project=? AND name=?', (run_id, project, name)).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def bind_target(run_id, project, name, binding):
+    with closing(connect()) as db, db:
+        db.execute('INSERT OR IGNORE INTO code_targets VALUES(?,?,?,?)', (run_id, project, name, json.dumps(binding)))

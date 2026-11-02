@@ -22,8 +22,11 @@ python3 "$CALABASH_SKILL_ROOT/scripts/validate-tool.py" <file>
 
 ### App 内置聊天执行
 
+共同编码规范见 [agent-policy.md](references/agent-policy.md)。App 每轮从同一文件加载；以下 CLI 操作说明不作为内置聊天的 Shell 授权。
+
 App 聊天由 Deep Agents 单 Agent 驱动，工具执行仍由 Calabash 服务层授权和校验。
 `write_file` / `read_file` / `edit_file` / `ls` / `glob` / `grep` 只操作会话内虚拟文件，不访问用户磁盘，也没有 Shell 或子 Agent。
+已有代码先用 `outline_code` 查看符号地图，`read_code_symbol` 按限定名读取函数，`search_code` 做字面搜索；可传会话虚拟 `file_path`，不接受磁盘路径。结果带 source/revision；普通编辑绑定当前会话预览，预览写入不代表正式发布。
 长代码先在 `/drafts/` 下分段编写；已有工具先 `stage_tool(project, name)` 获取虚拟草稿路径和最新 revision。
 用 `deliver_draft(project, name, file_path, action, revision)` 校验、准备预览或保存；action 分别为 `validate_tool`、`preview_tool`、`write_tool`。
 该接口读取完整草稿，不需要模型再次输出全文。预览不代表保存到工具列表，已有工具写入仍须 revision。

@@ -17,13 +17,7 @@
 
 - `main` must be a top-level function.
 - Do not decorate or dynamically generate `main`.
-- Keep the local run guard:
-
-```python
-if __name__ in {"__main__", "__mp_main__"}:
-    main()
-    ui.run(title="[工具标题]", port=8080, show=True)
-```
+- Calabash owns execution. Define main() only; do not add ui.run() or a standalone run guard.
 
 ## UI Rules
 
@@ -38,7 +32,7 @@ if __name__ in {"__main__", "__mp_main__"}:
 ## Runtime Robustness
 
 - Use the documented component APIs, not guessed lifecycle methods. `ToolResults()` renders immediately in the current UI container; it has no `mount()`. Call `results.refresh()` after publishing outputs. `ui.echart(...).options` is a read-only property: mutate the options dictionary in place and call `chart.update()` instead of assigning a new dictionary.
-- During repairs, query read_tool_logs for the current tool’s actual exception message and traceback, then read the failing code; paginate/search logs and query component APIs only as needed. An exception type alone does not identify the root cause; do not claim a cause that the evidence does not establish.
+- During repairs, read current tool code/revision first, then query read_tool_logs for the approved failure’s actual exception message and traceback; paginate/search logs and query component APIs only as needed. An exception type alone does not identify the root cause; do not claim a cause that the evidence does not establish.
 
 - Use type annotations for helper functions and classes.
 - Add docstrings where they clarify non-obvious behavior.
@@ -72,7 +66,7 @@ if __name__ in {"__main__", "__mp_main__"}:
 - Blocking operations do not run on the NiceGUI event loop.
 - Controls recover after failure and duplicate submissions are prevented.
 - The selected tool skeleton matches the requested workflow.
-- `main` is top-level and the local run guard is present.
+- `main` is top-level, with no standalone run guard or ui.run().
 - Error handling and user-facing notifications are present.
 - Large data views are paginated.
 - For file tools: check a failed sibling, failed-only retry, cancellation, history restoration and unchanged source files using synthetic data.
