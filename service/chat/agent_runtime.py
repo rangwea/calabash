@@ -126,7 +126,7 @@ async def respond(messages, chat_id, prompt, initial, provider, model, connectio
                 if os.name != "nt":
                     path.chmod(0o600)
                 graph = create_graph(CalabashChatModel(provider, model, connection, chat_id=chat_id), prompt,
-                                     build_tools(chat_id, messages, run_id, repair_session), saver)
+                                     build_tools(chat_id, messages, run_id, repair_session, model_identity=hashlib.sha256(json.dumps((provider, model, connection), sort_keys=True).encode()).hexdigest()), saver)
                 state = await graph.aget_state(config)
                 if state.values:
                     # Resume only pending graph work. A completed run is replayed

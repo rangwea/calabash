@@ -1,5 +1,6 @@
 """Local numeric request accounting. Never stores prompts, URLs, keys or errors."""
 
+import json
 import sqlite3
 from contextlib import closing
 from contextvars import ContextVar
@@ -20,6 +21,7 @@ def connect():
         provider TEXT NOT NULL, model TEXT NOT NULL, status TEXT NOT NULL,
         duration_ms INTEGER NOT NULL, first_token_ms INTEGER,
         input_tokens INTEGER, output_tokens INTEGER, cached_tokens INTEGER, cache_miss_tokens INTEGER, policy_revision TEXT NOT NULL)''')
+    db.execute("CREATE TABLE IF NOT EXISTS acceptance(id TEXT PRIMARY KEY,run_id TEXT,revision TEXT,status TEXT,checks TEXT)")
     db.commit()
     return db
 
@@ -77,14 +79,29 @@ def summary(run_id):
     totals = {key: sum(row[key] for row in rows if row[key] is not None) if any(row[key] is not None for row in rows) else None for key in keys}
     measured = [r for r in rows if r['cached_tokens'] is not None and r['input_tokens'] is not None]
     denominator = sum(r['input_tokens'] for r in measured)
+    with closing(connect()) as db:
+        evidence = db.execute('SELECT status,checks,revision FROM acceptance WHERE run_id=? ORDER BY rowid DESC LIMIT 1', (run_id,)).fetchone()
     return {**totals, 'requests': len(rows), 'summary_requests': sum(r['kind'] == 'summary' for r in rows),
             'failed_requests': sum(r['status'] != 'completed' for r in rows),
             'duration_ms': sum(r['duration_ms'] for r in rows), 'usage_reported_requests': sum(r['input_tokens'] is not None for r in rows),
             'cache_measured_requests': len(measured),
             'cache_hit_rate': sum(r['cached_tokens'] for r in measured) / denominator if denominator else None,
-            'runtime_verification': 'unknown'}
+            'runtime_verification': 'partial_checks_passed' if evidence and evidence[0] == 'checks_passed' else 'checks_failed' if evidence else 'unknown',
+            'preview_checks': json.loads(evidence[1]) if evidence else [],
+            'preview_check_revision': evidence[2] if evidence else None}
 
 
 def delete_runs(run_ids):
     with closing(connect()) as db, db:
         db.executemany('DELETE FROM requests WHERE run_id=?', [(value,) for value in run_ids])
+        db.executemany('DELETE FROM acceptance WHERE run_id=?', [(value,) for value in run_ids])
+
+
+def record_checks(run_id, revision, result):
+    from uuid import uuid4
+    # Store only check kinds/booleans, never expected business text or page contents.
+    if not run_id:
+        return
+    checks = [{'kind': item['kind'], 'passed': item['passed']} for item in result['checks']]
+    with closing(connect()) as db, db:
+        db.execute('INSERT INTO acceptance VALUES(?,?,?,?,?)', (uuid4().hex, run_id, revision, result['status'], json.dumps(checks)))

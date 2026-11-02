@@ -122,6 +122,13 @@ async def _render_preview(
             project, name, preview_key=preview_key, context=context, log_run_id=run.id
         )
 
+    if context and owner.startswith('tool:'):
+        from component.frontend_probe import FrontendProbe
+        from service.tools import preview_debug
+        _, chat_id = ui.context.client.calabash_output_owner
+        session = preview_debug.register(run, chat_id, context, ui.context.client)
+        FrontendProbe(session)
+
     def log_event_exception(exception: Exception) -> None:
         preview_logger.opt(exception=exception).error(
             f"预览事件回调执行失败: {type(exception).__name__}: {exception}"

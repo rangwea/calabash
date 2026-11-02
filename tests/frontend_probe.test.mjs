@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+
+const source = readFileSync(new URL('../component/frontend_probe.js', import.meta.url), 'utf8').replace('export function installProbe', 'function installProbe').replace('export default', 'globalThis.component =');
+const listeners = new Map(), reports = [];
+let clicks = 0;
+const button = { tagName: 'BUTTON', textContent: 'Increment', disabled: false, isConnected: true, getClientRects: () => [1], getAttribute: () => null, closest: () => null, matches: selector => selector.includes('button'), click: () => clicks++ };
+const input = { ...button, tagName: 'INPUT', type: 'text', textContent: '', value: 'private-input-value', labels: [{ textContent: 'Memo' }], matches: selector => selector === 'input,textarea', dispatchEvent() {} };
+const password = { ...input, type: 'password', value: 'secret', labels: [{ textContent: 'Password' }], matches: selector => selector.includes('type=password') };
+const hidden = { ...button, textContent: 'hidden-secret', getClientRects: () => [] };
+const media = { ...button, tagName: 'AUDIO', paused: true, ended: false, currentTime: 0, duration: NaN, readyState: 0, networkState: 3, src: 'file:///private/music.mp3' };
+const host = { querySelectorAll: selector => selector === 'audio,video' ? [media] : [button, input, password], contains: element => [button, input, password].includes(element) };
+const textNodes = [{ textContent: 'Ready', parentElement: button }, { textContent: 'hidden-secret', parentElement: hidden }];
+const doc = { documentElement: { scrollWidth: 800 }, querySelector: () => host, createTreeWalker: () => { let i = 0; return { nextNode: () => textNodes[i++] || null }; } };
+const originalFetch = async () => ({ ok: false, status: 404 });
+const originalError = () => {};
+const win = { document: doc, location: { href: 'http://127.0.0.1:1234/preview/demo?context=opaque', origin: 'http://127.0.0.1:1234' }, innerWidth: 800,
+  NodeFilter: { SHOW_TEXT: 4 }, getComputedStyle: () => ({ visibility: 'visible' }), console: { error: originalError }, fetch: originalFetch,
+  addEventListener: (name, callback) => listeners.set(name, callback), removeEventListener: name => listeners.delete(name),
+  Event: class { constructor(type) { this.type = type; } }, HTMLInputElement: class {}, HTMLTextAreaElement: class {} };
+const context = vm.createContext({ URL, window: win, Error });
+vm.runInContext(source, context);
+const probe = context.installProbe(win, event => reports.push(event));
+let snapshot = probe.snapshot();
+assert.equal(snapshot.elements.length, 2);
+assert.equal(snapshot.media[0].source, '[local-file-url]');
+assert.equal(snapshot.text, 'Ready');
+assert.ok(!JSON.stringify(snapshot).includes('private-input-value'));
+assert.ok(!JSON.stringify(snapshot).includes('hidden-secret'));
+const id = snapshot.elements[0].id;
+assert.equal(probe.operate({ action: 'click', element_id: id, expected_label: 'Increment' }).dispatched, true);
+assert.equal(clicks, 1);
+button.textContent = 'Delete';
+assert.ok(probe.operate({ action: 'click', element_id: id, expected_label: 'Increment' }).error);
+assert.equal(clicks, 1);
+assert.ok(probe.operate({ action: 'eval', element_id: id, expected_label: 'Delete' }).error);
+listeners.get('error')({ target: win, message: 'Synthetic JS error', error: new Error('Synthetic'), lineno: 7 });
+assert.equal(reports[0].kind, 'javascript_error');
+await win.fetch('http://127.0.0.1:1234/media?token=private');
+assert.equal(reports[1].source, '/media');
+win.console.error({ body: 'private-object' });
+assert.equal(reports.length, 2);
+for (let i = 0; i < 100; i++) win.console.error('Synthetic error');
+assert.equal(reports.length, 40);
+probe.dispose();
+assert.equal(win.fetch, originalFetch);
+assert.equal(win.console.error, originalError);
+assert.equal(listeners.size, 0);
+console.log('frontend probe contracts passed');

@@ -4,7 +4,7 @@ from pathlib import Path
 
 REFERENCE_ROOT = Path(__file__).resolve().parents[2] / 'agent/skills/calabash/references'
 REFERENCES = (
-    'agent-policy.md', 'quality-gate.md', 'runtime.md', 'file-workflow.md', 'lifecycle.md',
+    'frontend-debug.md', 'agent-policy.md', 'quality-gate.md', 'runtime.md', 'file-workflow.md', 'lifecycle.md',
     'design.md', 'design-details.md', 'design-scenes.md',
     'simple-tool.py', 'query-tool.py', 'file-tool.py',
     'office-workspace.py', 'media-workspace.py',

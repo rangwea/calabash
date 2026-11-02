@@ -35,6 +35,9 @@ ACTION_LABELS = {
     "outline_code": "查看代码结构",
     "read_code_symbol": "读取函数代码",
     "search_code": "搜索代码",
+    "inspect_preview": "检查预览状态",
+    "interact_preview": "操作预览（需确认）",
+    "verify_preview": "验收预览",
     "deliver_draft": "处理工具草稿",
     "write_todos": "更新执行计划",
     "list_tools": "检查现有工具",
@@ -541,6 +544,8 @@ def _render_chat_session(chat_id=None, on_change=None):
                 back.classes("chat-preview-back")
                 ui.label(t("工具预览")).classes("text-xs font-medium text-gray-600")
                 with ui.row().classes("items-center gap-1"):
+                    from component.preview_debug import PreviewDebugControl
+                    PreviewDebugControl(selected["id"], lambda: preview_state["url"])
                     save_preview_button, _ = _toolbar_button("save", t("保存到工具列表"), save_preview_tool)
                     refresh_preview_button, _ = _toolbar_button("refresh", t("刷新预览"), lambda: show_preview({"url": preview_state["url"]}), leave=True)
                     open_preview_button, _ = _toolbar_button("open", t("打开完整预览"), lambda: ui.navigate.to(preview_state["url"], new_tab=True) if preview_state["url"] else None)

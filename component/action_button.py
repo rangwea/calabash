@@ -23,6 +23,7 @@ ACTION_CSS = """
 """
 
 ICONS = {
+    "inspect": '<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M10 7v6M7 10h6"/>',
     "send": '<path d="M12 21V3m-7 7 7-7 7 7"/>',
     "stop": '<rect x="5" y="5" width="14" height="14" rx="2"/>',
 

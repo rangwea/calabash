@@ -86,6 +86,8 @@ def main() -> None:
         "--add-data",
         f"{ROOT / 'component' / 'tool_activity.js'}{os.pathsep}component",
         "--add-data",
+        f"{ROOT / 'component' / 'frontend_probe.js'}{os.pathsep}component",
+        "--add-data",
         f"{ROOT / 'component' / 'context_menu.js'}{os.pathsep}component",
         "--add-data",
         f"{ROOT / 'component' / 'assets' / 'calabash.png'}{os.pathsep}component/assets",
