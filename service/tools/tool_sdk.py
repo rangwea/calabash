@@ -28,9 +28,11 @@ class ToolSDK:
         self._start_lock = Lock()
         self._cancel_pending = False
         self._publishing = False
+        self._stopping = False
         self.host_token = ''
         self.router = APIRouter()
         self.router.add_api_route('/runtime-issue', self.runtime_issue, methods=['POST'])
+        self.router.add_api_route('/prepare-exit', self.prepare_exit, methods=['POST'])
         self.router.add_api_route('/status', self.status, methods=['GET'])
         self.router.add_api_route('/cancel', self.cancel, methods=['POST'])
         self.router.add_api_route('/publication-lock', self.publication_lock, methods=['POST'])
@@ -87,6 +89,11 @@ class ToolSDK:
 
     def start_batch(self, values, handler):
         with self._start_lock:
+            from service.tools import tool_activity
+            directory = tool_activity._directory()
+            if self._stopping or (directory and (directory / 'stop-jobs').exists()):
+                from core.i18n import t
+                raise HTTPException(409, t('应用正在安全退出，暂不接受新任务'))
             if self._publishing:
                 raise HTTPException(409, 'A tool version is being saved')
             if self.task and not self.task.done():
@@ -119,6 +126,12 @@ class ToolSDK:
                 raise HTTPException(409, 'Tool is running')
             self._publishing = frozen
         return {'ok': True}
+
+    def prepare_exit(self, request: Request):
+        self.host_request(request)
+        with self._start_lock:
+            self._stopping = True
+            return self.cancel()
 
     async def shutdown(self):
         if self.task and not self.task.done():

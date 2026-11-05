@@ -17,7 +17,9 @@ from uuid import uuid4
 
 import httpx
 
+from core.i18n import t
 from core.local_paths import app_dir
+from service.tools.owned_process import spawn, stop
 from service.tools import tool_bundles as bundles
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -110,20 +112,21 @@ async def build_bundle(files):
         raise FrontendBuildError(root) from error
     node, script = frontend_runtime()
     with (root / 'build.log').open('ab') as output:
-        process = await asyncio.create_subprocess_exec(node, str(script), 'build', str(root), stdout=output, stderr=output)
         try:
-            await asyncio.wait_for(process.wait(), 90)
+            process = await spawn([node, str(script), 'build', str(root)], group=True, stdin=subprocess.PIPE, stdout=output, stderr=output)
+            try:
+                await asyncio.to_thread(process.wait, timeout=90)
+            finally:
+                await asyncio.to_thread(stop, process, group=True)
         except BaseException as error:
-            if process.returncode is None:
-                process.kill()
-                await process.wait()
             if isinstance(error, asyncio.CancelledError):
                 shutil.rmtree(root, ignore_errors=True)
-            if isinstance(error, TimeoutError):
+            if isinstance(error, subprocess.TimeoutExpired):
                 raise FrontendBuildError(root) from error
             raise
         if process.returncode:
             raise FrontendBuildError(root)
+
     return root
 
 
@@ -148,14 +151,9 @@ class Worker:
 
     async def stop(self):
         # Caller checks active jobs first. Process termination is not safe job cancellation.
-        for process in (self.frontend, self.process):
-            if process and process.poll() is None:
-                process.terminate()
-                try:
-                    await asyncio.to_thread(process.wait, timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    await asyncio.to_thread(process.wait)
+        for process, group in ((self.frontend, True), (self.process, False)):
+            if process:
+                await asyncio.to_thread(stop, process, group=group)
         if self.log_run:
             self.log_run.close()
         directory = os.environ.get('CALABASH_SELECTION_DIR')
@@ -173,6 +171,7 @@ class ToolWorkers:
         self.lock = asyncio.Lock()
         self.start_locks = {}
         self.detached = set()
+        self.stopping = False
 
     def current(self, project, name, chat_id=None):
         key = self.key(project, name, chat_id)
@@ -211,53 +210,71 @@ class ToolWorkers:
                             pass  # A stopped process cannot accept new jobs.
 
     async def open(self, project, name, chat_id=None):
+        if self.stopping:
+            raise ValueError(t('应用正在安全退出，暂不接受新任务'))
         key = self.key(project, name, chat_id)
         async with self.start_locks.setdefault(key, asyncio.Lock()):
+            if self.stopping:
+                raise ValueError(t('应用正在安全退出，暂不接受新任务'))
             self.detached.discard(key)
-            if key in self.items and self.items[key].process.poll() is None:
-                return self.items[key]
+            previous = self.items.get(key)
+            if previous:
+                if previous.process.poll() is None and (not previous.frontend or previous.frontend.poll() is None):
+                    return previous
+                if previous.process.poll() is None and (await self._prepare_exit(previous)).get('running'):
+                    raise ValueError(t('工具界面已断开，请等待当前任务完成后重新打开'))
+                await previous.stop()
+                self.items.pop(key, None)
             source = bundles.read(project, name, chat_id)
             meta = bundles.validate(source['files'])
             from service.capabilities.tool_capabilities import require_tool_capabilities
             requirements = meta.get('requires', '')
             require_tool_capabilities(requirements)
             root = app_dir() / 'runtime' / uuid4().hex
-            root.mkdir(parents=True, mode=0o700)
-            for relative, content in source['files'].items():
-                path = root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(content)
-            from service.tools.api_contracts import prepare
-            prepare(root, source['files'])
-            node, script = frontend_runtime()
-            if not chat_id:
-                published_dist = bundles.directory(project, name) / 'dist'
-                if not (published_dist / 'index.html').is_file():
-                    raise ValueError('Publish a built tool before opening')
-                shutil.copytree(published_dist, root / 'dist')
-            port = free_port(); token = secrets.token_urlsafe(32); host_token = secrets.token_urlsafe(32)
-            frontend_port = free_port() if chat_id else None
-            origin = f'http://127.0.0.1:{frontend_port or port}'
-            config = {'root': str(root), 'project': project, 'name': name, 'port': port,
-                      'token': token, 'origin': origin, 'revision': source['revision'], 'host_token': host_token}
-            configs = app_dir() / 'worker-config'
-            configs.mkdir(parents=True, exist_ok=True, mode=0o700)
-            path = configs / (root.name + '.json'); path.write_text(json.dumps(config)); path.chmod(0o600)
-            from core import tool_run_logs
-            log_run = tool_run_logs.start(project, name, preview_key=chat_id)
-            environment = {**os.environ, 'CALABASH_JOB_ID': root.name}
-            process = await asyncio.to_thread(subprocess.Popen, command(str(path)), cwd=ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            worker = Worker(project, name, source['revision'], root, process, port, token, None, host_token=host_token, log_run=log_run, frontend_port=frontend_port)
+            log_run = None
+            try:
+                root.mkdir(parents=True, mode=0o700)
+                for relative, content in source['files'].items():
+                    path = root / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content)
+                from service.tools.api_contracts import prepare
+                prepare(root, source['files'])
+                node, script = frontend_runtime()
+                if not chat_id:
+                    published_dist = bundles.directory(project, name) / 'dist'
+                    if not (published_dist / 'index.html').is_file():
+                        raise ValueError('Publish a built tool before opening')
+                    shutil.copytree(published_dist, root / 'dist')
+                port = free_port(); token = secrets.token_urlsafe(32); host_token = secrets.token_urlsafe(32)
+                frontend_port = free_port() if chat_id else None
+                origin = f'http://127.0.0.1:{frontend_port or port}'
+                config = {'root': str(root), 'project': project, 'name': name, 'port': port,
+                          'token': token, 'origin': origin, 'revision': source['revision'], 'host_token': host_token}
+                configs = app_dir() / 'worker-config'
+                configs.mkdir(parents=True, exist_ok=True, mode=0o700)
+                path = configs / (root.name + '.json'); path.write_text(json.dumps(config)); path.chmod(0o600)
+                from core import tool_run_logs
+                log_run = tool_run_logs.start(project, name, preview_key=chat_id)
+                environment = {**os.environ, 'CALABASH_JOB_ID': root.name}
+                process = await spawn(command(str(path)), cwd=ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                worker = Worker(project, name, source['revision'], root, process, port, token, None, host_token=host_token, log_run=log_run, frontend_port=frontend_port)
+            except BaseException:
+                if log_run:
+                    log_run.close()
+                await asyncio.to_thread(shutil.rmtree, root, ignore_errors=True)
+                (app_dir() / 'worker-config' / (root.name + '.json')).unlink(missing_ok=True)
+                raise
             def capture(stream):
                 try:
                     while data := stream.read1(4096):
                         log_run.writer.write(data.decode('utf-8', errors='replace'))
                 finally:
                     stream.close()
-            threading.Thread(target=capture, args=(process.stdout,), daemon=True).start()
             try:
+                threading.Thread(target=capture, args=(process.stdout,), daemon=True).start()
                 if chat_id:
-                    worker.frontend = await asyncio.to_thread(subprocess.Popen, [node, str(script), 'serve', str(root), str(port), str(frontend_port)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    worker.frontend = await spawn([node, str(script), 'serve', str(root), str(port), str(frontend_port)], group=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                     threading.Thread(target=capture, args=(worker.frontend.stdout,), daemon=True).start()
                 async with httpx.AsyncClient(trust_env=False) as client:
                     for _ in range(200):
@@ -289,9 +306,14 @@ class ToolWorkers:
 
     async def close(self, project, name, chat_id=None):
         key = self.key(project, name, chat_id)
+        async with self.start_locks.setdefault(key, asyncio.Lock()):
+            await self._close(project, name, chat_id)
+
+    async def _close(self, project, name, chat_id=None):
+        key = self.key(project, name, chat_id)
         worker = self.items.get(key)
         if worker:
-            state = await self.status(worker) if worker.process.poll() is None else {'running': False}
+            state = await self._prepare_exit(worker) if worker.process.poll() is None else {'running': False}
             if state.get('running'):
                 async with httpx.AsyncClient(trust_env=False) as client:
                     await client.post(f'http://127.0.0.1:{worker.port}/api/sdk/cancel', headers={'Authorization': 'Bearer ' + worker.token})
@@ -310,9 +332,33 @@ class ToolWorkers:
             await self.close(project, name, chat_id)
 
     async def shutdown(self):
-        for worker in list(self.items.values()):
+        self.stopping = True
+        # Drain starts that have not yet registered their process handles.
+        for lock in tuple(self.start_locks.values()):
+            async with lock:
+                pass
+        for key, worker in tuple(self.items.items()):
             await worker.stop()
-        self.items.clear()
+            self.items.pop(key, None)
+
+    async def _prepare_exit(self, worker):
+        async with httpx.AsyncClient(trust_env=False, timeout=2) as client:
+            response = await client.post(
+                f'http://127.0.0.1:{worker.port}/api/sdk/prepare-exit',
+                headers={'Authorization': 'Bearer ' + worker.token, 'X-Calabash-Host': worker.host_token})
+            response.raise_for_status()
+            return response.json()
+
+    async def prepare_exit(self):
+        self.stopping = True
+        for lock in tuple(self.start_locks.values()):
+            async with lock:
+                pass
+        ready = True
+        for worker in tuple(self.items.values()):
+            if worker.process.poll() is None and (await self._prepare_exit(worker)).get('running'):
+                ready = False
+        return ready
 
     async def monitor(self):
         while True:
@@ -325,12 +371,16 @@ class ToolWorkers:
             for chat_id, grant in tuple(bundle_debug.grants.items()):
                 if time.monotonic() - grant['time'] > 600 or grant['worker'].process.poll() is not None:
                     bundle_debug.grants.pop(chat_id, None)
+            for key, item in tuple(self.items.items()):
+                broken = item.process.poll() is not None or (item.frontend and item.frontend.poll() is not None)
+                if broken:
+                    self.detached.add(key)
             for key in tuple(self.detached):
                 item = self.items.get(key)
                 try:
                     if item and (item.process.poll() is not None or not (await self.status(item)).get('running')) and key in self.detached:
                         await self.close(*key)
-                except httpx.HTTPError:
+                except (httpx.HTTPError, ValueError):
                     continue  # Unknown state must not terminate a possible writer.
             directory = os.environ.get('CALABASH_SELECTION_DIR')
             if directory:

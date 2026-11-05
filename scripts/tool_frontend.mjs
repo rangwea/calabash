@@ -4,7 +4,23 @@ import vue from '@vitejs/plugin-vue'
 import { dirname, resolve, relative, isAbsolute, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { writeFileSync, copyFileSync, realpathSync, existsSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
+
+// The host owns stdin. EOF also cleans up a compiler whose Python host died.
+let checker
+let previewServer
+let stopping = false
+async function shutdown() {
+  if (stopping) return
+  stopping = true
+  checker?.kill()
+  await previewServer?.close()
+  process.exit(0)
+}
+process.stdin.resume()
+process.stdin.on('end', shutdown)
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)
 
 const libraryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const within = (base, file) => { const path = relative(base, file); return path === '' || path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path) }
@@ -68,8 +84,13 @@ if (mode === 'build') {
     vueCompilerOptions: { strictTemplates: true },
     include: ['frontend/**/*.vue', 'frontend/**/*.ts', 'host-components.d.ts', resolve(libraryRoot, 'node_modules/element-plus/global.d.ts')],
   }))
-  const check = spawnSync(process.execPath, [resolve(libraryRoot, 'node_modules/vue-tsc/bin/vue-tsc.js'), '--project', resolve(root, 'tsconfig.json'), '--noEmit'], { stdio: 'inherit' })
-  if (check.status !== 0) throw new Error('Tool Vue/TypeScript validation failed')
+  const status = await new Promise((resolveStatus, reject) => {
+    checker = spawn(process.execPath, [resolve(libraryRoot, 'node_modules/vue-tsc/bin/vue-tsc.js'), '--project', resolve(root, 'tsconfig.json'), '--noEmit'], { stdio: ['ignore', 'inherit', 'inherit'] })
+    checker.once('error', reject)
+    checker.once('close', resolveStatus)
+  })
+  checker = undefined
+  if (status !== 0) throw new Error('Tool Vue/TypeScript validation failed')
   try { await build(config) } catch (error) {
     const file = typeof error.loc?.file === 'string' ? error.loc.file : error.id
     const path = typeof file === 'string' ? relative(root, file.split('?')[0]).replaceAll('\\', '/') : ''
@@ -80,5 +101,6 @@ if (mode === 'build') {
     writeFileSync(resolve(root, 'build-diagnostics.json'), JSON.stringify(diagnostic))
     throw error
   }
+  process.stdin.destroy()
 }
-else { const server = await createServer(config); await server.listen(); console.log('CALABASH_TOOL_READY', server.resolvedUrls.local[0]); }
+else { previewServer = await createServer(config); await previewServer.listen(); console.log('CALABASH_TOOL_READY', previewServer.resolvedUrls.local[0]); }

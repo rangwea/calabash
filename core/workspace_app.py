@@ -22,10 +22,16 @@ def create_workspace_app():
         import asyncio
 
         from service.tools.tool_workers import workers
+        from service.tools.tool_checks import checks
+        from service.tools.exit_handshake import watch
+        workers.stopping = False
         monitor = asyncio.create_task(workers.monitor())
+        exit_task = asyncio.create_task(watch(workers, checks, runs))
         try:
             yield
         finally:
+            exit_task.cancel()
+            await asyncio.gather(exit_task, return_exceptions=True)
             monitor.cancel()
             await asyncio.gather(monitor, return_exceptions=True)
             from service.tools.tool_checks import checks
@@ -45,6 +51,10 @@ def create_workspace_app():
         if request.headers.get('sec-fetch-site') in {'cross-site', 'same-site'}:
             return JSONResponse({'detail': 'Foreign request'}, status_code=403)
         if request.url.path.startswith('/api/'):
+            from service.tools.tool_workers import workers
+            if workers.stopping and request.method not in {'GET', 'HEAD'}:
+                from core.i18n import t
+                return JSONResponse({'detail': t('应用正在安全退出，暂不接受新任务')}, status_code=409)
             if request.cookies.get('calabash-session') != token:
                 return JSONResponse({'detail': 'Session unavailable'}, status_code=403)
             if request.method not in {'GET', 'HEAD'} and request.headers.get('x-calabash-request') != 'workspace':

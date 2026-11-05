@@ -1,4 +1,5 @@
 {
+  "工具界面已断开，请等待当前任务完成后重新打开": "The tool interface disconnected. Wait for the current task to finish, then reopen it.",
   "正在生成回复": "Generating a reply",
   "模型未返回可用内容，请重试或选择其他模型": "The model returned no usable content. Retry or choose another model.",
   "模型输出达到长度限制，本次未完成的工具调用未执行，请重试": "The model output reached its length limit. Incomplete tool calls were not executed. Please retry.",

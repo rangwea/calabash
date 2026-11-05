@@ -33,6 +33,10 @@ fn active_job_count(directory: &std::path::Path) -> u64 {
 
 fn request_safe_exit(app: &tauri::AppHandle) {
     if app.state::<SafeExit>().0.swap(true, Ordering::SeqCst) { return; }
+    if active_job_count(&app.state::<NativeSelections>().0) == 0 {
+        begin_safe_exit(app);
+        return;
+    }
     let english = interface_language() == "en";
     let handle = app.clone();
     app.dialog().message(if english {
@@ -47,18 +51,30 @@ fn request_safe_exit(app: &tauri::AppHandle) {
             handle.state::<SafeExit>().0.store(false, Ordering::SeqCst);
             return;
         }
-        let directory = handle.state::<NativeSelections>().0.clone();
-        if std::fs::write(directory.join("stop-jobs"), b"").is_err() {
-            handle.state::<SafeExit>().0.store(false, Ordering::SeqCst);
-            handle.dialog().message(if english { "Unable to stop safely. Keep the app open and cancel from the tool." } else { "无法安全停止，请保持应用打开并在工具中取消任务。" }).show(|_| {});
-            return;
+        begin_safe_exit(&handle);
+    });
+}
+
+fn backend_running(app: &tauri::AppHandle) -> bool {
+    let Some(backend) = app.try_state::<BackendProcess>() else { return false; };
+    let Ok(mut child) = backend.0.lock() else { return true; };
+    child.as_mut().is_some_and(|process| !matches!(process.try_wait(), Ok(Some(_))))
+}
+
+fn begin_safe_exit(handle: &tauri::AppHandle) {
+    let handle = handle.clone();
+    let english = interface_language() == "en";
+    let directory = handle.state::<NativeSelections>().0.clone();
+    if std::fs::write(directory.join("stop-jobs"), b"").is_err() {
+        handle.state::<SafeExit>().0.store(false, Ordering::SeqCst);
+        handle.dialog().message(if english { "Unable to stop safely. Keep the app open and cancel from the tool." } else { "无法安全停止，请保持应用打开并在工具中取消任务。" }).show(|_| {});
+        return;
+    }
+    thread::spawn(move || {
+        while !directory.join("exit-ready").is_file() && backend_running(&handle) {
+            thread::sleep(Duration::from_millis(200));
         }
-        thread::spawn(move || {
-            while active_job_count(&directory) != 0 {
-                thread::sleep(Duration::from_millis(200));
-            }
-            handle.exit(0);
-        });
+        handle.exit(0);
     });
 }
 
@@ -454,10 +470,8 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let active = active_job_count(&window.app_handle().state::<NativeSelections>().0);
                 eprintln!("Calabash close requested; active tool tasks: {active}");
-                if active > 0 {
-                    api.prevent_close();
-                    request_safe_exit(window.app_handle());
-                }
+                api.prevent_close();
+                request_safe_exit(window.app_handle());
                 return;
             }
             let tauri::WindowEvent::DragDrop(event) = event else { return };
@@ -479,7 +493,7 @@ pub fn run() {
             RunEvent::ExitRequested { api, .. } => {
                 let active = active_job_count(&app_handle.state::<NativeSelections>().0);
                 eprintln!("Calabash exit requested; active tool tasks: {active}");
-                if active > 0 {
+                if !app_handle.state::<NativeSelections>().0.join("exit-ready").is_file() && backend_running(app_handle) {
                     api.prevent_exit();
                     request_safe_exit(app_handle);
                 } else if let Some(backend) = app_handle.try_state::<BackendProcess>() {
