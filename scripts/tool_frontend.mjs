@@ -17,6 +17,8 @@ const config = {
     { name: 'calabash-source-boundary', enforce: 'pre',
       resolveId(source, importer) {
         if (!importer || !within(resolve(root, 'frontend'), importer.split('?')[0])) return
+        if (source === '@calabash/api') return
+        if (isAbsolute(source) && source.split('?')[0] === resolve(root, 'calabash-api.ts')) return
         if (source === '\0plugin-vue:export-helper' || source === '/@vite/client') return
         if (isAbsolute(source) && within(resolve(root, 'frontend'), source.split('?')[0])) return
         if (isAbsolute(source) && ['vue', 'element-plus', '@element-plus/icons-vue', 'echarts'].some(name => within(resolve(libraryRoot, 'node_modules', name), source.split('?')[0]))) return
@@ -30,7 +32,7 @@ const config = {
         server.middlewares.use((req, res, next) => {
           let path
           try { path = decodeURIComponent((req.url || '/').split('?')[0]) } catch { res.statusCode = 400; return res.end() }
-          const generated = ['/entry.ts', '/probe.js', '/runtime-ui.mjs']
+          const generated = ['/entry.ts', '/probe.js', '/runtime-ui.mjs', '/calabash-api.ts', '/calabash-client.ts']
           if (path.startsWith('/@fs/')) {
             const file = resolve(process.platform === 'win32' ? path.slice(5) : path.slice(4))
             if (!within(resolve(libraryRoot, 'node_modules'), file) && !within(resolve(root, 'frontend'), file) && !generated.some(name => file === resolve(root, '.' + name))) { res.statusCode = 403; return res.end() }
@@ -40,6 +42,7 @@ const config = {
       },
     }, vue()],
   resolve: { alias: {
+    '@calabash/api': resolve(root, 'calabash-api.ts'),
     vue: resolve(libraryRoot, 'node_modules/vue/dist/vue.esm-bundler.js'),
     'element-plus': resolve(libraryRoot, 'node_modules/element-plus'),
     '@element-plus/icons-vue': resolve(libraryRoot, 'node_modules/@element-plus/icons-vue/dist/index.js'),
@@ -53,10 +56,12 @@ const config = {
 writeFileSync(resolve(root, 'index.html'), '<!doctype html><html><head><script src="/api/sdk/runtime-guard.js"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#263445}html{--el-color-primary:#0f6cbd}.calabash-files{display:grid;gap:10px;margin:12px 0}.calabash-results,.calabash-job-status{margin:12px 0;font-size:13px}.calabash-results>div{padding:6px 0}.el-dialog{max-width:calc(100vw - 32px)}</style></head><body><div id="app"></div><script type="module" src="/entry.ts"></script></body></html>')
 copyFileSync(resolve(libraryRoot, 'component/frontend_probe.js'), resolve(root, 'probe.js'))
 copyFileSync(resolve(libraryRoot, 'scripts/tool_runtime_ui.mjs'), resolve(root, 'runtime-ui.mjs'))
+copyFileSync(resolve(libraryRoot, 'scripts/tool_api_client.ts'), resolve(root, 'calabash-client.ts'))
 const themeImport = existsSync(resolve(root, 'frontend/calabash-theme.css')) ? "import './frontend/calabash-theme.css';" : ''
 writeFileSync(resolve(root, 'entry.ts'), `import {createApp} from 'vue';import ElementPlus from 'element-plus';import 'element-plus/dist/index.css';import App from './frontend/App.vue';import * as components from './runtime-ui.mjs';import {installProbe} from './probe.js';${themeImport}document.querySelector('#app').className='calabash-tool';const transport=window.fetch.bind(window);const errors=[];const probe=installProbe(window,e=>{if(errors.length<40)errors.push(e)});const page=crypto.randomUUID();const app=createApp(App).use(ElementPlus);for(const [name,component] of Object.entries(components))app.component(name,component);app.mount('#app');async function poll(){while(true){try{const command=await(await transport('/api/sdk/debug/next')).json();if(command.id){let result=command.operation==='snapshot'?{page,...probe.snapshot(),events:errors}:probe.operate(command.request);await transport('/api/sdk/debug/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:command.id,result})});}}catch{}await new Promise(r=>setTimeout(r,250));}}poll();`)
 if (mode === 'build') {
   const paths = Object.fromEntries(['vue', 'element-plus', '@element-plus/icons-vue', 'echarts'].flatMap(name => [[name, [resolve(libraryRoot, 'node_modules', name)]], [name + '/*', [resolve(libraryRoot, 'node_modules', name, '*')]]]))
+  paths['@calabash/api'] = [resolve(root, 'calabash-api.ts')]
   writeFileSync(resolve(root, 'host-components.d.ts'), `import type {DefineComponent} from 'vue';declare module 'vue' {interface GlobalComponents {CalabashFiles:DefineComponent<any>;CalabashResults:DefineComponent<any>;CalabashJobStatus:DefineComponent<any>;CalabashChart:DefineComponent<any>}}export {};`)
   writeFileSync(resolve(root, 'tsconfig.json'), JSON.stringify({
     compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022', 'DOM', 'DOM.Iterable'], strict: true, skipLibCheck: true, noEmit: true, allowJs: true, checkJs: false, types: [], paths },

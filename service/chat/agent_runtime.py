@@ -87,6 +87,7 @@ class NoProgressMiddleware(AgentMiddleware):
         self.idle = 0
         self.warned = False
         self.signatures = []
+        self.delivery_prompted = False
 
     async def abefore_model(self, state, runtime):
         messages = state["messages"]
@@ -116,6 +117,30 @@ class NoProgressMiddleware(AgentMiddleware):
         self.last_count = count
         if self.idle >= 14:
             raise PublicAgentError(t("检测到重复操作，已暂停；请补充要求后继续"))
+        if (not self.delivery_prompted and calls and messages
+                and isinstance(messages[-1], ToolMessage)):
+            call, result = calls[-1]
+            path = call["args"].get("file_path")
+            if (call["name"] in {"write_file", "edit_file"} and isinstance(path, str)
+                    and path.startswith("/drafts/") and result.status != "error"
+                    and not str(result.content).startswith("Error:")):
+                parts = path.split("/")
+                if len(parts) >= 5 and parts[2] and parts[3]:
+                    prefix = "/".join(parts[:4]) + "/"
+                    required = ("tool.json", "frontend/App.vue", "backend/main.py")
+                    if all(sources.get(prefix + file) for file in required):
+                        self.delivery_prompted = True
+                        return {"messages": [SystemMessage(
+                            content=(
+                                f"Draft delivery checkpoint: {prefix} contains all required files. "
+                                "If the requested minimum behavior is implemented, call deliver_draft now "
+                                "with the current revision when required, then check_tool_build. "
+                                "Skip full-file rereads and rewrites for confidence. If the build fails, "
+                                "use its diagnostic to inspect the relevant lines and make a targeted edit. "
+                                "File presence alone does not prove completeness. Never publish here."
+                            ),
+                            id="calabash-delivery-hint",
+                        )]}
         if self.idle >= 6 and not self.warned:
             self.warned = True
             return {"messages": [SystemMessage(

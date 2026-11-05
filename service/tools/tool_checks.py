@@ -28,7 +28,8 @@ class Check:
 
 def compiler_version():
     node, script = frontend_runtime()
-    paths = [Path(node), script, script.parent / 'tool_runtime_ui.mjs',
+    paths = [Path(node), script, script.parent / 'tool_runtime_ui.mjs', script.parent / 'tool_api_client.ts',
+             Path(__file__).with_name('api_contracts.py'),
              script.parent.parent / 'component/frontend_probe.js', ROOT / 'package-lock.json']
     return tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in paths if p.exists())
 

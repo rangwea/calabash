@@ -35,6 +35,25 @@ class ProgressTests(unittest.IsolatedAsyncioTestCase):
         # New invocation starts with a clean investigation budget.
         await agent_runtime.NoProgressMiddleware().abefore_model(state, None)
 
+    async def test_delivery_hint_requires_complete_successful_draft_and_is_once(self):
+        guard = agent_runtime.NoProgressMiddleware()
+        prefix = '/drafts/demo/crm/'
+        state = {'messages': [
+            AIMessage(content='', tool_calls=[{'name': 'write_file', 'args': {'file_path': prefix + 'frontend/App.vue'}, 'id': 'write'}]),
+            ToolMessage(content='Updated', tool_call_id='write'),
+        ], 'files': {prefix + 'frontend/App.vue': {'content': ['<template>CRM</template>']}}}
+        self.assertIsNone(await guard.abefore_model(state, None))
+        for path in ('tool.json', 'backend/main.py'):
+            state['files'][prefix + path] = {'content': ['synthetic']}
+        state['messages'][-1] = ToolMessage(content='Error: rejected', tool_call_id='write', status='error')
+        self.assertIsNone(await guard.abefore_model(state, None))
+        state['messages'][-1] = ToolMessage(content='Updated', tool_call_id='write')
+        hint = await guard.abefore_model(state, None)
+        self.assertIn('deliver_draft', hint['messages'][0].content)
+        self.assertIsNone(await guard.abefore_model(state, None))
+        state['messages'].append(HumanMessage(content='Explain this tool'))
+        self.assertIsNone(await agent_runtime.NoProgressMiddleware().abefore_model(state, None))
+
     async def test_changed_source_resets_idle_budget(self):
         guard = agent_runtime.NoProgressMiddleware()
         state = {'messages': [], 'files': {}}

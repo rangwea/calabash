@@ -64,8 +64,12 @@ class ToolSDK:
         status = value.get('status', 0)
         if type(status) is not int or not 0 <= status <= 599:
             raise HTTPException(400, 'Invalid issue record')
+        request_id = value.get('request_id', '')
+        import re
+        if not isinstance(request_id, str) or request_id and not re.fullmatch(r'[a-f0-9]{32}', request_id):
+            raise HTTPException(400, 'Invalid issue record')
         # No request body, query, frontend message or browser stack is accepted.
-        get_logger(__name__).error('Tool browser issue: kind={} status={}', value['kind'], status)
+        get_logger(__name__).error('Tool browser issue: kind={} status={} request_id={}', value['kind'], status, request_id)
         return {'ok': True}
 
     def status(self):

@@ -25,6 +25,8 @@ def create_tool_app(config):
         yield
         await sdk.shutdown()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    from service.tools.api_errors import failure, install
+    install(app, root)
 
     @app.middleware('http')
     async def authorize(request: Request, call_next):
@@ -41,7 +43,12 @@ def create_tool_app(config):
             return JSONResponse({'detail': 'Foreign request'}, status_code=403)
         if request.url.path != '/health' and not bootstrap and token != config['token']:
             return JSONResponse({'detail': 'Session unavailable'}, status_code=403)
-        response = await call_next(request)
+        from uuid import uuid4
+        request.state.api_request_id = uuid4().hex
+        try:
+            response = await call_next(request)
+        except Exception as error:  # noqa: BLE001 - isolate arbitrary user-tool failures at the HTTP boundary.
+            response = failure(request, error, root)
         if bootstrap:
             response.set_cookie(cookie, config['token'], httponly=True, samesite='strict')
         response.headers['Referrer-Policy'] = 'no-referrer'

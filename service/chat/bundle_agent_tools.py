@@ -225,10 +225,28 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
     @tool
     def read_ui_reference(name: str = 'vue-tool.md') -> str:
         """Read the bundled Vue/Element Plus authoring contract and example. Does not read user files."""
-        if name not in {'vue-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md'}:
+        if name not in {'vue-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md', 'api-contract.md'}:
             raise ValueError('Unknown reference')
         from pathlib import Path
         return (Path(__file__).resolve().parents[2] / 'agent/skills/calabash/references' / name).read_text()
+
+    @tool
+    def read_api_contract(project: str, name: str, operation: str = '') -> str:
+        """Read statically derived Python API operation types for the current source revision. No backend execution. Use operation_id as a literal filter. Never reads business data."""
+        guard(project, name)
+        if len(operation) > 80:
+            raise ValueError('Invalid operation filter')
+        source = read(project, name)
+        from service.tools.api_contracts import ContractError, extract
+        try:
+            contract = extract(source['files'])
+        except ContractError as error:
+            return result({'error': 'api_contract_invalid', 'revision': source['revision'], 'diagnostic': error.diagnostic})
+        operations = [item for item in contract['operations'] if not operation or item['name'] == operation]
+        return result({'revision': source['revision'], 'operations': operations[:20],
+                       'models': {key: value[:2000] for key, value in list(contract['models'].items())[:6]} if operation else list(contract['models']),
+                       'models_truncated': bool(operation and (len(contract['models']) > 6 or any(len(value) > 2000 for value in contract['models'].values()))),
+                       'total': len(operations), 'note': 'Import api and model types from @calabash/api. Read one operation to expand model declarations. Static types and a build are not business acceptance.'})
 
     @tool
     def read_component_api(component: str, property_name: str = "", full: bool = False, offset: int = 0) -> str:
@@ -320,7 +338,7 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
 
     operations = [list_tools, read_tool, read_tool_file, search_code, write_tool, patch_tool_file,
             validate_tool, check_tool_build, read_build_diagnostics, read_ui_reference, read_ui_preset, read_task_context, set_task_brief, list_attachments, read_attachment,
-            inspect_preview, interact_preview, verify_preview, read_tool_logs, read_component_api,
+            inspect_preview, interact_preview, verify_preview, read_tool_logs, read_component_api, read_api_contract,
             stage_tool, deliver_draft]
 
     def sync_wrapper(operation):

@@ -80,7 +80,9 @@ def build_diagnostics(root):
         try:
             value = json.loads(diagnostic.read_text())
             item = {'code': 'VITE', 'message': 'Vue 编译失败，请检查此处语法或导入'}
-            if isinstance(value.get('file'), str) and value['file'].startswith('frontend/'):
+            if value.get('code') == 'API_CONTRACT':
+                item = {'code': 'API_CONTRACT', 'message': str(value.get('message', '接口契约检查失败'))[:300]}
+            if isinstance(value.get('file'), str) and value['file'].startswith(('frontend/', 'backend/')):
                 item['file'] = bundles.safe_path(value['file'])
             for key in ('line', 'column'):
                 if type(value.get(key)) is int and 0 < value[key] < 1000000:
@@ -99,6 +101,13 @@ async def build_bundle(files):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
+    from service.tools.api_contracts import ContractError, prepare
+    try:
+        prepare(root, files)
+    except ContractError as error:
+        (root / 'build.log').write_text('API contract validation failed', encoding='utf-8')
+        (root / 'build-diagnostics.json').write_text(json.dumps(error.diagnostic), encoding='utf-8')
+        raise FrontendBuildError(root) from error
     node, script = frontend_runtime()
     with (root / 'build.log').open('ab') as output:
         process = await asyncio.create_subprocess_exec(node, str(script), 'build', str(root), stdout=output, stderr=output)
@@ -218,6 +227,8 @@ class ToolWorkers:
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content)
+            from service.tools.api_contracts import prepare
+            prepare(root, source['files'])
             node, script = frontend_runtime()
             if not chat_id:
                 published_dist = bundles.directory(project, name) / 'dist'

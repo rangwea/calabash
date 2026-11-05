@@ -6,13 +6,13 @@
   const en = typeof guardLanguage !== 'undefined' && guardLanguage === 'en'
   const friendly = en ? 'The tool could not complete this action. Please try again or ask AI to fix it.' : '工具暂时未能完成操作，请重试或让 AI 帮你修复'
   const sent = new Set()
-  function report(kind, path = '', status = 0, needsRepair = true) {
+  function report(kind, path = '', status = 0, needsRepair = true, requestId = '') {
     const key = kind + path + status
     if (sent.has(key)) return
     if (sent.size >= 20) return
     sent.add(key)
     if (needsRepair && window.parent !== window) window.parent.postMessage({kind: 'calabash-tool-issue'}, '*')
-    void original('/api/sdk/runtime-issue', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,path,status})}).catch(() => {})
+    void original('/api/sdk/runtime-issue', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,status,request_id: /^[a-f0-9]{32}$/.test(requestId) ? requestId : ''})}).catch(() => {})
   }
   window.fetch = async (...args) => {
     let url
@@ -26,7 +26,7 @@
       throw new Error(friendly)
     }
     if (!response.ok) {
-      report('request_failed', url.pathname, response.status, response.status >= 500)
+      report('request_failed', url.pathname, response.status, response.status >= 500, response.headers?.get('X-Calabash-Request-Id') || '')
       const message = response.status >= 500 ? friendly : en ? 'Please check your entries or selected files and try again.' : '请检查填写的内容或所选文件后重试'
       throw new Error(message)
     }

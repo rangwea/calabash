@@ -16,3 +16,5 @@ description: 创建、修改、诊断和验收 Calabash 本地 Vue + Element Plu
 7. 用户不需要理解编码术语；只说明工具是否可用和下一步操作，不展示错误码、源码版本或文件行号。构建失败先用 read_build_diagnostics 查询本机当前版本的问题记录。交付或修改后调用 check_tool_build，使用与保存相同的严格类型检查和生产构建；修复返回的文件、行号和错误码，再检查。源码变化后重新检查，不绕过类型校验。区分静态校验、构建成功、渲染成功与业务验收；没有证据不能声称修复成功。
 
 随包库清单见 [运行库目录](references/runtime-libraries.json)。可选能力仅通过用户确认导入签名插件 ZIP，不下载或安装系统程序。
+
+接口契约与业务验收参考 references/api-contract.md。新建 JSON 业务接口优先使用 Python 类型生成的 @calabash/api，构建校验字段一致性，运行时记录操作标识和安全诊断。

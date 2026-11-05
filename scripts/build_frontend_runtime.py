@@ -73,6 +73,7 @@ def build_runtime():
     shutil.copy2(ROOT / 'scripts/tool_frontend.mjs', destination / 'scripts/tool_frontend.mjs')
     shutil.copy2(ROOT / 'scripts/tool_runtime_ui.mjs', destination / 'scripts/tool_runtime_ui.mjs')
     shutil.copy2(ROOT / 'scripts/tool_runtime_guard.js', destination / 'scripts/tool_runtime_guard.js')
+    shutil.copy2(ROOT / 'scripts/tool_api_client.ts', destination / 'scripts/tool_api_client.ts')
     (destination / 'component').mkdir()
     shutil.copy2(ROOT / 'component/frontend_probe.js', destination / 'component/frontend_probe.js')
     (destination / 'package.json').write_text(json.dumps({'private': True, 'type': 'module'}))

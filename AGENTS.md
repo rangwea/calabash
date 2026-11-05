@@ -96,6 +96,7 @@ with db_manager.session_scope() as session:
 虚拟草稿不访问磁盘；交付仍通过工具服务和受限修复服务。不启用 Shell、子 Agent 或外部 tracing。
 Agent 检查点位于 `~/.calabash/agent/checkpoints.sqlite`，操作回执位于同目录 `operations.sqlite`；使用各自服务/检查点公开 API，不直接修改内部表。
 API 密钥不得写入图状态、检查点配置或日志；模型对象中仅作为私有连接信息传递。
+新建 JSON 业务接口优先声明 Python Pydantic 请求/响应模型和 operation_id，前端通过 @calabash/api 使用静态生成的类型与调用方法。生成只解析源码，不导入执行工具，使用 read_api_contract 查询当前版本。契约不支持的动态类型显式报错，具体规则在内置 Skill 的 api-contract.md。接口诊断绑定当前运行，记录操作、请求标识与安全的字段/调用位置，不记录请求正文或查询值。
 新增文件工具优先使用已有文件输入、结果输出和 `CalabashFiles`、`CalabashResults`、`CalabashJobStatus` 和 `ToolSDK` / `ToolJobs` API。
 取消采用安全停止：当前文件处理完成，再停止后续任务，不强行中断写文件。
 错误交给 Agent 修复须用户确认；修复后由用户手动重试。

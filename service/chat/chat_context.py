@@ -80,7 +80,7 @@ def _compact_tool_sources(turn, budget):
     reference_reads = {call.get("id"): call.get("function", {}).get("name")
                        for item in compact for call in item.get("tool_calls", [])
                        if call.get("function", {}).get("name") in {
-                           "read_ui_reference", "read_ui_preset", "read_component_api", "read_tool_file"}}
+                           "read_ui_reference", "read_ui_preset", "read_component_api", "read_api_contract", "read_tool_file"}}
     for item in compact:
         if len(json.dumps(compact, ensure_ascii=False)) <= budget:
             break
@@ -97,7 +97,7 @@ def _compact_tool_sources(turn, budget):
         if isinstance(result, dict) and "error" not in result and result.get("success") is not False:
             # Preserve identity/revision and retrieval metadata, discard only
             # repeatable successful reference/source payloads.
-            for key in ("files", "rules", "tokens", "example", "content", "lines", "declarations"):
+            for key in ("files", "rules", "tokens", "example", "content", "lines", "declarations", "models", "operations"):
                 if key in result:
                     result[key] = "[Snapshot omitted. Query this reference or current source only if needed.]"
             item["content"] = json.dumps(result, ensure_ascii=False)
