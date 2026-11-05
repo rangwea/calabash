@@ -1,33 +1,18 @@
+import json
 import unittest
 
-from service.tools.tool_metadata import parse_tool_metadata
+from service.tools.tool_bundles import validate
+from tests.test_vue_workspace import fixture
 
 
-class ToolMetadataTest(unittest.TestCase):
-    def test_parses_normalized_docstring_fields(self):
-        content = '''"""
-        Name: Sales Dashboard
-        description: Revenue: monthly trend
-        Tags: sales, finance
-        """
-'''
-
-        self.assertEqual(
-            parse_tool_metadata(content),
-            {
-                "name": "Sales Dashboard",
-                "description": "Revenue: monthly trend",
-                "tags": "sales, finance",
-            },
-        )
-
-    def test_returns_empty_metadata_without_module_docstring(self):
-        self.assertEqual(parse_tool_metadata("VALUE = 1\n"), {})
-
-    def test_propagates_invalid_python_syntax(self):
-        with self.assertRaises(SyntaxError):
-            parse_tool_metadata("def broken(:\n")
-
-
-if __name__ == "__main__":
-    unittest.main()
+class ToolMetadataTests(unittest.TestCase):
+    def test_manifest_identity_and_capabilities(self):
+        files = fixture()
+        manifest = json.loads(files['tool.json'])
+        manifest['requires'] = 'media.ffmpeg>=9.0.2'
+        files['tool.json'] = json.dumps(manifest)
+        self.assertEqual('demo', validate(files)['project'])
+        manifest['requires'] = 'https://untrusted.invalid/install'
+        files['tool.json'] = json.dumps(manifest)
+        with self.assertRaises(ValueError):
+            validate(files)

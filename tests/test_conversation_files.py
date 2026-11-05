@@ -2,13 +2,20 @@ import asyncio
 import os
 import tempfile
 import unittest
-from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
 from service.chat import ai_chat
 from service.files import conversation_files as files
 
+
+class SmallFileUpload:
+    def __init__(self, name, content_type, data):
+        self.name, self.data = name, data
+    def size(self):
+        return len(self.data)
+    async def iterate(self):
+        yield self.data
 
 class ConversationFilesTests(unittest.TestCase):
     def setUp(self):
@@ -89,7 +96,6 @@ class ConversationFilesTests(unittest.TestCase):
                 files.consume_selection("one", "../sample")
 
     def test_upload_limit_and_cleanup(self):
-        from nicegui.elements.upload_files import SmallFileUpload
         with patch.object(files, "UPLOAD_LIMIT", 10):
             upload = SmallFileUpload("../../safe.txt", "text/plain", b"ok")
             item = asyncio.run(files.store_upload("one", upload))
@@ -141,7 +147,6 @@ class ConversationFilesTests(unittest.TestCase):
         self.assertEqual([], list(files.upload_dir().iterdir()))
 
     def test_cleanup_keeps_referenced_upload(self):
-        from nicegui.elements.upload_files import SmallFileUpload
         item = asyncio.run(files.store_upload("one", SmallFileUpload("file.txt", "", b"ok")))
         path = Path(files.get_record("one", item["id"])["path"])
         files.cleanup_uploads(now=path.stat().st_mtime + 86401)

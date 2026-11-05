@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 
 from loguru import logger
 
@@ -8,9 +7,6 @@ from core.local_paths import logs_dir
 
 # App logs are separate from per-run tool logs managed by core.tool_run_logs.
 LOG_BASE_DIR = logs_dir()
-
-_TMP_DIR = Path("/tmp/nicegui_client_tools")
-"""预览临时文件目录: /tmp/nicegui_client_tools/{token}.py"""
 
 # ── 日志格式 ────────────────────────────────────────────────────────────────────
 _CONSOLE_FORMAT = (
@@ -57,6 +53,8 @@ def setup_logger():
         format=_CONSOLE_FORMAT,
         level="INFO",
         colorize=True,
+        backtrace=False,
+        diagnose=False,
     )
 
     # 创建日志目录
@@ -71,6 +69,8 @@ def setup_logger():
         retention="30 days",
         compression="zip",
         encoding="utf-8",
+        backtrace=False,
+        diagnose=False,
     )
 
     # 文件输出 - 错误日志
@@ -82,6 +82,8 @@ def setup_logger():
         retention="30 days",
         compression="zip",
         encoding="utf-8",
+        backtrace=False,
+        diagnose=False,
     )
 
     return logger
@@ -110,7 +112,3 @@ def get_logger(name: str = ""):
 
 def get_tool_logger(tool_type: str, tool_name: str):
     return logger.bind(name=f'tool.{tool_type}.{tool_name}', tool_type=tool_type, tool_name=tool_name)
-
-
-def get_preview_logger(token: str):
-    return logger.bind(name=f'preview.{token}', preview_token=token)

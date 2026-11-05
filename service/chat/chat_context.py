@@ -18,7 +18,7 @@ def _compact_tool_sources(turn, budget):
         for call in item.get("tool_calls", []):
             function = call.get("function", {})
             if call.get("id") not in results or function.get("name") not in {
-                "write_tool", "validate_tool", "preview_tool", "write_file", "edit_file"
+                "write_tool", "validate_tool", "preview_tool", "write_file", "edit_file", "patch_tool_file"
             }:
                 continue
             try:
@@ -35,7 +35,11 @@ def _compact_tool_sources(turn, budget):
                 continue
             if not isinstance(arguments, dict):
                 continue
-            fields = ("old_string", "new_string") if function.get("name") == "edit_file" else ("content",)
+            fields = ("old_string", "new_string", "old", "new", "content")
+            if isinstance(arguments.get("files"), dict):
+                arguments["files"] = {path: "[Executed source omitted. Read current draft before editing.]" for path in arguments["files"]}
+                omitted = True
+                function["arguments"] = json.dumps(arguments, ensure_ascii=False)
             if not any(isinstance(arguments.get(field), str) for field in fields):
                 continue
             for field in fields:
@@ -72,6 +76,31 @@ def _compact_tool_sources(turn, budget):
             break
         if item.get("role") == "tool" and item.get("tool_call_id") in draft_reads and not item.get("content", "").startswith("Error:"):
             item["content"] = "[Virtual draft read omitted. Use read_file for its current content.]"
+            omitted = True
+    reference_reads = {call.get("id"): call.get("function", {}).get("name")
+                       for item in compact for call in item.get("tool_calls", [])
+                       if call.get("function", {}).get("name") in {
+                           "read_ui_reference", "read_ui_preset", "read_component_api", "read_tool_file"}}
+    for item in compact:
+        if len(json.dumps(compact, ensure_ascii=False)) <= budget:
+            break
+        name = reference_reads.get(item.get("tool_call_id"))
+        if item["role"] != "tool" or not name:
+            continue
+        try:
+            result = json.loads(item.get("content", ""))
+        except (ValueError, TypeError):
+            if name == "read_ui_reference" and not item.get("content", "").startswith("Error:"):
+                item["content"] = "[UI reference omitted. Read the named reference again only if needed.]"
+                omitted = True
+            continue
+        if isinstance(result, dict) and "error" not in result and result.get("success") is not False:
+            # Preserve identity/revision and retrieval metadata, discard only
+            # repeatable successful reference/source payloads.
+            for key in ("files", "rules", "tokens", "example", "content", "lines", "declarations"):
+                if key in result:
+                    result[key] = "[Snapshot omitted. Query this reference or current source only if needed.]"
+            item["content"] = json.dumps(result, ensure_ascii=False)
             omitted = True
     return compact, omitted
 

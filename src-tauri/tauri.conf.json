@@ -33,7 +33,7 @@
   },
   "bundle": {
     "active": true,
-    "resources": ["../LICENSE", "../NOTICE"],
+    "resources": {"../LICENSE": "LICENSE", "../NOTICE": "NOTICE", "../build/frontend-runtime/": "frontend-runtime/"},
     "targets": ["app", "dmg"],
     "externalBin": ["binaries/calabash-backend"],
     "icon": [

@@ -9,12 +9,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 
 from service.chat import ai_chat
-from service.files import conversation_files
-from service.files import file_readers
-from service.files import tool_inputs
-from service.files import tool_outputs
-from service.files.tool_input_selection import ToolInputSelection
-from service.tools.tool_jobs import ToolJobs
+from service.files import conversation_files, file_readers, tool_outputs
 
 
 class OfficeWorkflowTests(unittest.IsolatedAsyncioTestCase):
@@ -31,8 +26,7 @@ class OfficeWorkflowTests(unittest.IsolatedAsyncioTestCase):
         item = conversation_files.register("office", path)
         messages = [{"role": "user", "content": "Analyze by team", "attachments": [item["id"]]}]
         ai_chat.save_chat("office", messages)
-        token = tool_inputs.create("office", "office-preview", messages, tool_key="tool:demo/office")
-        return item, token
+        return item
 
     async def test_excel_structure_full_data_export_and_restored_history(self):
         source = self.root / "sales.xlsx"
@@ -46,14 +40,13 @@ class OfficeWorkflowTests(unittest.IsolatedAsyncioTestCase):
         workbook.save(source)
         workbook.close()
         original = source.read_bytes()
-        item, token = self.attach(source)
+        item = self.attach(source)
         structure = await file_readers.read_attachment("office", item["id"])
         self.assertEqual(["Sales", "Notes"], [sheet["name"] for sheet in structure["sheets"]])
         sample = await file_readers.read_attachment("office", item["id"], sheet="Sales", limit=2)
         self.assertTrue(sample["truncated"])
-        selection = ToolInputSelection(tool_inputs.resolve(token, "office-preview"), context=(token, "office-preview"))
-        paths = selection.freeze()
-        owner = tool_inputs.owner(token, "office-preview")
+        paths = [str(source)]
+        owner = ("tool:demo/office", "office")
         outputs = tool_outputs.ToolOutputs(owner=owner)
 
         def write_report(destination):
@@ -71,10 +64,7 @@ class OfficeWorkflowTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 incoming.close()
 
-        try:
-            key = await asyncio.to_thread(outputs.write, "summary.xlsx", write_report)
-        finally:
-            selection.set_locked(False)
+        key = await asyncio.to_thread(outputs.write, "summary.xlsx", write_report)
         restored = tool_outputs.ToolOutputs(owner=owner)
         report = load_workbook(restored.path(key), read_only=True, data_only=True)
         try:
@@ -85,42 +75,3 @@ class OfficeWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(restored.files()[0]["available"])
         with self.assertRaises(KeyError):
             tool_outputs.ToolOutputs(owner=(owner[0], None)).path(key)
-
-    async def test_failed_batch_retries_original_inputs_and_restores_results(self):
-        first, broken, later = [self.root / name for name in ("first.txt", "broken.txt", "later.txt")]
-        first.write_text("first")
-        broken.write_bytes(b"\xff")
-        later.write_text("later")
-        originals = first.read_bytes(), later.read_bytes()
-        selection = ToolInputSelection([])
-        selection.add([first, broken, first])
-        jobs = ToolJobs(selection.freeze())
-        outputs = tool_outputs.ToolOutputs(owner=("tool:demo/batch", None))
-        calls = []
-
-        async def handle(path):
-            self.assertTrue(selection.locked)
-            self.assertFalse(selection.clear())
-            calls.append(path)
-
-            def write(destination):
-                destination.write_text(Path(path).read_text(encoding="utf-8").upper())
-
-            return await asyncio.to_thread(outputs.write, Path(path).name, write)
-
-        def changed():
-            selection.set_locked(jobs.running)
-
-        await jobs.run(handle, changed=changed)
-        self.assertEqual(["succeeded", "failed"], [job.status for job in jobs.jobs])
-        selection.clear()
-        selection.add([later])
-        broken.write_text("repaired")
-        await jobs.run(handle, retry_failed=True, changed=changed)
-        self.assertEqual([str(first), str(broken), str(broken)], calls)
-        self.assertEqual([str(later)], selection.paths())
-        restored = tool_outputs.ToolOutputs(owner=outputs.owner)
-        self.assertEqual(2, len(restored.files()))
-        self.assertEqual({outputs.id}, {row["run_id"] for row in restored.files()})
-        self.assertEqual({"FIRST", "REPAIRED"}, {restored.path(row["id"]).read_text() for row in restored.files()})
-        self.assertEqual(originals, (first.read_bytes(), later.read_bytes()))

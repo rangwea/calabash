@@ -1,4 +1,4 @@
-/* Calabash's Fluent-inspired light theme, shared by the launch and Python UI. */
+/* Calabash's Fluent-inspired light theme, shared by the Vue host and launch UI. */
 :root {
   --app-primary: #0f6cbd;
   --app-primary-hover: #115ea3;
@@ -29,9 +29,4 @@
   --app-control-height: 36px;
   --app-shadow-float: 0 8px 24px rgb(28 42 62 / 12%), 0 2px 4px rgb(28 42 62 / 6%);
   --app-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --q-primary: var(--app-primary);
-  --q-secondary: var(--app-secondary);
-  --q-positive: var(--app-success);
-  --q-warning: var(--app-warning);
-  --q-negative: var(--app-danger);
 }

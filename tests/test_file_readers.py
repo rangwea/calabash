@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from service.chat import ai_chat
-from service.files import file_readers
 from service.files import conversation_files as files
+from service.files import file_readers
 
 
 class FileReaderTests(unittest.IsolatedAsyncioTestCase):

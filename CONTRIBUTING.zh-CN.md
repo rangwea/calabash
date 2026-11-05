@@ -37,16 +37,16 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 | 路径 | 职责 |
 | --- | --- |
-| `src-tauri/`、`desktop-ui/` | 原生窗口、桌面桥接与启动页 |
+| `src-tauri/`、`desktop-ui/` | 原生窗口与 Vue + Element Plus 工作区 |
 | `backend/`、`main.py` | Python 后端与开发入口 |
-| `ui/`、`component/` | 页面与可复用界面组件 |
+| `api/`、`component/` | FastAPI 路由与隔离的前端诊断 |
 | `service/`、`api/` | 业务服务与本地内部 API |
 | `core/`、`models/` | 运行基础设施、国际化与数据模型 |
 | `agent/skills/calabash/` | 随 App 内置的 Agent Skill 与工具规范 |
 | `website/` | 独立中英文产品网站、指南与演示素材 |
 | `scripts/`、`tests/` | 构建脚本与回归测试 |
 
-技术栈：Tauri v2、Python、NiceGUI、FastAPI、SQLite。依赖以 `pyproject.toml`、`uv.lock` 和 npm 锁文件为准，不读取 `.env`。更多开发约定见 [AGENTS.md](AGENTS.md)；后续方向见 [Roadmap](ROADMAP.md)。
+技术栈：Tauri v2、Python、Vue + Element Plus、FastAPI、SQLite。依赖以 `pyproject.toml`、`uv.lock` 和 npm 锁文件为准，不读取 `.env`。更多开发约定见 [AGENTS.md](AGENTS.md)；后续方向见 [Roadmap](ROADMAP.md)。
 
 ### 聊天助手执行
 

@@ -17,8 +17,7 @@ const click = new Event('click', { cancelable: true });
 document.dispatchEvent(click);
 assert.equal(click.defaultPrevented, false, 'ordinary clicks are unchanged');
 
-const html = readFileSync(new URL('../desktop-ui/index.html', import.meta.url), 'utf8');
-assert.match(html, /class="window-frame" data-tauri-drag-region><\/div>/);
-assert.ok(!html.includes('frame-brand'));
-assert.ok(html.includes('<h1>Calabash</h1>'), 'centered startup branding is retained');
-console.log('Context menu and startup frame checks passed');
+const ui = readFileSync(new URL('../desktop-ui/src/App.vue', import.meta.url), 'utf8');
+assert.match(ui, /class="titlebar" data-tauri-drag-region/);
+assert.ok(ui.includes('<h1>Calabash</h1>'));
+console.log('Context menu and Vue window frame checks passed');

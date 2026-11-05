@@ -34,6 +34,10 @@ def _prepare_runtime(args: argparse.Namespace) -> tuple[str, int]:
 
 def main() -> None:
     multiprocessing.freeze_support()
+    if '--tool-worker' in sys.argv:
+        from backend.tool_worker import main as tool_worker
+        tool_worker()
+        return
     if "--file-reader" in sys.argv:
         from service.files.file_reader_worker import main as read_file
         read_file()

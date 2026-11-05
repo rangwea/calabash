@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from service.tools.tool_jobs import ToolJobs
 from service.files.tool_outputs import ToolOutputs
+from service.tools.tool_jobs import ToolJobs
 
 
 class OutputTests(unittest.TestCase):

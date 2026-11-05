@@ -37,16 +37,16 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 | Path | Purpose |
 | --- | --- |
-| `src-tauri/`, `desktop-ui/` | Native window, desktop bridge and startup screen |
+| `src-tauri/`, `desktop-ui/` | Native window and Vue + Element Plus workspace |
 | `backend/`, `main.py` | Python backend and development entry point |
-| `ui/`, `component/` | Pages and reusable UI components |
+| `api/`, `component/` | FastAPI routes and isolated frontend diagnostics |
 | `service/`, `api/` | Business services and internal local APIs |
 | `core/`, `models/` | Runtime infrastructure, localization and data models |
 | `agent/skills/calabash/` | Bundled agent skill and tool conventions |
 | `website/` | Independent bilingual website, guide and demo assets |
 | `scripts/`, `tests/` | Build scripts and regression tests |
 
-Built with Tauri v2, Python, NiceGUI, FastAPI and SQLite. Dependencies are defined in `pyproject.toml`, `uv.lock` and the npm lockfile. The app does not read `.env`. See [AGENTS.md](AGENTS.md) for development conventions and the [Roadmap](ROADMAP.md) for planned work.
+Built with Tauri v2, Python, Vue + Element Plus, FastAPI and SQLite. Dependencies are defined in `pyproject.toml`, `uv.lock` and the npm lockfile. The app does not read `.env`. See [AGENTS.md](AGENTS.md) for development conventions and the [Roadmap](ROADMAP.md) for planned work.
 
 ### Assistant execution
 

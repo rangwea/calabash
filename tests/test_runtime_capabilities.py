@@ -52,7 +52,14 @@ class RuntimeCapabilitiesTests(unittest.TestCase):
                 if command[0] == "uv":
                     (root / "calabash-backend").write_bytes(b"synthetic executable")
 
-            with patch.object(build, "BIN_DIR", root), patch.object(build, "PYINSTALLER_WORK_DIR", root / "work"), patch.object(build, "_host_triple", return_value="synthetic"), patch.object(build, "_run", side_effect=execute), patch.object(build.os, "name", "posix"):
+            with (
+                patch.object(build, 'BIN_DIR', root),
+                patch.object(build, 'PYINSTALLER_WORK_DIR', root / 'work'),
+                patch.object(build, '_host_triple', return_value='synthetic'),
+                patch.object(build, '_run', side_effect=execute),
+                patch.object(build.os, 'name', 'posix'),
+                patch('scripts.build_frontend_runtime.build_runtime', return_value=root),
+            ):
                 build.main()
             command = commands[0]
             for module in ("PIL", "reportlab", "pypdfium2", "pypdfium2_raw"):

@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from service.chat import ai_chat
-from service.files import tool_inputs
 from service.files import tool_outputs
 
 
@@ -106,15 +105,3 @@ class OutputHistoryTests(unittest.TestCase):
             writer.write("late.txt", export)
         self.assertEqual([], writer.files())
         self.assertFalse(list(writer.directory.glob("*.txt")))
-
-    def test_empty_attachment_preview_keeps_chat_owner(self):
-        ai_chat.save_chat("one", [])
-        token = tool_inputs.create("one", "preview-key", [], tool_key=self.owner[0])
-        self.assertTrue(token)
-        self.assertEqual([], tool_inputs.resolve(token, "preview-key"))
-        self.assertEqual((self.owner[0], "one"), tool_inputs.owner(token, "preview-key"))
-        with self.assertRaises(ValueError):
-            tool_inputs.owner(token, "wrong-preview")
-        ai_chat.delete_chat("one")
-        with self.assertRaises(ValueError):
-            tool_inputs.owner(token, "preview-key")

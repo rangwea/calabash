@@ -2,7 +2,11 @@ import copy
 import json
 import unittest
 
-from service.chat.chat_context import MAX_HISTORY_CHARACTERS, _compact_tool_sources, prepare
+from service.chat.chat_context import (
+    MAX_HISTORY_CHARACTERS,
+    _compact_tool_sources,
+    prepare,
+)
 
 
 class ChatContextCompactionTests(unittest.TestCase):

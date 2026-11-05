@@ -5,17 +5,16 @@ import logging
 import os
 import re
 import shutil
-import sqlite3
 import threading
 import time
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from uuid import uuid4
 
 from loguru import logger
 
-from core.local_paths import app_dir, logs_dir
+from core.local_paths import logs_dir
 
 KEEP_RUNS = 5
 MAX_AGE = 7 * 86400
@@ -51,11 +50,7 @@ def current_id():
     value = _current.get()
     if value:
         return value
-    try:
-        from nicegui import ui
-        return getattr(ui.context.client, 'calabash_log_run', None)
-    except (RuntimeError, AttributeError):
-        return None
+    return None
 
 
 def add_context(record):
@@ -146,6 +141,13 @@ class Run:
         target.propagate = False
 
     def retain(self):
+        if self.references == 0:
+            if not self.path.is_file() or self.path.is_symlink():
+                raise ValueError('Run logs are no longer available')
+            self.sink = logger.add(self.writer, format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}',
+                                   filter=lambda record: record['extra'].get('tool_run_id') == self.id,
+                                   backtrace=False, diagnose=False)
+            _active[self.id] = self
         self.references += 1
 
     def close(self):
@@ -198,22 +200,8 @@ def retain_current(run_id=None):
 
 
 def protected_runs():
-    protected = set(_active)
-    # Read-only application-owned repair records. Do not initialize/migrate DBs.
-    database = app_dir() / 'conversations.db'
-    if database.is_file() and not database.is_symlink():
-        try:
-            with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as db:
-                rows = db.execute("SELECT json_extract(data,'$.log_run_id') FROM tool_repairs WHERE state='queued' OR (state='running' AND started > datetime('now','-10 minutes'))")
-                protected.update(row[0] for row in rows if row[0])
-        except sqlite3.OperationalError as error:
-            if 'no such table' in str(error):
-                return protected
-            return None
-        except sqlite3.Error:
-            # Fail closed if repair ownership cannot be determined.
-            return None
-    return protected
+    # Worker and consent grants retain the public Run object until completion.
+    return set(_active)
 
 
 def cleanup(*, now=None):

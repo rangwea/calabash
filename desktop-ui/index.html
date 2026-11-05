@@ -4,23 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Calabash</title>
-    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <div class="window-frame" data-tauri-drag-region></div>
-    <main class="shell">
-      <div class="brand">
-        <div class="mark">C</div>
-        <div>
-          <h1>Calabash</h1>
-          <p id="status">Starting local runtime...</p>
-        </div>
-      </div>
-      <div class="loader" aria-label="正在启动">
-        <span></span><span></span><span></span>
-      </div>
-      <p class="hint">正在准备你的本地工具</p>
-    </main>
-    <script type="module" src="/src/main.js"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

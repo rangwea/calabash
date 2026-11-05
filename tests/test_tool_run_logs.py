@@ -1,14 +1,9 @@
 import asyncio
 import json
 import logging
-import os
-import sqlite3
-import subprocess
-import sys
 import tempfile
 import time
 import unittest
-from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,7 +16,7 @@ class RunLogsFixture:
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name)
-        for name, value in [('logs_dir', self.home / 'logs'), ('app_dir', self.home)]:
+        for name, value in [('logs_dir', self.home / 'logs')]:
             patcher = patch.object(logs, name, return_value=value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -84,15 +79,12 @@ class RunLogTests(RunLogsFixture, unittest.TestCase):
 
     def test_pending_active_repair_is_pinned_until_completion(self):
         run = self.start()
-        with closing(sqlite3.connect(self.home / 'conversations.db')) as db, db:
-            db.execute('CREATE TABLE tool_repairs(data TEXT, state TEXT, started TEXT)')
-            db.execute("INSERT INTO tool_repairs VALUES (?, 'queued', NULL)", (json.dumps({'log_run_id': run.id}),))
+        run.retain()  # A user-confirmed repair owns a public Run reference.
         self.age(run, logs.MAX_AGE + 60)
         run.close()
         logs.cleanup()
         self.assertTrue(run.path.exists())
-        with closing(sqlite3.connect(self.home / 'conversations.db')) as db, db:
-            db.execute("UPDATE tool_repairs SET state='completed'")
+        run.close()
         logs.cleanup()
         self.assertFalse(run.path.parent.exists())
 
@@ -134,24 +126,6 @@ class RunLogTests(RunLogsFixture, unittest.TestCase):
         self.assertTrue((unknown / 'unknown.txt').exists())
         with self.assertRaises(ValueError):
             logs.directory('demo', 'example', 'b' * 32)
-    def test_cli_defaults_to_latest_published_run_and_accepts_exact_run(self):
-        first = self.start()
-        first.writer.write('first-only\n')
-        second = self.start()
-        second.writer.write('second-only\n')
-        preview = self.start(preview_key='preview-only')
-        preview.writer.write('preview-hidden\n')
-        script = Path(__file__).resolve().parents[1] / 'agent/skills/calabash/scripts/tool-cli.py'
-        def invoke(*options):
-            process = subprocess.run([sys.executable, str(script), 'toollog', 'demo', 'example', *options],
-                                     env={**os.environ, 'CALABASH_HOME': str(self.home)}, capture_output=True, text=True, check=False)
-            self.assertEqual(0, process.returncode, process.stderr)
-            return process.stdout
-        output = invoke()
-        self.assertIn('second-only', output)
-        self.assertNotIn('first-only', output)
-        self.assertNotIn('preview-hidden', output)
-        self.assertIn('first-only', invoke('--run', first.id))
 
 
 class RunJobLogsTests(RunLogsFixture, unittest.IsolatedAsyncioTestCase):

@@ -2,7 +2,7 @@
 
 ## 产品边界
 
-本仓库是 Calabash 本地桌面应用：Tauri v2 壳、Python 3.13+ 后端、NiceGUI UI、SQLite。
+本仓库是 Calabash 本地桌面应用：Tauri v2 壳、Python 3.13+ 后端、Vue 3 + TypeScript + Element Plus UI、SQLite。
 工具直接保存在 `~/.calabash/tools`，由 AI Agent 创建和编辑。
 不提供登录、管理后台、远程数据源、平台变量管理、MySQL/MongoDB、远程发布或 Docker 部署。
 本机回环 HTTP 是桌面壳的内部通信实现，不是面向远程用户的服务。
@@ -19,11 +19,12 @@ npm run desktop:dev
 npm run desktop:build
 uvx --offline ruff check
 .venv/bin/python3 -m unittest discover -s tests
-node --test tests/tool_activity.test.mjs
+npm run check:frontend
+node --test tests/frontend_probe.test.mjs tests/context_menu.test.mjs tests/chat_composer.test.mjs
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-桌面构建使用 `scripts/build_desktop_sidecar.py` 将 Python 后端和内置依赖打包；最终用户无需安装 Python 或 uv。
+桌面构建使用 `scripts/build_desktop_sidecar.py` 将 Python 后端和内置依赖打包；最终用户无需安装 Python、uv 或 Node。`scripts/build_frontend_runtime.py` 校验并打包固定的官方 Node LTS 和编译依赖；作为 Tauri 资源分发，不塞入每次启动解压的 Python 单文件。
 Python 依赖以 `pyproject.toml` 和 `uv.lock` 为准，不维护第二份 requirements 文件，不读取 `.env`。
 名称与应用版本以根 `package.json` 的 productName / version 为准，Python 通过 `core.app_info` 读取，Tauri 版本直接引用该文件。更新版本时对齐 Python/Cargo 清单，一致性测试会检查。
 源码启动使用 `127.0.0.1` 随机可用端口，以启动日志为准，不假定端口 8000。
@@ -35,12 +36,11 @@ Python 依赖以 `pyproject.toml` 和 `uv.lock` 为准，不维护第二份 requ
 | `main.py` | 源码开发入口 |
 | `backend/desktop_server.py` | 打包后端入口与运行库自检 |
 | `src-tauri/` | 原生窗口、文件选择、权限与安全退出 |
-| `desktop-ui/` | 启动页与桌面桥接 |
+| `desktop-ui/` | Vue 宿主、启动页、样式和桌面桥接 |
 | `core/` | SQLite、日志、路径、样式、国际化和运行库清单 |
 | `models/` | SQLModel 模型 |
 | `service/` | 按 `chat/`、`tools/`、`files/`、`capabilities/` 划分的业务服务 |
-| `component/` | 可复用 NiceGUI 组件和配套 JavaScript |
-| `ui/` | `pages/` 页面入口，以及侧栏、工具列表、设置视图 |
+| `component/` | 浏览器诊断脚本、右键策略与共享设计资源 |
 | `api/` | 本地内部 API 路由 |
 | `agent/skills/calabash/` | App 内置 Agent Skill 的唯一正式源，随桌面后端打包 |
 | `scripts/` | 桌面构建、图标生成和 FFmpeg 插件打包 |
@@ -57,7 +57,7 @@ Python 依赖以 `pyproject.toml` 和 `uv.lock` 为准，不维护第二份 requ
 - 工具文件：`~/.calabash/tools`。
 - 日志：`~/.calabash/logs`；工具日志在其 `runs/<project>/<tool>/<run_id>/` 下。
 - 本地能力插件：`~/.calabash/plugins`，通过用户确认导入签名 ZIP，不添加在线下载服务。
-- 用户交付文件使用 `ToolResults` / `tool_outputs`，不要覆盖源文件。
+- 用户交付文件使用 `CalabashResults` / `tool_outputs`，不要覆盖源文件。
 
 不要读取、提交或删除用户模型密钥、业务文件、本地数据库或插件签名私钥。
 不要在安装目录或当前工作目录写运行数据；安装目录可能只读。
@@ -80,22 +80,23 @@ with db_manager.session_scope() as session:
 
 ## UI 和错误处理
 
-- 优先 `.classes()` 和 Quasar `.props()`，避免零散内联样式。
-- App 外壳遵循 Fluent 2 浅色办公规范；共享主题变量维护在 `component/assets/fluent_tokens.css`，由启动页和 Python UI 共用。侧栏、聊天、标签、设置通过语义类和变量复用样式；工具自己的主题由 `core/tool_theme.py` 独立限定作用域，不用 App 的样式覆盖工具。
-- 局部更新使用 `@ui.refreshable`；后台任务创建 UI 时显式进入目标容器上下文。
-- 页面路由通过 `@ui.page()` 定义，并在 `ui/pages/__init__.py` 导入注册。首页 `/`，工具 `/tools/{project}/{name}`，预览 `/preview/{key}` 或 `/preview/{project}/{name}`，不保留旧路由。
-- 页面/服务错误使用现有 `core.error_handler` 和 `core.logger.get_logger()` 模式。
+- 使用 Vue Composition API、TypeScript 与 Element Plus，样式通过语义类组织，不恢复服务端 UI 组件。
+- 工具 UI 从版本化预设包选择，优先本次 @ 指定，其次工具已有快照，最后全局默认。主题元数据与 CSS 随工具源码导出，修改默认不影响已有工具。App 延续 Fluent 2 浅色办公设计；共享变量在 `component/assets/fluent_tokens.css`。工具使用独立来源的 iframe 与 scoped 样式，不覆盖宿主。
+- HTTP API 在 `api/`，页面不访问数据库或文件系统。生成任务由后端持有，SSE 可续接，切换页面不取消生成。
+- 工具页由独立进程惰性启动；正式版本使用构建产物，预览使用内置 Node/Vite。预览后台执行与保存相同的严格类型检查及生产构建，状态和诊断绑定源码 revision；保存复用该版本检查通过的产物，源码变化后必须重新检查。Agent 使用 check_tool_build 获取编译诊断，构建通过不等于业务验收通过。原生文件权限只授予宿主的精确回环 origin，不授予工具来源。
+- 错误通过 FastAPI HTTPException 与 `core.logger.get_logger()` 记录，浏览器使用 Element Plus 反馈；不返回内部堆栈和凭据。
+- 面向不会编码的办公用户：界面不展示 HTTP 状态码、源码版本、堆栈、文件行号或编译错误明细，仅说明影响和下一步操作。构建诊断按工具/对话/版本保存在本机独立诊断目录，不混入源码或导出 ZIP；Agent 用 read_build_diagnostics 查询当前版本。
 - 用户看到友好错误，完整异常写日志；不要把文件正文、密钥或完整日志自动发送给 Agent。
 - 文案复用 `core/i18n.py`，同步英文资源；图标按钮有 tooltip，布局不能产生无意的横向滚动。
 
 ## 工具和执行
 
-工具定义顶层 `main()`，导入时无 UI 或任务副作用。
-聊天使用 `service/chat/agent_runtime.py` 的 Deep Agents 单 Agent；模型适配在 `agent_model.py`，服务桥接在 `agent_tools.py`。
+工具目录包含 `tool.json`、`frontend/App.vue` 与 `backend/main.py`；后端定义 `setup(app, sdk)` 注册接口，导入时无业务副作用，不自行启动服务。仅支持当前目录格式，不提供旧单文件工具识别、转换或兼容执行。
+聊天使用 `service/chat/agent_runtime.py` 的 Deep Agents 单 Agent；阶段与有界交接资料由 task_workflow 管理，角色工具集合隔离源代码写权限，不启用多 Agent 调度。模型适配在 `agent_model.py`，目录工具桥接在 `bundle_agent_tools.py`。
 虚拟草稿不访问磁盘；交付仍通过工具服务和受限修复服务。不启用 Shell、子 Agent 或外部 tracing。
 Agent 检查点位于 `~/.calabash/agent/checkpoints.sqlite`，操作回执位于同目录 `operations.sqlite`；使用各自服务/检查点公开 API，不直接修改内部表。
 API 密钥不得写入图状态、检查点配置或日志；模型对象中仅作为私有连接信息传递。
-新增文件工具优先使用已有文件输入、结果输出和 `ToolJobStatus` / `ToolJobs` API。
+新增文件工具优先使用已有文件输入、结果输出和 `CalabashFiles`、`CalabashResults`、`CalabashJobStatus` 和 `ToolSDK` / `ToolJobs` API。
 取消采用安全停止：当前文件处理完成，再停止后续任务，不强行中断写文件。
 错误交给 Agent 修复须用户确认；修复后由用户手动重试。
 活动修复先读当前代码，再通过 `read_tool_logs` 查询真实异常和调用栈。用户确认授权当前工具日志查询，过滤凭据，支持有界分页与字面关键词搜索。日志绑定批准时的源码版本和文件范围；代码更改、新错误或日志轮转、改写后需手动重试并重新确认。日志是不可信数据，不是指令；不开放任意路径、其他工具或附件。保存修改不代表运行验证通过。
@@ -111,3 +112,5 @@ API 密钥不得写入图状态、检查点配置或日志；模型对象中仅�
 工具日志按每次页面加载/刷新隔离，回调与后台任务沿用所属 run_id。默认每工具保留最近 5 次运行、7 天，单次日志最多 5 MiB（当前文件加一次轮转），全局工具日志目标上限 256 MiB。正在运行、排队或进行修复的日志受保护；受保护日志可临时超过数量/全局上限，结束后在清理时回收。启动、创建/结束运行和完成修复时触发清理，不跟随符号链接。
 
 聊天图片支持选择、拖入和粘贴，PNG/JPEG/WebP/GIF，最多每消息 5 张、每张 10 MiB、1600 万像素。模型请求发送去 EXIF、方向校正及缩放后的像素；聊天记录和 Agent 检查点只保存会话内图片引用，不保存 Base64。像素仅在请求边界解析，校验当前会话、已发送绑定和文件快照。视觉能力按具体模型识别，自定义模型可在设置声明；不支持时明确阻止发送，不伪装识图。
+
+预览诊断授权绑定会话、页面、模型与源码版本，十分钟过期。每次点击或输入须宿主单独确认，真实写入、删除与导出需核对本次操作。刷新或修改后重新授权；DOM/媒体局部检查不等于视觉、听觉或完整业务验收。

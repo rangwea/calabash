@@ -13,7 +13,7 @@ class ToolChatTests(unittest.IsolatedAsyncioTestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         root = Path(self.directory.name)
-        for target, name, value in ((ai_chat, 'app_dir', root), (ai_chat, 'tools_dir', root / 'tools'), (i18n, 'app_dir', root)):
+        for target, name, value in ((ai_chat, 'app_dir', root),  (i18n, 'app_dir', root)):
             patcher = patch.object(target, name, return_value=value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -48,13 +48,3 @@ class ToolChatTests(unittest.IsolatedAsyncioTestCase):
             results = list(pool.map(lambda _: ai_chat.get_or_create_tool_chat('demo', 'one', 'First tool'), range(2)))
         self.assertEqual(results[0], results[1])
         self.assertEqual(1, len(ai_chat.conversations()))
-
-    async def test_successful_write_returns_repairs_to_the_saving_conversation(self):
-        args = {'project': 'demo', 'name': 'one', 'content': 'def main(): return "new UI"\n', 'revision': ''}
-        ai_chat.save_chat('original', [{'role': 'user', 'content': 'Create a blue sidebar'}])
-        await ai_chat.execute_chat_tool('write_tool', args, 'original')
-        self.assertEqual('original', ai_chat.get_or_create_tool_chat('demo', 'one', 'One'))
-        ai_chat.save_chat('followup', [{'role': 'user', 'content': 'Edit this tool in this conversation'}])
-        revision = ai_chat.execute_tool('read_tool', {'project': 'demo', 'name': 'one'})['revision']
-        await ai_chat.execute_chat_tool('write_tool', {**args, 'revision': revision, 'content': 'def main(): return "fixed new UI"\n'}, 'followup')
-        self.assertEqual('followup', ai_chat.get_or_create_tool_chat('demo', 'one', 'One'))

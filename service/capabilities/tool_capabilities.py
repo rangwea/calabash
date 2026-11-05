@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from service.capabilities.capability_manifest import PACK_IDS, VERSION, version_key
 from service.capabilities.capability_packs import official_manager
-from service.tools.tool_metadata import parse_tool_metadata
 
 _REQUIREMENT = re.compile(rf"(?P<id>[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+)(?:\s*>=\s*(?P<version>{VERSION}))?")
 
@@ -35,8 +34,9 @@ class ToolCapabilityError(ValueError):
         super().__init__("Invalid tool capability declaration" if invalid else "Tool capabilities are not ready")
 
 
-def parse_requirements(content: str) -> tuple[Requirement, ...]:
-    value = parse_tool_metadata(content).get("requires", "")
+def parse_requirements(value: str) -> tuple[Requirement, ...]:
+    if not isinstance(value, str):
+        raise ToolCapabilityError(invalid=True)
     if not value:
         return ()
     if len(value) > 2048:
@@ -76,8 +76,8 @@ def check_requirements(requirements, manager=None) -> tuple[CapabilityIssue, ...
     return tuple(issues)
 
 
-def require_tool_capabilities(content: str):
-    requirements = parse_requirements(content)
+def require_tool_capabilities(value: str):
+    requirements = parse_requirements(value)
     issues = check_requirements(requirements)
     if issues:
         raise ToolCapabilityError(requirements, issues)

@@ -1,13 +1,13 @@
 import asyncio
 import json
-import unittest
-import tempfile
 import os
+import tempfile
+import unittest
 from unittest.mock import patch
 
 import httpx
 
-from service.chat import ai_chat, agent_model, model_providers
+from service.chat import agent_model, ai_chat, model_providers
 
 
 class SlowStream(httpx.AsyncByteStream):
@@ -46,13 +46,15 @@ class ChatStreamLimitTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({"type": "disabled"}, self.payload["thinking"])
 
     async def test_heartbeats_cannot_keep_request_open_forever(self):
-        with patch.object(ai_chat, "MODEL_REQUEST_TIMEOUT", 0.025):
-            with self.assertRaises(TimeoutError):
-                await self.collect(stream=SlowStream())
+        with (
+            patch.object(ai_chat, 'MODEL_REQUEST_TIMEOUT', 0.025),
+            self.assertRaises(TimeoutError),
+        ):
+            await self.collect(stream=SlowStream())
 
     async def test_truncated_tool_call_is_not_executed(self):
         packets = [{"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "one", "function": {"name": "write_tool", "arguments": '{"content":"partial'}}]}, "finish_reason": "length"}]}]
-        with patch.object(ai_chat, "execute_chat_tool") as execute:
+        with patch("service.tools.tool_bundles.write") as execute:
             with self.assertRaises(ValueError):
                 await self.collect(packets)
             execute.assert_not_called()
@@ -65,7 +67,7 @@ class ChatStreamLimitTests(unittest.IsolatedAsyncioTestCase):
             {"type": "message_stop"},
         ]
         client = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, text="".join("data: " + json.dumps(p) + "\n\n" for p in packets))))
-        with patch.object(model_providers, "active", return_value=("anthropic", "synthetic", {"key": "synthetic", "base_url": "https://example.test"})), patch.object(agent_model.httpx, "AsyncClient", return_value=client), patch.object(ai_chat, "execute_chat_tool") as execute:
+        with patch.object(model_providers, "active", return_value=("anthropic", "synthetic", {"key": "synthetic", "base_url": "https://example.test"})), patch.object(agent_model.httpx, "AsyncClient", return_value=client), patch("service.tools.tool_bundles.write") as execute:
             with self.assertRaises(agent_model.OutputLimitError):
                 _ = [event async for event in ai_chat.respond([{"role": "user", "content": "Create tool"}])]
             execute.assert_not_called()
@@ -94,6 +96,6 @@ class ChatStreamLimitTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, text="data: " + json.dumps(value) + "\n\ndata: [DONE]\n\n")
 
         client_class = httpx.AsyncClient
-        with patch.object(model_providers, "active", return_value=("deepseek", "model", {"key": "synthetic", "base_url": "https://example.test"})), patch.object(agent_model.httpx, "AsyncClient", side_effect=lambda **kwargs: client_class(transport=httpx.MockTransport(handle))), patch.object(ai_chat, "execute_chat_tool", return_value=[]):
+        with patch.object(model_providers, "active", return_value=("deepseek", "model", {"key": "synthetic", "base_url": "https://example.test"})), patch.object(agent_model.httpx, "AsyncClient", side_effect=lambda **kwargs: client_class(transport=httpx.MockTransport(handle))), patch("service.tools.tool_bundles.list_tools", return_value=[]):
             events = [event async for event in ai_chat.respond([{"role": "user", "content": "List tools"}])]
         self.assertLess(events.index(("activity", "generating_tool")), events.index(("activity", "list_tools")))

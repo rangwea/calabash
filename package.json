@@ -4,19 +4,42 @@
   "version": "1.1.0",
   "private": true,
   "license": "Elastic-2.0",
-  "keywords": ["ai-agent", "desktop-app", "app-builder", "personal-tools", "productivity", "local-first", "tauri", "python", "nicegui", "source-available"],
+  "keywords": [
+    "ai-agent",
+    "desktop-app",
+    "app-builder",
+    "personal-tools",
+    "productivity",
+    "local-first",
+    "tauri",
+    "python",
+    "source-available",
+    "vue",
+    "fastapi"
+  ],
   "type": "module",
   "scripts": {
     "desktop:web:dev": "vite desktop-ui --host 127.0.0.1",
     "desktop:web:build": "vite build desktop-ui",
-    "desktop:backend:build": "uv run --group desktop python scripts/build_desktop_sidecar.py",
-    "desktop:dev": "tauri dev",
+    "desktop:backend:build": "npm run desktop:web:build && uv run --group desktop python scripts/build_desktop_sidecar.py",
+    "desktop:dev": "npm run desktop:web:build && tauri dev",
     "desktop:build": "npm run desktop:backend:build && tauri build --verbose",
-    "desktop:bundle": "tauri bundle --verbose"
+    "desktop:bundle": "tauri bundle --verbose",
+    "check:frontend": "vue-tsc --project desktop-ui/tsconfig.json --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "dompurify": "^3.4.17",
+    "echarts": "^6.1.0",
+    "element-plus": "^2.14.7",
+    "marked": "^18.1.3",
+    "vue": "^3.5.44"
+  },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
-    "vite": "^7.0.0"
+    "@vitejs/plugin-vue": "^6.0.10",
+    "typescript": "^6.0.3",
+    "vite": "^7.0.0",
+    "vue-tsc": "^3.3.14"
   }
 }

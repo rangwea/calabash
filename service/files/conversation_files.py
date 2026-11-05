@@ -158,11 +158,13 @@ def for_message(chat_id, message_id):
         return [_public(row) for row in _records(db, chat_id) if row["id"] in ids]
 
 
-def consume_selection(chat_id, token):
+def consume_selection_paths(token):
     directory = os.environ.get("CALABASH_SELECTION_DIR")
     if not directory or not isinstance(token, str) or not re.fullmatch(r"[a-f0-9]{32}", token):
         raise ValueError("invalid_selection")
     path = Path(directory) / f"{token}.json"
+    if path.is_symlink():
+        raise ValueError('invalid_selection')
     try:
         # Rename claims a single-use native-issued ticket before reading it.
         claimed = path.with_suffix(f".{uuid4().hex}.claimed")
@@ -178,6 +180,11 @@ def consume_selection(chat_id, token):
             raise ValueError("limit")
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
         raise ValueError("invalid_selection") from error
+    return paths
+
+
+def consume_selection(chat_id, token):
+    paths = consume_selection_paths(token)
     # Invalid individual files must not prevent valid siblings being attached.
     results = []
     for selected in paths:

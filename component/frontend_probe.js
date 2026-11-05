@@ -10,7 +10,9 @@ export function installProbe(win, report) {
   };
   const emit = (kind, message, extra = {}) => { if (sent++ < 40) report({ kind, message: clean(message), ...extra }); };
   const visible = element => element.isConnected && element.getClientRects().length > 0 && win.getComputedStyle(element).visibility !== 'hidden';
-  const root = () => doc.querySelector('.calabash-tool');
+  // The probe runs only in the isolated tool frame. Include Element Plus
+  // dialogs/popovers teleported outside #app, never the host workspace.
+  const root = () => doc.body || doc.querySelector('.calabash-tool');
   const idFor = element => { if (!counters.has(element)) counters.set(element, 'e' + (++sequence)); const id = counters.get(element); ids.set(id, element); return id; };
   const blocked = element => element.matches('input[type=password],input[type=file],input[type=hidden]') || element.closest('[data-private], [data-sensitive]') || /password|secret|token|api[_ -]?key|authorization|密钥|密码|令牌/i.test([element.name, element.id, element.getAttribute('aria-label'), element.getAttribute('placeholder'), element.labels?.[0]?.textContent].join(' '));
   const name = element => clean(element.getAttribute('aria-label') || element.labels?.[0]?.textContent || element.textContent || element.getAttribute('placeholder') || '').slice(0, 120);

@@ -41,7 +41,7 @@ class ToolOutputs:
     def write(self, name, writer):
         """Call writer(Path) on a private file, then publish without overwriting.
 
-        Run blocking writers with NiceGUI run.io_bound. A failed writer never
+        Run blocking writers with sdk.io. A failed writer never
         produces a visible result. The suffix is preserved for office libraries.
         """
         if not name or Path(name).name != name or name in {".", ".."} or "\\" in name:

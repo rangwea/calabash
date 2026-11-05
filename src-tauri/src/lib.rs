@@ -18,12 +18,17 @@ struct NativeSelections(std::path::PathBuf);
 struct SafeExit(AtomicBool);
 
 fn active_job_count(directory: &std::path::Path) -> u64 {
-    let path = directory.join("active-jobs.json");
-    if !path.exists() { return 0; }
-    std::fs::read_to_string(path).ok()
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        .and_then(|value| value.get("active").and_then(|count| count.as_u64()))
-        .unwrap_or(1)
+    let Ok(entries) = std::fs::read_dir(directory) else { return 0; };
+    entries.filter_map(Result::ok).filter(|entry| {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        name == "active-jobs.json" || (name.starts_with("active-jobs-") && name.ends_with(".json"))
+    }).map(|entry| {
+        std::fs::read_to_string(entry.path()).ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .and_then(|value| value.get("active").and_then(|count| count.as_u64()))
+            .unwrap_or(1)
+    }).sum()
 }
 
 fn request_safe_exit(app: &tauri::AppHandle) {
@@ -55,6 +60,29 @@ fn request_safe_exit(app: &tauri::AppHandle) {
             handle.exit(0);
         });
     });
+}
+
+#[cfg(target_os = "macos")]
+fn install_safe_app_menu(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+    let menu = Menu::default(app.handle())?;
+    let quit = MenuItem::with_id(app, "safe-quit", "Quit Calabash", true, Some("CmdOrCtrl+Q"))?;
+    let application = Submenu::with_items(app, "Calabash", true, &[
+        &PredefinedMenuItem::about(app, None, None)?,
+        &PredefinedMenuItem::separator(app)?,
+        &PredefinedMenuItem::services(app, None)?,
+        &PredefinedMenuItem::separator(app)?,
+        &PredefinedMenuItem::hide(app, None)?,
+        &PredefinedMenuItem::hide_others(app, None)?,
+        &PredefinedMenuItem::separator(app)?,
+        &quit,
+    ])?;
+    // Preserve the standard File/Edit/View/Window menus. Native terminate:
+    // bypasses ExitRequested, so the application menu uses an explicit event.
+    menu.remove_at(0)?;
+    menu.insert(&application, 0)?;
+    app.set_menu(menu)?;
+    Ok(())
 }
 
 impl Drop for NativeSelections {
@@ -302,6 +330,8 @@ fn backend_command(_app: &tauri::App) -> Result<Command, String> {
     let binary_path = executable_dir.join(binary_name);
     let mut command = Command::new(&binary_path);
     command.arg("--print-ready").current_dir(executable_dir);
+    command.env("CALABASH_FRONTEND_RUNTIME", _app.path().resource_dir()
+        .map_err(|error| error.to_string())?.join("frontend-runtime"));
     Ok(command)
 }
 
@@ -343,6 +373,20 @@ fn start_backend(app: &tauri::App) -> Result<(), String> {
             let Ok(parsed) = url.parse::<tauri::Url>() else {
                 continue;
             };
+            if parsed.scheme() != "http" || parsed.host_str() != Some("127.0.0.1") {
+                continue;
+            }
+            // Native file permissions belong only to the host's exact origin,
+            // never every loopback tool/preview process.
+            let origin = format!("{}/*", parsed.as_str().trim_end_matches('/'));
+            let capability = tauri::ipc::CapabilityBuilder::new("workspace-host")
+                .local(false).window("main").remote(origin)
+                .permission("allow-select-chat-files")
+                .permission("allow-save-tool-output")
+                .permission("dialog:allow-open")
+                .permission("core:window:allow-start-dragging")
+                .permission("core:window:allow-internal-toggle-maximize");
+            if app_handle.add_capability(capability).is_err() { continue; }
             wait_for_backend(&parsed);
             let thread_handle = app_handle.clone();
             let window_handle = app_handle.clone();
@@ -388,7 +432,12 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![interface_language, select_chat_files, save_tool_output])
         .plugin(tauri_plugin_dialog::init())
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "safe-quit" { app.exit(0); }
+        })
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            install_safe_app_menu(app)?;
             let directory = std::env::temp_dir().join(format!("calabash-selections-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir(&directory)?;
             #[cfg(unix)]
@@ -403,7 +452,9 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if active_job_count(&window.app_handle().state::<NativeSelections>().0) > 0 {
+                let active = active_job_count(&window.app_handle().state::<NativeSelections>().0);
+                eprintln!("Calabash close requested; active tool tasks: {active}");
+                if active > 0 {
                     api.prevent_close();
                     request_safe_exit(window.app_handle());
                 }
@@ -411,8 +462,8 @@ pub fn run() {
             }
             let tauri::WindowEvent::DragDrop(event) = event else { return };
             let payload = match event {
-                tauri::DragDropEvent::Drop { paths, .. } => match selection_ticket(window.app_handle(), paths.clone()) {
-                    Ok(ticket) => serde_json::json!({"ticket": ticket}),
+                tauri::DragDropEvent::Drop { paths, position, .. } => match selection_ticket(window.app_handle(), paths.clone()) {
+                    Ok(ticket) => serde_json::json!({"ticket": ticket, "position": {"x": position.x, "y": position.y}}),
                     Err(error) => serde_json::json!({"error": error}),
                 },
                 tauri::DragDropEvent::Enter { .. } | tauri::DragDropEvent::Over { .. } => serde_json::json!({"hover": true}),
@@ -426,7 +477,9 @@ pub fn run() {
         .expect("error while building Calabash desktop")
         .run(|app_handle, event| match event {
             RunEvent::ExitRequested { api, .. } => {
-                if active_job_count(&app_handle.state::<NativeSelections>().0) > 0 {
+                let active = active_job_count(&app_handle.state::<NativeSelections>().0);
+                eprintln!("Calabash exit requested; active tool tasks: {active}");
+                if active > 0 {
                     api.prevent_exit();
                     request_safe_exit(app_handle);
                 } else if let Some(backend) = app_handle.try_state::<BackendProcess>() {
@@ -458,6 +511,9 @@ mod tests {
         assert_eq!(active_job_count(&directory), 2);
         std::fs::write(&file, br#"{"active":0}"#).unwrap();
         assert_eq!(active_job_count(&directory), 0);
+        std::fs::write(directory.join("active-jobs-one.json"), br#"{"active":1}"#).unwrap();
+        std::fs::write(directory.join("active-jobs-two.json"), br#"{"active":2}"#).unwrap();
+        assert_eq!(active_job_count(&directory), 3);
         std::fs::remove_dir_all(directory).unwrap();
     }
 

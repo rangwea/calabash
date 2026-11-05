@@ -59,6 +59,7 @@ def finish(run_id, call_id, result):
 def delete_chat(chat_id):
     # Use the checkpointer's public API rather than editing its internal tables.
     from langgraph.checkpoint.sqlite import SqliteSaver
+
     from service.chat.agent_usage import delete_runs
     with closing(connect()) as db, db:
         runs = [row[0] for row in db.execute("SELECT id FROM runs WHERE chat_id=?", (chat_id,))]

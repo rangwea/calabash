@@ -2,20 +2,113 @@
   "schema_version": 1,
   "python": "3.13+",
   "libraries": [
-    {"distribution": "nicegui", "module": "nicegui", "purpose": "交互界面、表格、ECharts 图表和异步任务"},
-    {"distribution": "pandas", "module": "pandas", "purpose": "表格清洗、分组统计、CSV 和 XLSX 读写"},
-    {"distribution": "numpy", "module": "numpy", "purpose": "数值数组与计算（pandas 的运行依赖）"},
-    {"distribution": "openpyxl", "module": "openpyxl", "purpose": "XLSX 工作表、单元格、样式和图表；不计算公式"},
-    {"distribution": "pypdf", "module": "pypdf", "purpose": "文本型 PDF 提取、合并、拆分和页面操作；不提供 OCR 或页面渲染"},
-    {"distribution": "python-docx", "module": "docx", "purpose": "DOCX 正文、表格和样式读写；不提供 Word 排版渲染或转 PDF"},
-    {"distribution": "httpx", "module": "httpx", "purpose": "按用户授权进行 HTTP 请求；不提供浏览器自动化"},
-    {"distribution": "Pillow", "module": "PIL", "purpose": "常见图片读写、缩放、裁剪、旋转和格式转换；不提供 OCR", "collect_all": ["PIL"]},
-    {"distribution": "reportlab", "module": "reportlab", "purpose": "生成 PDF、文字和表格；非拉丁文字须使用合法随附字体，不依赖系统字体", "collect_all": ["reportlab"]},
-    {"distribution": "pypdfium2", "module": "pypdfium2", "purpose": "PDF 页面渲染为图片；不是 OCR、浏览器或 Office 转换引擎", "collect_all": ["pypdfium2", "pypdfium2_raw"]}
+    {
+      "distribution": "pandas",
+      "module": "pandas",
+      "purpose": "表格清洗、分组统计、CSV 和 XLSX 读写"
+    },
+    {
+      "distribution": "numpy",
+      "module": "numpy",
+      "purpose": "数值数组与计算（pandas 的运行依赖）"
+    },
+    {
+      "distribution": "openpyxl",
+      "module": "openpyxl",
+      "purpose": "XLSX 工作表、单元格、样式和图表；不计算公式"
+    },
+    {
+      "distribution": "pypdf",
+      "module": "pypdf",
+      "purpose": "文本型 PDF 提取、合并、拆分和页面操作；不提供 OCR 或页面渲染"
+    },
+    {
+      "distribution": "python-docx",
+      "module": "docx",
+      "purpose": "DOCX 正文、表格和样式读写；不提供 Word 排版渲染或转 PDF"
+    },
+    {
+      "distribution": "httpx",
+      "module": "httpx",
+      "purpose": "按用户授权进行 HTTP 请求；不提供浏览器自动化"
+    },
+    {
+      "distribution": "Pillow",
+      "module": "PIL",
+      "purpose": "常见图片读写、缩放、裁剪、旋转和格式转换；不提供 OCR",
+      "collect_all": [
+        "PIL"
+      ]
+    },
+    {
+      "distribution": "reportlab",
+      "module": "reportlab",
+      "purpose": "生成 PDF、文字和表格；非拉丁文字须使用合法随附字体，不依赖系统字体",
+      "collect_all": [
+        "reportlab"
+      ]
+    },
+    {
+      "distribution": "pypdfium2",
+      "module": "pypdfium2",
+      "purpose": "PDF 页面渲染为图片；不是 OCR、浏览器或 Office 转换引擎",
+      "collect_all": [
+        "pypdfium2",
+        "pypdfium2_raw"
+      ]
+    }
   ],
-  "hidden_imports": ["pandas.io.excel._openpyxl"],
-  "stdlib": ["pathlib", "csv", "json", "sqlite3", "re", "datetime", "collections", "math", "statistics", "decimal", "shutil", "zipfile", "tempfile", "hashlib", "io", "wave"],
-  "platform_helpers": ["component.tool_files.ToolFileInput", "component.tool_results.ToolResults", "component.tool_results.ToolJobStatus", "service.tools.tool_jobs.ToolJobs", "service.tools.tool_jobs.ToolTask", "component.file_access.choose_path"],
-  "optional_packs": [{"id": "media.ffmpeg", "status": "local_zip", "platforms": ["macos-arm64"], "purpose": "本地 FFmpeg/ffprobe 插件，安装并自检后通过 service.capabilities.media_runtime.MediaRuntime 调用"}, {"id": "document.ocr", "status": "planned", "purpose": "中英文图片和扫描 PDF OCR"}],
-  "not_bundled": ["FFmpeg/ffprobe（独立插件 ZIP，非主 App 内置）", "Tesseract/OCR（可选包尚未实现）", "LibreOffice/Microsoft Office 转换引擎", "Playwright/Selenium 浏览器与驱动", "音视频转写模型", "旧版 xls/doc 解析引擎", "matplotlib"]
+  "hidden_imports": [
+    "pandas.io.excel._openpyxl"
+  ],
+  "stdlib": [
+    "pathlib",
+    "csv",
+    "json",
+    "sqlite3",
+    "re",
+    "datetime",
+    "collections",
+    "math",
+    "statistics",
+    "decimal",
+    "shutil",
+    "zipfile",
+    "tempfile",
+    "hashlib",
+    "io",
+    "wave"
+  ],
+  "platform_helpers": [
+    "component.tool_files.ToolFileInput",
+    "component.tool_results.ToolResults",
+    "component.tool_results.ToolJobStatus",
+    "service.tools.tool_jobs.ToolJobs",
+    "service.tools.tool_jobs.ToolTask",
+    "component.file_access.choose_path"
+  ],
+  "optional_packs": [
+    {
+      "id": "media.ffmpeg",
+      "status": "local_zip",
+      "platforms": [
+        "macos-arm64"
+      ],
+      "purpose": "本地 FFmpeg/ffprobe 插件，安装并自检后通过 service.capabilities.media_runtime.MediaRuntime 调用"
+    },
+    {
+      "id": "document.ocr",
+      "status": "planned",
+      "purpose": "中英文图片和扫描 PDF OCR"
+    }
+  ],
+  "not_bundled": [
+    "FFmpeg/ffprobe（独立插件 ZIP，非主 App 内置）",
+    "Tesseract/OCR（可选包尚未实现）",
+    "LibreOffice/Microsoft Office 转换引擎",
+    "Playwright/Selenium 浏览器与驱动",
+    "音视频转写模型",
+    "旧版 xls/doc 解析引擎",
+    "matplotlib"
+  ]
 }

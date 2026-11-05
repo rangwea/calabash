@@ -8,9 +8,11 @@ import platform
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 TAURI_DIR = ROOT / "src-tauri"
 BIN_DIR = TAURI_DIR / "binaries"
 PYINSTALLER_WORK_DIR = ROOT / "build" / "pyinstaller"
@@ -57,6 +59,8 @@ def main() -> None:
 
     BIN_DIR.mkdir(parents=True, exist_ok=True)
     PYINSTALLER_WORK_DIR.mkdir(parents=True, exist_ok=True)
+    from scripts.build_frontend_runtime import build_runtime
+    build_runtime()
 
     command = [
         "uv",
@@ -82,21 +86,11 @@ def main() -> None:
         "--add-data",
         f"{ROOT / 'core' / 'locales'}{os.pathsep}core/locales",
         "--add-data",
-        f"{ROOT / 'component' / 'native_file_drop.js'}{os.pathsep}component",
-        "--add-data",
-        f"{ROOT / 'component' / 'tool_activity.js'}{os.pathsep}component",
+        f"{ROOT / 'desktop-ui' / 'dist'}{os.pathsep}desktop-ui/dist",
         "--add-data",
         f"{ROOT / 'component' / 'frontend_probe.js'}{os.pathsep}component",
         "--add-data",
-        f"{ROOT / 'component' / 'context_menu.js'}{os.pathsep}component",
-        "--add-data",
-        f"{ROOT / 'component' / 'assets' / 'calabash.png'}{os.pathsep}component/assets",
-        "--add-data",
-        f"{ROOT / 'component' / 'assets' / 'fluent_tokens.css'}{os.pathsep}component/assets",
-        "--add-data",
         f"{ROOT / 'agent' / 'skills' / 'calabash'}{os.pathsep}agent/skills/calabash",
-        "--collect-all",
-        "nicegui",
         "--collect-all",
         "fastapi",
         "--collect-all",
@@ -108,21 +102,21 @@ def main() -> None:
         "--hidden-import",
         "service.files.file_reader_worker",
         "--hidden-import",
-        "component.tool_files",
+        "backend.tool_worker",
         "--hidden-import",
-        "component.tool_results",
+        "api.workspace_api",
         "--hidden-import",
         "service.tools.tool_jobs",
         "--hidden-import",
-        "ui.pages",
+        "api.bundle_api",
         "--hidden-import",
-        "ui.pages.home",
+        "service.chat.bundle_agent_tools",
         "--hidden-import",
-        "ui.pages.tools",
+        "service.tools.tool_sdk",
         "--hidden-import",
         "api.health_api",
         "--hidden-import",
-        "ui.pages.preview",
+        "service.tools.tool_workers",
         str(BACKEND_ENTRY),
     ]
     catalog_path = ROOT / "agent/skills/calabash/references/runtime-libraries.json"

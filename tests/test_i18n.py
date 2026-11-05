@@ -1,5 +1,4 @@
 import ast
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,19 +34,3 @@ class I18nTests(unittest.TestCase):
                 for node in ast.walk(ast.parse(path.read_text())):
                     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "t" and node.args and isinstance(node.args[0], ast.Constant):
                         self.assertIn(node.args[0].value, catalog, str(path))
-
-    def test_english_ui_components_build(self):
-        from component.ai_chat import render_ai_chat
-        from component.model_settings import render_model_settings
-        from component.file_access import access_dialog
-        from component.app_frame import render_app_frame
-        from service.chat import ai_chat
-        from service.chat import model_providers
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory)
-            with patch.object(i18n, "app_dir", return_value=path), patch.object(ai_chat, "app_dir", return_value=path), patch.object(model_providers, "app_dir", return_value=path):
-                i18n.set_language("en")
-                render_model_settings()
-                render_ai_chat()
-                access_dialog()
-                render_app_frame(action=lambda: None)

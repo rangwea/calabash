@@ -36,7 +36,8 @@ def _publish():
     directory = _directory()
     if directory is None:
         return
-    destination = directory / "active-jobs.json"
+    suffix = os.environ.get('CALABASH_JOB_ID', '')
+    destination = directory / (f'active-jobs-{suffix}.json' if suffix else 'active-jobs.json')
     temporary = directory / f".jobs-{uuid4().hex}.tmp"
     try:
         with temporary.open("x", encoding="utf-8") as handle:

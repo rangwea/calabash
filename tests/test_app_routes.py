@@ -1,44 +1,18 @@
 import unittest
-from unittest.mock import patch
-
-from nicegui import app
 
 import main as development
-import ui.pages  # noqa: F401
 from backend import desktop_server
-from core import app_factory
-from service.tools.preview_service import get_fixed_preview_url, get_preview_url
+from core.workspace_app import create_workspace_app
 
 
 class AppRoutesTests(unittest.TestCase):
-    def test_desktop_pages_have_only_current_routes(self):
+    def test_vue_host_and_current_workspace_routes(self):
+        app = create_workspace_app()
         paths = {route.path for route in app.routes}
-        for path in (
-            "/",
-            "/tools/{project_name}/{tool_name}",
-            "/preview/{token}",
-            "/preview/{username}/{tool_name}",
-        ):
-            self.assertIn(path, paths)
-        self.assertFalse(any(path.startswith(("/user/", "/client/")) for path in paths))
+        self.assertIn('/api/workspace/chats', paths)
+        self.assertIn('/api/workspace/tools/{project}/{name}/publish', paths)
+        self.assertIn('/preview/{project}/{name}', paths)
+        self.assertFalse(any(path.startswith(('/user/', '/client/', '/_nicegui')) for path in paths))
 
-    def test_preview_links_target_current_pages(self):
-        self.assertEqual("/preview/example", get_preview_url("example"))
-        self.assertEqual(
-            "/preview/demo/example", get_fixed_preview_url("demo", "example")
-        )
-
-    def test_development_and_desktop_share_startup(self):
+    def test_development_and_packaged_backend_share_entrypoint(self):
         self.assertIs(development.main, desktop_server.main)
-
-    def test_factory_initializes_nicegui_after_registering_pages(self):
-        with (
-            patch.object(app_factory, "apply_app_styles"),
-            patch.object(app_factory, "start_tool_index_watcher"),
-            patch("service.files.conversation_files.cleanup_uploads"),
-            patch("service.capabilities.capability_packs.recover_existing"),
-            patch.object(app_factory.ui, "run_with") as mount,
-        ):
-            application = app_factory.create_app()
-        self.assertIs(mount.call_args.args[0], application)
-        self.assertEqual("/", mount.call_args.kwargs["mount_path"])

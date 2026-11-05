@@ -8,7 +8,11 @@ from uuid import uuid4
 
 import httpx
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessageChunk, convert_to_openai_messages, message_chunk_to_message
+from langchain_core.messages import (
+    AIMessageChunk,
+    convert_to_openai_messages,
+    message_chunk_to_message,
+)
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import PrivateAttr
@@ -17,7 +21,11 @@ from core.i18n import t
 from service.chat import model_providers
 
 
-class OutputLimitError(ValueError):
+class PublicAgentError(ValueError):
+    """A host-authored message safe to display without provider payloads."""
+
+
+class OutputLimitError(PublicAgentError):
     """No tool calls from a truncated response may be executed."""
 
 
@@ -97,49 +105,53 @@ class CalabashChatModel(BaseChatModel):
         # Calls are deliberately buffered until the whole response is complete.
         # Streaming incomplete JSON into the graph risks dispatching partial writes.
         calls, text, finish, done = {}, "", None, False
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=15)) as client:
-            async with asyncio.timeout(MODEL_REQUEST_TIMEOUT), client.stream("POST", url, headers=headers, json=payload) as response:
-                if response.status_code != 200:
-                    if response.status_code == 400:
-                        raise ValueError(t("模型拒绝了当前请求（400），请检查模型选择，或新建对话后重试"))
-                    raise ValueError(t("{provider} 请求失败（{status}），请检查密钥、模型、服务地域和账户额度",
-                                       provider=t(model_providers.PROVIDERS[self._provider][0]), status=response.status_code))
-                async for line in response.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        done = True
-                        break
-                    raw_packet = json.loads(data)
-                    from service.chat.agent_usage import observe
-                    observe(raw_packet, observation['usage'])
-                    packet = model_providers.normalize(raw_packet, self._provider)
-                    if packet.get("error"):
-                        raise ValueError(t("模型服务返回错误，请稍后重试"))
-                    for choice in packet.get("choices", []):
-                        if observation['first_token_ms'] is None and (choice.get('delta', {}).get('content') or choice.get('delta', {}).get('tool_calls')):
-                            observation['first_token_ms'] = int((time.monotonic() - observation['started']) * 1000)
-                        # Anthropic emits message_stop after max_tokens. A later
-                        # generic stop must not turn truncation into success.
-                        if finish != "length":
-                            finish = choice.get("finish_reason") or finish
-                        delta = choice.get("delta", {})
-                        token = delta.get("content") or ""
-                        if token:
-                            text += token
-                            yield ChatGenerationChunk(message=AIMessageChunk(content=token))
-                        for call in delta.get("tool_calls", []):
-                            item = calls.setdefault(call["index"], {"id": "", "name": "", "args": ""})
-                            item["id"] += call.get("id", "")
-                            item["name"] += call.get("function", {}).get("name", "")
-                            item["args"] += call.get("function", {}).get("arguments", "")
+        async with (
+            httpx.AsyncClient(timeout=httpx.Timeout(120, connect=15)) as client,
+            asyncio.timeout(MODEL_REQUEST_TIMEOUT),
+            client.stream('POST', url, headers=headers, json=payload) as response,
+        ):
+            if response.status_code != 200:
+                from core.logger import get_logger
+                get_logger(__name__).warning('Model request rejected: provider={} status={}', self._provider, response.status_code)
+                if response.status_code == 400:
+                    raise PublicAgentError(t("模型暂时无法处理这次请求，请更换模型或新建对话后重试"))
+                raise PublicAgentError(t("模型服务暂时无法使用，请检查连接设置和账户余额后重试"))
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    done = True
+                    break
+                raw_packet = json.loads(data)
+                from service.chat.agent_usage import observe
+                observe(raw_packet, observation['usage'])
+                packet = model_providers.normalize(raw_packet, self._provider)
+                if packet.get("error"):
+                    raise PublicAgentError(t("模型服务返回错误，请稍后重试"))
+                for choice in packet.get("choices", []):
+                    if observation['first_token_ms'] is None and (choice.get('delta', {}).get('content') or choice.get('delta', {}).get('tool_calls')):
+                        observation['first_token_ms'] = int((time.monotonic() - observation['started']) * 1000)
+                    # Anthropic emits message_stop after max_tokens. A later
+                    # generic stop must not turn truncation into success.
+                    if finish != "length":
+                        finish = choice.get("finish_reason") or finish
+                    delta = choice.get("delta", {})
+                    token = delta.get("content") or ""
+                    if token:
+                        text += token
+                        yield ChatGenerationChunk(message=AIMessageChunk(content=token))
+                    for call in delta.get("tool_calls", []):
+                        item = calls.setdefault(call["index"], {"id": "", "name": "", "args": ""})
+                        item["id"] += call.get("id", "")
+                        item["name"] += call.get("function", {}).get("name", "")
+                        item["args"] += call.get("function", {}).get("arguments", "")
         if not done and not finish:
-            raise ValueError(t("模型响应中断，进度已保存；请继续生成"))
+            raise PublicAgentError(t("模型响应中断，进度已保存；请继续生成"))
         if finish == "length":
             raise OutputLimitError(t("模型输出达到长度限制，未执行残缺调用；请继续生成，代码可分段编辑"))
         if finish in {"content_filter", "refusal"}:
-            raise ValueError(t("模型未返回可用内容，请重试或选择其他模型"))
+            raise PublicAgentError(t("模型未返回可用内容，请重试或选择其他模型"))
         parsed = []
         for index, call in calls.items():
             try:
@@ -147,8 +159,8 @@ class CalabashChatModel(BaseChatModel):
             except ValueError as error:
                 raise OutputLimitError(t("模型输出达到长度限制，未执行残缺调用；请继续生成，代码可分段编辑")) from error
             if not isinstance(args, dict) or not call["name"]:
-                raise ValueError(t("模型未返回可用内容，请重试或选择其他模型"))
+                raise PublicAgentError(t("模型未返回可用内容，请重试或选择其他模型"))
             parsed.append({"index": index, "id": call["id"] or uuid4().hex, "name": call["name"], "args": json.dumps(args, ensure_ascii=False)})
         if not parsed and not text.strip():
-            raise ValueError(t("模型未返回可用内容，请重试或选择其他模型"))
+            raise PublicAgentError(t("模型未返回可用内容，请重试或选择其他模型"))
         yield ChatGenerationChunk(message=AIMessageChunk(content="", tool_call_chunks=parsed))

@@ -64,7 +64,7 @@ def active():
 async def available_models(provider, connection):
     base = connection["base_url"].strip().rstrip("/")
     parsed = urlparse(base)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError(t("请填写有效的 HTTPS API 地址"))
     headers = {"x-api-key": connection["key"], "anthropic-version": "2023-06-01"} if provider == "anthropic" else {"Authorization": f"Bearer {connection['key']}"}
     async with httpx.AsyncClient(timeout=20) as client:

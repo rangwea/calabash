@@ -25,7 +25,7 @@ class ImageFixture:
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        for module, field, value in [(ai_chat, 'app_dir', self.root), (ai_chat, 'tools_dir', self.root / 'tools'),
+        for module, field, value in [(ai_chat, 'app_dir', self.root),
                                      (agent_store, 'app_dir', self.root), (model_providers, 'app_dir', self.root)]:
             patcher = patch.object(module, field, return_value=value)
             patcher.start()

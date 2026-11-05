@@ -31,14 +31,14 @@ def agent_guidance() -> str:
         + "。未内置：" + "、".join(data["not_bundled"])
         + "。可选媒体能力状态：" + media_guidance
         + "。安装后仅通过 service.capabilities.media_runtime.MediaRuntime 的 probe/convert/extract_audio 处理用户选择的本地文件；"
-        "使用可选能力必须在工具模块 docstring 声明 requires: media.ffmpeg>=9.0.2（最低版本按实际需要选择）；"
+        "使用可选能力必须在工具 tool.json 的 requires 字段声明 media.ffmpeg>=9.0.2（最低版本按实际需要选择）；"
         "多个能力用英文逗号分隔，不需要可选能力时省略或留空。宿主在导入模块前检查能力，缺失时用户导入 ZIP 后手动重试，"
         "不自动执行任务，不把 Python 包名或 URL 写进 requires，不通过 pip/brew 安装。"
-        "阻塞调用使用 await run.io_bound，取消使用 threading.Event，不拼装命令行或调用系统 ffmpeg。"
+        "阻塞调用使用 await sdk.io，批量任务使用 sdk.start_batch，不拼装命令行或调用系统 ffmpeg。"
         "document.ocr 尚未实现；不把 FFmpeg 当作语音转写或视频理解模型"
         + "。不要将开发环境已安装或系统 PATH 中的包/程序当成内置能力，不运行 pip/uv/brew/npm 等安装命令，"
         "不要求用户安装系统工具。需要未提供的能力时如实说明限制和已有能力的替代方案，不编造已完成。"
-        "图表优先 ui.echart；XLSX 使用 openpyxl 或 pandas 的 openpyxl engine；旧版 xls/doc、扫描 PDF 和音视频理解不能冒充已支持。"
+        "界面使用 Vue 和 Element Plus；XLSX 使用 openpyxl 或 pandas 的 openpyxl engine；旧版 xls/doc、扫描 PDF 和音视频理解不能冒充已支持。"
         "Python 工具与宿主共享系统权限，不是沙箱；库可用不等于已取得网络、文件或破坏性操作授权。"
     )
 

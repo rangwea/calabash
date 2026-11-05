@@ -29,22 +29,6 @@ class AIChatTests(unittest.TestCase):
                         },
                         chats,
                     )
-                    self.assertIn(
-                        "tool_key",
-                        {
-                            row[1]
-                            for row in db.execute(
-                                "PRAGMA table_info(tool_input_contexts)"
-                            )
-                        },
-                    )
-                    self.assertIn(
-                        "started",
-                        {
-                            row[1]
-                            for row in db.execute("PRAGMA table_info(tool_repairs)")
-                        },
-                    )
                     self.assertEqual(
                         {
                             "chats",
@@ -52,8 +36,6 @@ class AIChatTests(unittest.TestCase):
                             "tool_chats",
                             "chat_files",
                             "message_files",
-                            "tool_input_contexts",
-                            "tool_repairs",
                             "output_runs",
                             "output_files",
                         },
@@ -83,27 +65,6 @@ class AIChatTests(unittest.TestCase):
             self.assertEqual([("two", "原始标题")], ai_chat.conversations())
             self.assertEqual([], ai_chat.read_chat("one"))
 
-    def test_write_requires_revision_and_valid_entrypoint(self):
-        with (
-            tempfile.TemporaryDirectory() as directory,
-            patch.object(ai_chat, "tools_dir", return_value=Path(directory)),
-        ):
-            args = {
-                "project": "demo",
-                "name": "hello",
-                "content": "def main():\n    pass\n",
-            }
-            self.assertIn("saved", ai_chat.execute_tool("write_tool", args))
-            self.assertIn("error", ai_chat.execute_tool("write_tool", args))
-            read = ai_chat.execute_tool("read_tool", args)
-            self.assertIn(
-                "saved",
-                ai_chat.execute_tool(
-                    "write_tool", {**args, "revision": read["revision"]}
-                ),
-            )
-            with self.assertRaises(ValueError):
-                ai_chat.tool_path("..", "escape")
 
     def test_conversations_persist(self):
         with (
