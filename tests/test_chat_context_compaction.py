@@ -10,12 +10,12 @@ from service.chat.chat_context import (
 
 
 class ChatContextCompactionTests(unittest.TestCase):
-    def test_long_virtual_draft_snapshots_are_compacted(self):
+    def test_long_working_source_snapshots_are_compacted(self):
         messages = [
             {"role": "user", "content": "Create draft"},
-            {"role": "assistant", "content": None, "tool_calls": [{"id": "write", "type": "function", "function": {"name": "write_file", "arguments": json.dumps({"file_path": "/draft.py", "content": "# source\n" * 12000})}}]},
-            {"role": "tool", "tool_call_id": "write", "content": "Updated file /draft.py"},
-            {"role": "assistant", "content": None, "tool_calls": [{"id": "read", "type": "function", "function": {"name": "read_file", "arguments": '{"file_path":"/draft.py"}'}}]},
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "write", "type": "function", "function": {"name": "write_tool_file", "arguments": json.dumps({"path": "backend/helpers.py", "content": "# source\n" * 12000})}}]},
+            {"role": "tool", "tool_call_id": "write", "content": "Updated file backend/helpers.py"},
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "read", "type": "function", "function": {"name": "read_tool_file", "arguments": '{"path":"backend/helpers.py"}'}}]},
             {"role": "tool", "tool_call_id": "read", "content": "# source\n" * 12000},
         ]
         result = prepare(messages)
@@ -41,7 +41,7 @@ class ChatContextCompactionTests(unittest.TestCase):
 
     def test_large_executed_tool_source_does_not_reject_small_request(self):
         messages = [{"role": "user", "content": "Create a ledger"}]
-        for index, name in enumerate(("validate_tool", "write_tool", "preview_tool")):
+        for index, name in enumerate(("write_tool_file", "write_tool", "patch_tool_file")):
             messages.extend([
                 {"role": "assistant", "content": None, "tool_calls": [{
                     "id": str(index), "type": "function", "function": {
@@ -91,3 +91,60 @@ class ChatContextCompactionTests(unittest.TestCase):
         self.assertEqual(prepare(messages), messages)
         with self.assertRaises(ValueError):
             prepare([{"role": "user", "content": "x" * (MAX_HISTORY_CHARACTERS + 1)}])
+
+    def test_latest_read_survives_large_context_and_is_paged(self):
+        messages = [{'role': 'user', 'content': 'Repair current tool'}]
+        for index in range(4):
+            messages.extend([
+                {'role': 'assistant', 'tool_calls': [{'id': str(index), 'function': {'name': 'read_tool_file', 'arguments': '{"path":"frontend/App.vue","offset":0}'}}]},
+                {'role': 'tool', 'tool_call_id': str(index), 'content': 'const current = true;\n' * 4000},
+            ])
+        original = copy.deepcopy(messages)
+        compact, _ = _compact_tool_sources(messages, 40000)
+        self.assertTrue(compact[-1]['content'].startswith('const current = true;'))
+        self.assertIn('offset=', compact[-1]['content'])
+        self.assertNotIn('read omitted', compact[-1]['content'])
+        self.assertLess(len(json.dumps(compact)), 40000)
+        self.assertEqual(messages, original)
+
+    def test_latest_structured_read_keeps_lines_revision_and_next_offset(self):
+        payload = {'path': 'frontend/App.vue', 'revision': 'current', 'lines': [
+            {'line': index + 31, 'text': 'const current = true;' * 25} for index in range(150)]}
+        messages = [
+            {'role': 'assistant', 'tool_calls': [{'id': 'read', 'function': {'name': 'read_tool_file', 'arguments': '{"offset":30}'}}]},
+            {'role': 'tool', 'tool_call_id': 'read', 'content': json.dumps(payload)},
+        ]
+        compact, _ = _compact_tool_sources(messages, 40000)
+        result = json.loads(compact[-1]['content'])
+        self.assertEqual('current', result['revision'])
+        self.assertTrue(result['truncated'])
+        self.assertEqual(result['lines'][-1]['line'], result['next_offset'])
+        self.assertIsInstance(result['lines'], list)
+        self.assertLess(len(json.dumps(compact)), 40000)
+
+    def test_current_read_is_not_trimmed_when_old_write_can_be_released(self):
+        content = 'current line\n' * 1800
+        messages = [
+            {'role': 'assistant', 'tool_calls': [{'id': 'write', 'function': {'name': 'write_tool_file', 'arguments': json.dumps({'content': 'old source' * 10000})}}]},
+            {'role': 'tool', 'tool_call_id': 'write', 'content': 'Updated'},
+            {'role': 'assistant', 'tool_calls': [{'id': 'read', 'function': {'name': 'read_tool_file', 'arguments': '{}'}}]},
+            {'role': 'tool', 'tool_call_id': 'read', 'content': content},
+        ]
+        compact, _ = _compact_tool_sources(messages, 40000)
+        self.assertEqual(content, compact[-1]['content'])
+
+    def test_repeated_paging_retains_complete_small_working_file(self):
+        messages = [{'role': 'user', 'content': 'Fix one function without rereading the file'}]
+        for repeat in range(5):
+            for offset in (0, 130, 260, 390):
+                call_id = f'{repeat}-{offset}'
+                content = '\n'.join(f'{line+1:3}  source_line_{line}' for line in range(offset, min(offset+130, 497)))
+                messages.extend([
+                    {'role': 'assistant', 'tool_calls': [{'id': call_id, 'function': {'name': 'read_tool_file', 'arguments': json.dumps({'path': 'backend/main.py', 'offset': offset, 'limit': 130})}}]},
+                    {'role': 'tool', 'tool_call_id': call_id, 'content': content},
+                ])
+        compact, _ = _compact_tool_sources(messages, 40000)
+        contents = '\n'.join(item.get('content', '') for item in compact if item['role'] == 'tool')
+        for line in range(497):
+            self.assertIn(f'source_line_{line}\n', contents + '\n')
+        self.assertLess(len(json.dumps(compact)), 40000)

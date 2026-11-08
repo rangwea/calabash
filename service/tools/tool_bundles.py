@@ -13,6 +13,7 @@ from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from core.local_paths import app_dir, tools_dir
+from service.tools.source_integrity import validate_source_file
 
 MAX_FILE = 1024 * 1024
 MAX_TOTAL = 8 * 1024 * 1024
@@ -49,7 +50,7 @@ def revision(files):
     return hashlib.sha256(json.dumps(files, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def validate(files, project=None, name=None):
+def validate(files, project=None, name=None, *, check_source=True):
     if not isinstance(files, dict) or not 3 <= len(files) <= MAX_FILES:
         raise ValueError('Invalid tool files')
     total = 0
@@ -61,12 +62,26 @@ def validate(files, project=None, name=None):
         names.add(path.casefold())
         if not isinstance(content, str) or len(content.encode()) > MAX_FILE:
             raise ValueError('Tool file too large')
+        if check_source:
+            validate_source_file(path, content)
         total += len(content.encode())
         if path.endswith('.py'):
             ast.parse(content, filename=path)
     if total > MAX_TOTAL:
         raise ValueError('Tool bundle too large')
+    manifest = validate_manifest(files, project, name)
+    if not files.get('frontend/App.vue') or not files.get('backend/main.py'):
+        raise ValueError('App.vue and backend/main.py are required')
+    tree = ast.parse(files['backend/main.py'])
+    if not any(isinstance(node, ast.FunctionDef) and node.name == 'setup' for node in tree.body):
+        raise ValueError('Backend must define setup(app, sdk), without starting a server')
+    return manifest
+
+
+def validate_manifest(files, project=None, name=None):
     manifest = json.loads(files.get('tool.json', '{}'))
+    if not isinstance(manifest, dict):
+        raise ValueError('tool.json must be an object')  # noqa: TRY004 - bounded source-validation errors use ValueError.
     if manifest.get('format') != 'calabash-vue-tool' or manifest.get('version') != 1:
         raise ValueError('Unsupported tool format')
     for key in ('project', 'name'):
@@ -84,17 +99,14 @@ def validate(files, project=None, name=None):
             raise ValueError('UI preset token snapshot is required')
     from service.capabilities.tool_capabilities import parse_requirements
     parse_requirements(manifest.get('requires', ''))
-    if not files.get('frontend/App.vue') or not files.get('backend/main.py'):
-        raise ValueError('App.vue and backend/main.py are required')
-    tree = ast.parse(files['backend/main.py'])
-    if not any(isinstance(node, ast.FunctionDef) and node.name == 'setup' for node in tree.body):
-        raise ValueError('Backend must define setup(app, sdk), without starting a server')
     return manifest
 
 
 def directory(project, name, chat_id=None):
     identity(project); identity(name)
-    root = tools_dir() if chat_id is None else app_dir() / 'drafts' / identity(chat_id)
+    root = tools_dir() if chat_id is None else app_dir() / 'drafts'
+    if chat_id is not None:
+        identity(chat_id)
     path = root / project / name
     for part in [path, *path.parents]:
         if part.is_symlink():
@@ -120,11 +132,14 @@ def read_directory(path):
             if item.stat().st_size > MAX_FILE or len(files) >= MAX_FILES:
                 raise ValueError('Tool bundle too large')
             files[relative] = item.read_text(encoding='utf-8')
-    validate(files)
+    validate(files, check_source=False)
     return files
 
 
 def read(project, name, chat_id=None):
+    if chat_id is not None and directory(project, name, chat_id).exists():
+        from service.tools.work_drafts import snapshot
+        return snapshot(project, name)
     path = directory(project, name, chat_id)
     if not path.is_dir() and chat_id:
         path = directory(project, name)

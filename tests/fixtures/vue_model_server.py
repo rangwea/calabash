@@ -32,8 +32,7 @@ class Handler(BaseHTTPRequestHandler):
             elif index == 4:
                 inspected = json.loads(results[-1]['content'])
                 assert inspected.get('untrusted_events'), inspected
-                source = json.loads(results[0]['content'])
-                name, args = 'patch_tool_file', {**TARGET, 'path': 'frontend/App.vue', 'old': "console.error('Synthetic broken action')", 'new': 'count.value++', 'revision': source['revision']}
+                name, args = 'patch_tool_file', {**TARGET, 'path': 'frontend/App.vue', 'old': "console.error('Synthetic broken action')", 'new': 'count.value++'}
             elif index == 5:
                 name, args = 'validate_tool', TARGET
             final = '修改已保存；保留原界面。请手动刷新预览、重新授权并验收。尚未运行验证。'

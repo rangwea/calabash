@@ -1,4 +1,4 @@
-"""Deep Agents model adapter over Calabash's existing provider protocols."""
+"""Single-agent model adapter over Calabash's existing provider protocols."""
 
 import asyncio
 import json

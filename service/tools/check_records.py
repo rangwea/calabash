@@ -87,6 +87,13 @@ def read(project, name, chat_id, revision):
         if not isinstance(code, str) or not re.fullmatch(r'TS[0-9]{4,6}|VITE|BUILD', code):
             code = 'BUILD'
         clean = {'code': code, 'message': messages.get(code, '构建未完成，请重新检查')}
+        for key in ('actual_type', 'expected_type'):
+            field = item.get(key)
+            if isinstance(field, str) and re.fullmatch(r'(number|string|boolean|null|undefined|unknown|never)(\[\])?', field):
+                clean[key] = field
+        field = item.get('property')
+        if isinstance(field, str) and re.fullmatch(r'[A-Za-z_$][A-Za-z0-9_$]{0,79}', field):
+            clean['property'] = field
         file = item.get('file')
         if isinstance(file, str) and file.startswith('frontend/'):
             try:

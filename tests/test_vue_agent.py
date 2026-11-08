@@ -23,6 +23,32 @@ class VueAgentTests(unittest.IsolatedAsyncioTestCase):
         ai_chat.save_chat('synthetic', [{'role': 'user', 'content': 'Create and modify a counter, keep its interface'}])
         self.requests = []
 
+    async def test_graph_rejects_context_placeholder_and_continues_with_real_source(self):
+        steps = [
+            ('write_tool', {'project': 'demo', 'name': 'counter', 'files': fixture()}),
+            ('write_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'frontend/App.vue', 'content': '[Executed source snapshot omitted. Read current tool or virtual draft before editing.]'}),
+            ('read_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'frontend/App.vue'}),
+        ]
+        def handle(request):
+            packet = json.loads(request.content)
+            results = [message for message in packet['messages'] if message['role'] == 'tool']
+            if len(results) == 2:
+                self.assertIn('source_placeholder_rejected', results[-1]['content'])
+            if len(results) == 3:
+                self.assertIn('Increment', results[-1]['content'])
+            if len(results) < len(steps):
+                name, args = steps[len(results)]
+                delta = {'tool_calls': [{'index': 0, 'id': f'call-{len(results)}', 'function': {'name': name, 'arguments': json.dumps(args)}}]}
+                finish = 'tool_calls'
+            else:
+                delta, finish = {'content': 'Original source preserved after rejected placeholder.'}, 'stop'
+            return httpx.Response(200, text='data: ' + json.dumps({'choices': [{'delta': delta, 'finish_reason': finish}]}) + '\n\ndata: [DONE]\n\n')
+        original = httpx.AsyncClient
+        with patch.object(model_providers, 'active', return_value=('openai', 'synthetic', {'key': 'synthetic-only', 'base_url': 'https://example.invalid'})), patch.object(agent_model.httpx, 'AsyncClient', side_effect=lambda **options: original(transport=httpx.MockTransport(handle))):
+            events = [event async for event in ai_chat.respond(ai_chat.read_chat('synthetic'), 'synthetic')]
+        self.assertTrue(any(kind == 'preview' for kind, _ in events))
+        self.assertEqual(fixture()['frontend/App.vue'], bundles.read('demo', 'counter', 'synthetic')['files']['frontend/App.vue'])
+
     async def test_missing_and_invalid_file_requests_do_not_abort_generation(self):
         packets = []
         def handle(request):
@@ -135,8 +161,7 @@ class VueAgentTests(unittest.IsolatedAsyncioTestCase):
             elif n == 2:
                 name, args = 'read_tool', {'project': 'demo', 'name': 'counter'}
             elif n == 3:
-                source = json.loads(results[-1]['content'])
-                name, args = 'patch_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'frontend/App.vue', 'old': 'Increment', 'new': 'Increase', 'revision': source['revision']}
+                name, args = 'patch_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'frontend/App.vue', 'old': 'Increment', 'new': 'Increase'}
             elif n == 4:
                 name, args = 'validate_tool', {'project': 'demo', 'name': 'counter'}
             delta = {'content': 'Draft saved; refresh and verify manually.'} if args is None else {'tool_calls': [{'index': 0, 'id': f'call-{n}', 'function': {'name': name, 'arguments': json.dumps(args)}}]}

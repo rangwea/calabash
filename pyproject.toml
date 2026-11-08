@@ -1,6 +1,6 @@
 [project]
 name = "calabash"
-version = "1.1.0"
+version = "1.2.0"
 description = "Calabash local AI tool desktop"
 readme = "README.md"
 license = "Elastic-2.0"
@@ -22,7 +22,7 @@ dependencies = [
     "Pillow>=11.0.0",
     "reportlab>=4.0.0",
     "pypdfium2>=4.0.0",
-    "deepagents==0.7.32",
+    "langchain==1.4.7",
     "langgraph-checkpoint-sqlite==3.1.2",
 ]
 

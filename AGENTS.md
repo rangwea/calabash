@@ -92,8 +92,8 @@ with db_manager.session_scope() as session:
 ## 工具和执行
 
 工具目录包含 `tool.json`、`frontend/App.vue` 与 `backend/main.py`；后端定义 `setup(app, sdk)` 注册接口，导入时无业务副作用，不自行启动服务。仅支持当前目录格式，不提供旧单文件工具识别、转换或兼容执行。
-聊天使用 `service/chat/agent_runtime.py` 的 Deep Agents 单 Agent；阶段与有界交接资料由 task_workflow 管理，角色工具集合隔离源代码写权限，不启用多 Agent 调度。模型适配在 `agent_model.py`，目录工具桥接在 `bundle_agent_tools.py`。
-虚拟草稿不访问磁盘；交付仍通过工具服务和受限修复服务。不启用 Shell、子 Agent 或外部 tracing。
+聊天使用 `service/chat/agent_runtime.py` 的 LangChain/LangGraph 单 Agent；阶段与有界交接资料由 task_workflow 管理，角色工具集合隔离源代码写权限，不启用多 Agent 调度。模型适配在 `agent_model.py`，目录工具桥接在 `bundle_agent_tools.py`。
+每个工具只保留一份真实工作草稿，位于 `~/.calabash/drafts/<project>/<tool>/`，正式工具在 tools 下独立保存。Agent 通过受限 write_tool_file/read_tool_file/patch_tool_file 操作相同目录，不存在虚拟文件、stage/deliver 或 Agent 管理的 revision 参数。源码不存入检查点文件状态；中断续接直接使用原目录。宿主持久化读取指纹、按工具持有写租约，并绑定构建产物源码指纹。预览直接引用工作目录，运行目录只放宿主启动文件、缓存和不可编辑的后端执行快照，避免运行中的任务混入新代码；后端修改后仍手动刷新。不启用 Shell、子 Agent 或外部 tracing。
 Agent 检查点位于 `~/.calabash/agent/checkpoints.sqlite`，操作回执位于同目录 `operations.sqlite`；使用各自服务/检查点公开 API，不直接修改内部表。
 API 密钥不得写入图状态、检查点配置或日志；模型对象中仅作为私有连接信息传递。
 新建 JSON 业务接口优先声明 Python Pydantic 请求/响应模型和 operation_id，前端通过 @calabash/api 使用静态生成的类型与调用方法。生成只解析源码，不导入执行工具，使用 read_api_contract 查询当前版本。契约不支持的动态类型显式报错，具体规则在内置 Skill 的 api-contract.md。接口诊断绑定当前运行，记录操作、请求标识与安全的字段/调用位置，不记录请求正文或查询值。

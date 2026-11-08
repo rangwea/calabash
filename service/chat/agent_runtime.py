@@ -5,16 +5,12 @@ import json
 import os
 from uuid import uuid4
 
-from deepagents import (
-    GeneralPurposeSubagentProfile,
-    HarnessProfile,
-    create_deep_agent,
-    register_harness_profile,
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    ModelCallLimitMiddleware,
+    SummarizationMiddleware,
+    TodoListMiddleware,
 )
-from deepagents.backends import StateBackend
-from deepagents.middleware.filesystem import FilesystemMiddleware
-from deepagents.middleware.summarization import SummarizationMiddleware
-from langchain.agents.middleware import ModelCallLimitMiddleware, TodoListMiddleware
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import (
     AIMessage,
@@ -39,13 +35,6 @@ from service.chat.bundle_agent_tools import build_tools
 MODEL_CALLS_PER_RUN = 40
 _active_runs = set()
 _active_chats = set()
-
-# Explicitly remove delegation. Filesystem tools below operate only on graph
-# state; there is no local filesystem or shell backend.
-register_harness_profile("calabash:local", HarnessProfile(
-    general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
-))
-
 
 class CompletedContextMiddleware(AgentMiddleware):
     """Release repeatable completed payloads before costly summarization."""
@@ -72,81 +61,74 @@ class CompletedContextMiddleware(AgentMiddleware):
                 updates.append(message.model_copy(update={"content": after["content"]}))
         if updates:
             updates.append(SystemMessage(
-                content="Completed source/reference snapshots were omitted to save context. Their results and call IDs remain; do not repeat completed writes. Current virtual files remain available. Read only the relevant current file before editing; omitted placeholders are not executable code.",
+                content="Completed source/reference snapshots were omitted to save context. Their results and call IDs remain; do not repeat completed writes. The real working directory remains available. Use read_tool_file for only the relevant current lines; omitted placeholders are not executable code.",
                 id="calabash-context-hint",
             ))
             return {"messages": updates}
 
 
 class NoProgressMiddleware(AgentMiddleware):
-    """Bound read-only investigation by actual source progress, per invocation."""
+    """Track actual reads of the one working source, without virtual file state."""
 
     def __init__(self):
-        self.seen = set()
-        self.last_count = None
+        self.started = False
+        self.signatures = []
+        self.processed = set()
+        self.pages = {}
+        self.last_write = None
         self.idle = 0
         self.warned = False
-        self.signatures = []
-        self.delivery_prompted = False
+        self.hinted = set()
 
     async def abefore_model(self, state, runtime):
-        messages = state["messages"]
-        results = {m.tool_call_id: m for m in messages if isinstance(m, ToolMessage)}
-        calls = [(c, results[c["id"]]) for m in messages if isinstance(m, AIMessage)
-                 for c in m.tool_calls if c["id"] in results]
-        # Source content, not timestamps or varying read offsets, is progress.
-        sources = {path: value.get("content") for path, value in state.get("files", {}).items()
-                   if path.startswith("/drafts/")}
-        evidence = []
-        for call, result in calls:
-            if call["name"] in {"write_tool", "patch_tool_file", "deliver_draft", "check_tool_build", "validate_tool"}:
-                evidence.append((call["name"], result.content))
-        fingerprint = hashlib.sha256(json.dumps((sources, evidence[-1:]), sort_keys=True, default=str).encode()).hexdigest()
-        count = len(calls)
-        if self.last_count is not None and count > self.last_count:
-            self.signatures.extend(json.dumps((call["name"], call["args"]), sort_keys=True)
-                                   for call, _ in calls[self.last_count:])
-            self.signatures = self.signatures[-4:]
-            if fingerprint in self.seen and len(self.signatures) == 4 and len(set(self.signatures)) == 1:
-                raise PublicAgentError(t("检测到重复操作，已暂停；请补充要求后继续"))
-        if self.last_count is None or fingerprint not in self.seen:
-            self.idle = 0
-        elif count > self.last_count:
-            self.idle += 1
-        self.seen.add(fingerprint)
-        self.last_count = count
+        initial = not self.started
+        self.started = True
+        messages = state['messages']
+        results = {message.tool_call_id: message for message in messages if isinstance(message, ToolMessage)}
+        new_calls = [(call, results[call['id']]) for message in messages if isinstance(message, AIMessage)
+                     for call in message.tool_calls if call['id'] in results and call['id'] not in self.processed]
+        progress, complete = False, []
+        for call, response in new_calls:
+            self.processed.add(call['id'])
+            try:
+                value = json.loads(str(response.content))
+            except (ValueError, TypeError):
+                value = {}
+            if not isinstance(value, dict) or value.get('error') or response.status == 'error':
+                continue
+            if call['name'] in {'write_tool', 'write_tool_file', 'patch_tool_file'} and value.get('success'):
+                self.pages.clear(); self.hinted.clear()
+                self.last_write = call['id']; progress = True
+            elif call['name'] == 'read_tool_file' and isinstance(value.get('lines'), list):
+                key = (call['args'].get('project'), call['args'].get('name'), value.get('path'), value.get('file_fingerprint'))
+                seen = self.pages.setdefault(key, set())
+                before = len(seen)
+                seen.update(line['line'] for line in value['lines'] if isinstance(line, dict) and type(line.get('line')) is int)
+                progress = progress or len(seen) > before
+                total = value.get('total_lines')
+                if type(total) is int and total > 0 and len(seen) == total and key not in self.hinted:
+                    self.hinted.add(key); complete.append(f"{value.get('path')}: all {total} lines read")
+            elif call['name'] in {'check_tool_build', 'validate_tool'}:
+                progress = progress or bool(value.get('state') == 'passed' or value.get('validated'))
+        if initial or not new_calls:
+            return None
+        self.signatures.extend(json.dumps((call['name'], call['args']), sort_keys=True) for call, _ in new_calls)
+        self.signatures = self.signatures[-4:]
+        if not progress and len(self.signatures) == 4 and len(set(self.signatures)) == 1:
+            raise PublicAgentError(t('检测到重复操作，已暂停；请补充要求后继续'))
+        self.idle = 0 if progress else self.idle + 1
         if self.idle >= 14:
-            raise PublicAgentError(t("检测到重复操作，已暂停；请补充要求后继续"))
-        if (not self.delivery_prompted and calls and messages
-                and isinstance(messages[-1], ToolMessage)):
-            call, result = calls[-1]
-            path = call["args"].get("file_path")
-            if (call["name"] in {"write_file", "edit_file"} and isinstance(path, str)
-                    and path.startswith("/drafts/") and result.status != "error"
-                    and not str(result.content).startswith("Error:")):
-                parts = path.split("/")
-                if len(parts) >= 5 and parts[2] and parts[3]:
-                    prefix = "/".join(parts[:4]) + "/"
-                    required = ("tool.json", "frontend/App.vue", "backend/main.py")
-                    if all(sources.get(prefix + file) for file in required):
-                        self.delivery_prompted = True
-                        return {"messages": [SystemMessage(
-                            content=(
-                                f"Draft delivery checkpoint: {prefix} contains all required files. "
-                                "If the requested minimum behavior is implemented, call deliver_draft now "
-                                "with the current revision when required, then check_tool_build. "
-                                "Skip full-file rereads and rewrites for confidence. If the build fails, "
-                                "use its diagnostic to inspect the relevant lines and make a targeted edit. "
-                                "File presence alone does not prove completeness. Never publish here."
-                            ),
-                            id="calabash-delivery-hint",
-                        )]}
+            raise PublicAgentError(t('检测到重复操作，已暂停；请补充要求后继续'))
+        if complete:
+            return {'messages': [SystemMessage(
+                content='Working source read checkpoint: ' + '; '.join(complete) +
+                '. Do not reread these files from the beginning. Make a targeted patch and call check_tool_build. No stage or delivery operation exists.',
+                id='calabash-source-coverage') ]}
         if self.idle >= 6 and not self.warned:
             self.warned = True
-            return {"messages": [SystemMessage(
-                content="Investigation has made no source or validation progress for several rounds. Stop rereading whole files or references. If the virtual draft contains tool.json, frontend/App.vue and backend/main.py, use deliver_draft now, then check_tool_build. Fix only concrete diagnostics with a targeted edit. If blocked, explain the missing information instead of repeating calls. Do not publish or perform business actions without authorization.",
-                id="calabash-progress-hint",
-            )]}
+            return {'messages': [SystemMessage(
+                content='Investigation is repeating without source or validation progress. The real working files are already saved. Use the concrete build diagnostic for a targeted patch, then check_tool_build. Explain a blocker rather than rereading entire files.',
+                id='calabash-progress-hint')]}
 
 
 class ToolRequestMiddleware(AgentMiddleware):
@@ -154,8 +136,11 @@ class ToolRequestMiddleware(AgentMiddleware):
 
     @staticmethod
     def failure(request, error):
+        from service.tools.source_integrity import SourcePlaceholderError
         from service.tools.tool_bundles import ToolUnavailable
-        if isinstance(error, ToolUnavailable):
+        if isinstance(error, SourcePlaceholderError):
+            code, message = 'source_placeholder_rejected', str(error)
+        elif isinstance(error, ToolUnavailable):
             code, message = error.code, str(error)
         elif isinstance(error, FileNotFoundError):
             code, message = 'file_not_found', 'Requested file is unavailable. Read the current tool file list before retrying.'
@@ -168,14 +153,28 @@ class ToolRequestMiddleware(AgentMiddleware):
         return ToolMessage(content=json.dumps({'error': code, 'message': message}),
                            tool_call_id=request.tool_call['id'], name=request.tool_call['name'], status='error')
 
+    @staticmethod
+    def validate_source_write(request):
+        from service.tools.source_integrity import reject_placeholders
+        call = request.tool_call
+        if call['name'] not in {'write_tool', 'write_tool_file', 'patch_tool_file'}:
+            return
+        args = call['args']
+        for field in ('content', 'new_string', 'new'):
+            reject_placeholders(args.get(field))
+        for content in args.get('files', {}).values():
+            reject_placeholders(content)
+
     def wrap_tool_call(self, request, handler):
         try:
+            self.validate_source_write(request)
             return handler(request)
         except (ValueError, KeyError, FileNotFoundError, PermissionError, SyntaxError) as error:
             return self.failure(request, error)
 
     async def awrap_tool_call(self, request, handler):
         try:
+            self.validate_source_write(request)
             return await handler(request)
         except (ValueError, KeyError, FileNotFoundError, PermissionError, SyntaxError) as error:
             return self.failure(request, error)
@@ -198,13 +197,11 @@ def run_identity(messages, chat_id, provider, model, connection, repair):
 
 
 def create_graph(model, prompt, tools, saver):
-    backend = StateBackend()
-    return create_deep_agent(
-        model=model, system_prompt=prompt, tools=tools, backend=backend,
+    return create_agent(
+        model=model, system_prompt=prompt, tools=tools,
         middleware=[
-            FilesystemMiddleware(backend=backend, tools=["ls", "read_file", "write_file", "edit_file", "glob", "grep"]),
             CompletedContextMiddleware(),
-            SummarizationMiddleware(model=model, backend=backend, trigger=("tokens", 16000), keep=("tokens", 6000)),
+            SummarizationMiddleware(model=model, trigger=("tokens", 16000), keep=("tokens", 6000)),
             TodoListMiddleware(), NoProgressMiddleware(), ToolRequestMiddleware(),
             ModelCallLimitMiddleware(run_limit=MODEL_CALLS_PER_RUN, exit_behavior="error"),
         ], checkpointer=saver,
@@ -248,7 +245,7 @@ async def respond(messages, chat_id, prompt, initial, provider, model, connectio
     try:
         user = next(m for m in reversed(messages) if m.get("role") == "user")
         if user.get("agent_output_truncated"):
-            prompt += " Previous response was truncated and its tool calls were not executed. Do not emit the whole file again. Write a small initial virtual draft, then extend it using multiple edit_file calls; deliver_draft reads the complete draft locally."
+            prompt += " Previous response was truncated and its tool calls were not executed. Do not emit the whole file again. Write small real source files with write_tool_file, then patch only the needed sections. Files persist automatically; call check_tool_build when complete."
         if chat_id:
             ai_chat.save_chat(chat_id, messages)  # Persist retry identity before calling the model.
         from service.chat.task_workflow import TaskWorkflow
@@ -283,20 +280,6 @@ async def respond(messages, chat_id, prompt, initial, provider, model, connectio
                     for index, message in enumerate(seed):
                         message.id = f"seed-{index}"
                     value = {"messages": seed}
-                    # A follow-up user message starts fresh execution, but keeps
-                    # its own conversation's virtual drafts. It never resumes
-                    # another turn's pending side effects automatically.
-                    if not repair_session:
-                        previous_user = next((m for m in reversed(messages)
-                                         if m.get("role") == "user" and m.get("agent_checkpoint_id") != run_id
-                                         and m.get("agent_checkpoint_id")), {})
-                        # Redacted repair drafts are never inherited by an
-                        # unrestricted turn: they must be read/redacted afresh.
-                        previous = None if previous_user.get("agent_repair") else previous_user.get("agent_checkpoint_id")
-                        if previous and agent_store.owned(previous, chat_id):
-                            previous_state = await graph.aget_state({"configurable": {"thread_id": previous}})
-                            if previous_state.values.get("files"):
-                                value["files"] = previous_state.values["files"]
                 succeeded = False
                 prior_messages = state.values.get('messages', []) if state.values else value.get('messages', [])
                 reported_tools = {message.id for message in prior_messages if isinstance(message, ToolMessage)}
@@ -341,6 +324,8 @@ async def respond(messages, chat_id, prompt, initial, provider, model, connectio
                     if chat_id and ai_chat.chat_exists(chat_id):
                         ai_chat.save_chat(chat_id, messages)
     finally:
+        from service.tools.work_drafts import release
+        release(run_id)
         agent_usage.current_run.reset(usage_scope)
         _active_runs.discard(run_id)
         if chat_id:

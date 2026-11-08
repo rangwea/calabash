@@ -81,3 +81,5 @@
 .ui-suggestions{display:grid;gap:3px;margin-bottom:8px;padding:5px;border:1px solid var(--app-border);border-radius:8px;max-height:180px;overflow:auto}.ui-suggestions button{display:flex;align-items:center;gap:8px;border:0;border-radius:5px;padding:7px;background:transparent;text-align:left;font-size:12px;color:var(--app-text)}.ui-suggestions button:hover{background:var(--app-hover)}.ui-suggestions i{height:10px;width:10px;border-radius:3px;flex:none}.ui-suggestions small{color:var(--app-subtle);font-size:11px}.composer-actions .ui-picker{font-size:11px;padding:4px;white-space:nowrap}.setting-hint{font-size:12px;color:var(--app-subtle);line-height:1.6;margin:6px 0 0}
 
 @container(max-width:300px){.composer-actions{gap:5px}.composer-actions .el-select{min-width:65px;flex:0 1 120px}.ui-suggestions small{display:none}.composer-actions .ui-picker{padding:3px 1px;font-size:10px}}
+
+.preview-editing{display:flex;align-items:center;gap:8px;flex:none;padding:7px 14px;min-height:30px;font-size:12px;line-height:1.4;color:var(--app-primary);background:var(--app-primary-light);border-bottom:1px solid var(--app-border)}

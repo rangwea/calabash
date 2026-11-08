@@ -7,6 +7,7 @@ import logo from '../../component/assets/calabash.png'
 import { displayError } from './request_errors.mjs'
 import { shouldSend } from './composer.mjs'
 import { markdown } from './markdown'
+import RuntimeConnection from './RuntimeConnection.vue'
 
 type Message = { role: string; content?: string; tool_calls?: unknown[]; attachments?: string[] }
 type Chat = { id: string; title: string; running: boolean }
@@ -32,7 +33,7 @@ const language = ref('zh-CN'), translations = ref<Record<string, string>>({})
 const t = (value: string) => language.value === 'en' ? translations.value[value] || value : value
 const chats = ref<Chat[]>([]), tools = ref<Tool[]>([]), chatId = ref(''), messages = ref<Message[]>([])
 const draft = ref(''), liveText = ref(''), activity = ref<string[]>([]), error = ref(''), running = ref(false)
-const activityLabels: Record<string,string> = {read_ui_preset: '选择工具风格', read_task_context: '了解当前任务', set_task_brief: '整理需求与验收条件', read_tool: '了解工具当前内容', read_tool_file: '了解工具当前内容', search_code: '查找需要调整的地方', patch_tool_file: '调整工具', write_tool: '创建工具', stage_tool: '准备调整工具', deliver_draft: '保存工具草稿', validate_tool: '检查工具', check_tool_build: '检查工具是否可以保存', read_build_diagnostics: '查看工具的问题记录', read_tool_logs: '查看工具的问题记录', inspect_preview: '检查工具界面', verify_preview: '确认使用效果', interact_preview: '检查工具操作', resuming: '继续处理'}
+const activityLabels: Record<string,string> = {read_ui_preset: '选择工具风格', read_task_context: '了解当前任务', set_task_brief: '整理需求与验收条件', read_tool: '了解工具当前内容', read_tool_file: '了解工具当前内容', search_code: '查找需要调整的地方', patch_tool_file: '调整工具', write_tool: '创建工具', write_tool_file: '保存工具草稿', validate_tool: '检查工具', check_tool_build: '检查工具是否可以保存', read_build_diagnostics: '查看工具的问题记录', read_tool_logs: '查看工具的问题记录', inspect_preview: '检查工具界面', verify_preview: '确认使用效果', interact_preview: '检查工具操作', resuming: '继续处理'}
 const uploads = ref(new Set<string>())
 const sending = ref(new Set<string>())
 const submitting = computed(() => sending.value.has(chatId.value))
@@ -42,6 +43,12 @@ const attachments = ref<any[]>([]), models = ref<Record<string, string>>({}), mo
 const chatFiles = ref<any[]>([])
 const preview = ref(''), previewShown = ref(false), previewRevision = ref(0), search = ref('')
 const previewRuntime = ref('')
+const previewOpening = ref(false), previewOpenFailed = ref(false)
+let previewLoadTarget = '', previewLoadTicket = 0
+const previewResource = computed(() => {
+  const parts = new URL(preview.value || '/', location.origin).pathname.split('/')
+  return parts.length === 4 ? `/tools/${parts[2]}/${parts[3]}/runtime?chat_id=${encodeURIComponent(chatId.value)}` : ''
+})
 const runtimeProblems = ref(new Set<string>())
 const previewProblem = computed(() => Boolean(previewRuntime.value && runtimeProblems.value.has(new URL(previewRuntime.value).origin)))
 const manualPreviewPending = ref(false)
@@ -82,9 +89,10 @@ const diagnosticBusy = ref(false)
 const filteredTools = computed(() => tools.value.filter(tool => `${tool.title} ${tool.name} ${tool.description}`.toLowerCase().includes(search.value.toLowerCase())))
 const toolKey = (tool: Tool) => `${tool.project}/${tool.name}`
 const opening = ref(new Set<string>())
+const openFailures = ref(new Set<string>())
 const creatingChat = ref(false)
 const activeTool = computed(() => openTools.value.find(tool => toolKey(tool) === selectedTool.value))
-const activeProblem = computed(() => Boolean(activeTool.value && runtimeProblems.value.has(new URL(activeTool.value.url).origin)))
+const activeProblem = computed(() => Boolean(activeTool.value?.url && runtimeProblems.value.has(new URL(activeTool.value.url).origin)))
 function navigateToolTab(event: KeyboardEvent, tool: Tool) {
   const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
   if (!keys.includes(event.key)) return
@@ -153,7 +161,7 @@ async function enterChat(id: string, resetPreview = true, navigate = true) {
   chatId.value = id; draft.value = drafts.get(id) || ''; messages.value = data.messages
   attachments.value = data.attachments; chatFiles.value = data.files; error.value = data.failure
   preview.value = data.preview; if (resetPreview) previewShown.value = Boolean(data.preview)
-  if (resetPreview) { previewRuntime.value = ''; manualPreviewPending.value = false; if (data.preview) void attempt(loadPreview) }
+  if (resetPreview) { ++previewLoadTicket; previewOpening.value = false; previewOpenFailed.value = false; previewRuntime.value = ''; manualPreviewPending.value = false; if (data.preview) void attempt(loadPreview) }
   liveText.value = ''; activity.value = []; running.value = data.run?.status === 'running'
   if (running.value) {
     for (const event of data.run.events) {
@@ -236,14 +244,18 @@ async function chatAction(action: string, chat: Chat) {
 }
 async function openTool(tool: Tool) {
   const key = toolKey(tool)
+  selectedTool.value = key; page.value = 'opened'
   if (opening.value.has(key)) return
+  if (openTools.value.some(item => toolKey(item) === key)) return
+  openTools.value.push({...tool, url: ''})
   opening.value.add(key)
   try {
-  if (!openTools.value.some(item => toolKey(item) === key)) {
     const runtime = await api('/tools/open', json('POST', { project: tool.project, name: tool.name }))
-    openTools.value.push({ ...tool, url: runtime.url })
-  }
-  selectedTool.value = key; page.value = 'opened'
+    const current = openTools.value.find(item => toolKey(item) === key)
+    if (current) current.url = runtime.url
+    openFailures.value.delete(key)
+  } catch {
+    openFailures.value.add(key)
   } finally { opening.value.delete(key) }
 }
 async function importTool() {
@@ -337,24 +349,48 @@ async function toolAction(action: string, tool: Tool) {
 }
 async function closeTool(tool: Tool) {
   const key = toolKey(tool)
+  if (opening.value.has(key)) return
   const state = await api(`/tools/${tool.project}/${tool.name}/status`)
   if (state.running) await ElMessageBox.confirm(t('工具正在运行，等待当前项目完成后关闭？'), t('关闭工具'), { type: 'warning' })
   await api(`/tools/${tool.project}/${tool.name}/close`, json('POST'))
+  openFailures.value.delete(key)
   openTools.value = openTools.value.filter(item => toolKey(item) !== key)
   if (selectedTool.value === key) selectedTool.value = openTools.value[0] ? toolKey(openTools.value[0]) : ''
   if (!openTools.value.length) selectedTool.value = ''
 }
 async function refreshTool(tool: Tool & {url: string}) {
-  const runtime = await api(`/tools/${tool.project}/${tool.name}/refresh`, json('POST'))
-  tool.url = runtime.url
+  const key = toolKey(tool)
+  if (opening.value.has(key)) return
+  opening.value.add(key)
+  try {
+    const runtime = await api(`/tools/${tool.project}/${tool.name}/refresh`, json('POST'))
+    if (tool.url) runtimeProblems.value.delete(new URL(tool.url).origin)
+    tool.url = runtime.url
+    openFailures.value.delete(key)
+  } catch (failure) {
+    if (!tool.url) openFailures.value.add(key)
+    throw failure
+  } finally { opening.value.delete(key) }
 }
 async function loadPreview() {
   const id = chatId.value, url = preview.value
   const parts = new URL(url, location.origin).pathname.split('/')
   if (parts.length !== 4) return
-  if (previewRuntime.value) runtimeProblems.value.delete(new URL(previewRuntime.value).origin)
-  const runtime = await api(`/tools/${parts[2]}/${parts[3]}/preview/open`, json('POST', { chat_id: id }))
-  if (id === chatId.value && url === preview.value) { previewRuntime.value = runtime.url; previewRevision.value++; manualPreviewPending.value = false; void pollBuildCheck() }
+  const target = id + ':' + url
+  if (previewOpening.value && previewLoadTarget === target) return
+  const ticket = ++previewLoadTicket
+  previewLoadTarget = target
+  previewOpening.value = true; previewOpenFailed.value = false
+  try {
+    const runtime = await api(`/tools/${parts[2]}/${parts[3]}/preview/open`, json('POST', { chat_id: id }))
+    if (ticket === previewLoadTicket && id === chatId.value && url === preview.value) {
+      if (previewRuntime.value) runtimeProblems.value.delete(new URL(previewRuntime.value).origin)
+      previewRuntime.value = runtime.url; previewRevision.value++; manualPreviewPending.value = false
+      void pollBuildCheck()
+    }
+  } catch {
+    if (ticket === previewLoadTicket && id === chatId.value && url === preview.value) previewOpenFailed.value = true
+  } finally { if (ticket === previewLoadTicket) previewOpening.value = false }
 }
 async function detachPreview() {
   if (!previewRuntime.value || !chatId.value) return
@@ -373,7 +409,7 @@ function frameTarget(event: MessageEvent) {
   const frames = Array.from(document.querySelectorAll('iframe'))
   const frame = frames.find(item => item.contentWindow === event.source)
   if (!frame || new URL(frame.src).origin !== event.origin) return
-  const tool = openTools.value.find(item => new URL(item.url).origin === event.origin)
+  const tool = openTools.value.find(item => item.url && new URL(item.url).origin === event.origin)
   if (tool && page.value === 'opened' && selectedTool.value === toolKey(tool)) return { project: tool.project, name: tool.name, chat_id: null }
   if (page.value === 'chat' && previewShown.value && previewRuntime.value && new URL(previewRuntime.value).origin === event.origin) {
     const parts = new URL(preview.value, location.origin).pathname.split('/')
@@ -408,7 +444,7 @@ async function nativeFiles(event: Event) {
     const element = document.elementFromPoint(detail.position.x / devicePixelRatio, detail.position.y / devicePixelRatio)
     const frame = element?.closest('iframe')
     if (frame) {
-      const tool = openTools.value.find(item => new URL(item.url).origin === new URL(frame.src).origin)
+      const tool = openTools.value.find(item => item.url && new URL(item.url).origin === new URL(frame.src).origin)
       const parts = previewRuntime.value && new URL(previewRuntime.value).origin === new URL(frame.src).origin ? new URL(preview.value, location.origin).pathname.split('/') : []
       const target = tool ? { project: tool.project, name: tool.name, chat_id: null } : parts.length === 4 ? {project: parts[2], name: parts[3], chat_id: chatId.value} : null
       if (target) await api(`/tools/${target.project}/${target.name}/inputs/selection`, json('POST', { ...target, ticket: detail.ticket }))
@@ -557,18 +593,19 @@ onBeforeUnmount(() => { stream?.close(); clearInterval(diagnosticTimer); clearIn
             <div class="tool-tab-list" role="tablist" :aria-label="t('已打开工具')">
               <div v-for="tool in openTools" :key="toolKey(tool)" class="tool-tab" :class="{ selected: selectedTool === toolKey(tool) }" role="presentation">
                 <button :id="'tool-tab-' + toolKey(tool)" role="tab" :aria-selected="selectedTool === toolKey(tool)" :aria-controls="'tool-panel-' + toolKey(tool)" :tabindex="selectedTool === toolKey(tool) ? 0 : -1" :title="tool.title" @click="selectedTool = toolKey(tool)" @keydown="navigateToolTab($event, tool)">{{ tool.title }}</button>
-                <el-button :icon="Close" text :aria-label="t('关闭工具') + ': ' + tool.title" :title="t('关闭工具')" @click="attempt(() => closeTool(tool))" />
+                <el-button :icon="Close" text :aria-label="t('关闭工具') + ': ' + tool.title" :title="t('关闭工具')" :disabled="opening.has(toolKey(tool))" @click="attempt(() => closeTool(tool))" />
               </div>
             </div>
             <div v-if="activeTool" class="tool-workspace-actions">
               <el-button size="small" :icon="ChatLineRound" text :title="t('通过对话调整这个工具')" @click="attempt(() => modifyTool(activeTool!))">{{ t('对话修改') }}</el-button>
               <el-button :icon="MagicStick" text :aria-label="t('修复工具问题')" :title="t('修复工具问题')" @click="attempt(() => repairTool(activeTool!))" />
-              <el-button :icon="Refresh" text :aria-label="t('刷新工具')" :title="t('刷新工具')" @click="attempt(() => refreshTool(activeTool!))" />
+              <el-button :icon="Refresh" text :aria-label="t('刷新工具')" :title="t('刷新工具')" :loading="opening.has(toolKey(activeTool!))" @click="attempt(() => refreshTool(activeTool!))" />
             </div>
           </div>
           <el-empty v-if="!openTools.length" class="opened-empty" :description="t('还没有打开工具')"><el-button type="primary" size="small" @click="page = 'tools'">{{ t('去工具列表') }}</el-button></el-empty>
+          <RuntimeConnection v-if="activeTool" :resource="`/tools/${activeTool.project}/${activeTool.name}/runtime`" :url="activeTool.url" :visible="page === 'opened'" :pending="opening.has(toolKey(activeTool))" :failed="openFailures.has(toolKey(activeTool))" :t="t" @retry="attempt(() => refreshTool(activeTool!))" @repair="attempt(() => repairTool(activeTool!))" />
           <div v-if="activeTool && activeProblem" class="preview-check failed" role="alert"><span>{{ t('工具暂时未能完成操作，请重试或让 AI 帮你修复') }}</span><el-button text size="small" @click="attempt(() => repairTool(activeTool!))">{{ t('让 AI 帮我修复') }}</el-button></div>
-          <iframe v-for="tool in openTools" v-show="selectedTool === toolKey(tool)" :id="'tool-panel-' + toolKey(tool)" :key="toolKey(tool)" role="tabpanel" :aria-labelledby="'tool-tab-' + toolKey(tool)" :src="tool.url" :title="tool.title" sandbox="allow-scripts allow-same-origin allow-downloads allow-forms" />
+          <iframe v-for="tool in openTools.filter(item => item.url)" v-show="selectedTool === toolKey(tool)" :id="'tool-panel-' + toolKey(tool)" :key="toolKey(tool)" role="tabpanel" :aria-labelledby="'tool-tab-' + toolKey(tool)" :src="tool.url" :title="tool.title" sandbox="allow-scripts allow-same-origin allow-downloads allow-forms" />
         </section>
         <section v-show="page === 'chat'" class="chat-workspace">
           <div class="chat-column" :style="{ width: previewShown ? `${effectiveChatWidth}px` : '100%' }">
@@ -588,12 +625,12 @@ onBeforeUnmount(() => { stream?.close(); clearInterval(diagnosticTimer); clearIn
             </div>
           </div>
           <div v-if="previewShown" class="resize-handle" role="separator" :aria-label="t('调整预览宽度')" :title="t('调整预览宽度')" @pointerdown.prevent="resize($event, 'chat')" />
-          <div v-if="previewShown" class="preview-column"><div class="panel-heading"><span>{{ t('工具预览') }}</span><div><el-button :icon="MagicStick" text :aria-label="t('让 AI 帮我修复')" :title="t('让 AI 帮我修复')" :disabled="!preview || running" @click="attempt(repairPreview)" /><el-button :icon="View" text :aria-label="t('让 AI 检查界面')" :title="t('让 AI 检查界面')" :disabled="!preview" @click="attempt(grantDiagnostics)" /><el-button :icon="FolderAdd" text :aria-label="t('保存到工具列表')" :title="t('保存到工具列表')" :disabled="!preview || buildCheck?.state !== 'passed' || manualPreviewPending || Boolean(checkError) || previewProblem" :loading="publishing" @click="attempt(publishPreview)" /><el-button :icon="Refresh" text :aria-label="t('刷新预览')" :title="t('刷新预览')" @click="attempt(loadPreview)" /><el-button :icon="Close" text :aria-label="t('关闭预览')" :title="t('关闭预览')" @click="togglePreview" /></div></div><el-alert v-if="manualPreviewPending" :title="t('修改已保存，请手动刷新预览')" type="info" :closable="false"><el-button text @click="attempt(loadPreview)">{{ t('刷新预览') }}</el-button></el-alert><div v-if="preview" class="preview-check" :class="previewProblem ? 'failed' : buildCheck?.state" aria-live="polite">
+          <div v-if="previewShown" class="preview-column"><div class="panel-heading"><span>{{ t('工具预览') }}</span><div><el-button :icon="MagicStick" text :aria-label="t('让 AI 帮我修复')" :title="t('让 AI 帮我修复')" :disabled="!preview || running" @click="attempt(repairPreview)" /><el-button :icon="View" text :aria-label="t('让 AI 检查界面')" :title="t('让 AI 检查界面')" :disabled="!preview" @click="attempt(grantDiagnostics)" /><el-button :icon="FolderAdd" text :aria-label="t('保存到工具列表')" :title="t('保存到工具列表')" :disabled="!preview || previewOpening || previewOpenFailed || buildCheck?.state !== 'passed' || manualPreviewPending || Boolean(checkError) || previewProblem" :loading="publishing" @click="attempt(publishPreview)" /><el-button :icon="Refresh" text :aria-label="t('刷新预览')" :title="t('刷新预览')" :loading="previewOpening" @click="attempt(loadPreview)" /><el-button :icon="Close" text :aria-label="t('关闭预览')" :title="t('关闭预览')" @click="togglePreview" /></div></div><div v-if="running || submitting" class="preview-editing" role="status" aria-live="polite"><span class="status-pulse" aria-hidden="true" /><span>{{ t('AI 正在修改工具…') }}</span></div><el-alert v-if="manualPreviewPending && !running && !submitting" :title="t('修改已保存，请手动刷新预览')" type="info" :closable="false"><el-button text @click="attempt(loadPreview)">{{ t('刷新预览') }}</el-button></el-alert><div v-if="preview && !running && !submitting" class="preview-check" :class="previewProblem ? 'failed' : buildCheck?.state" aria-live="polite">
             <span v-if="checkError">{{ checkError }}</span><span v-else>{{ t(previewProblem ? '试用时遇到问题，请先修复' : buildCheck?.state === 'passed' ? '工具已准备好预览' : buildCheck?.state === 'failed' ? '工具还需要调整，可以让 AI 帮你修复' : '正在准备工具…') }}</span>
             <el-button v-if="buildCheck?.state === 'failed' || previewProblem" text size="small" :disabled="running" @click="attempt(repairPreview)">{{ t('让 AI 帮我修复') }}</el-button>
             <el-button v-if="checkError || buildCheck?.state === 'failed'" text size="small" @click="pollBuildCheck(true)">{{ t('重试') }}</el-button>
             <small v-if="buildCheck?.state === 'passed' && !previewProblem">{{ t('保存前请试用一下，确认符合你的需要') }}</small>
-          </div><iframe v-if="previewRuntime" :key="previewRevision" :src="previewRuntime" :title="t('工具预览')" sandbox="allow-scripts allow-same-origin allow-downloads allow-forms" /><el-empty v-else :description="t('暂无工具预览')" /></div>
+          </div><RuntimeConnection v-if="preview && !running && !submitting" :resource="previewResource" :url="previewRuntime" :visible="page === 'chat' && previewShown" :pending="previewOpening" :failed="previewOpenFailed" :t="t" @retry="attempt(loadPreview)" @repair="attempt(repairPreview)" /><iframe v-if="previewRuntime" :key="previewRevision" :src="previewRuntime" :title="t('工具预览')" sandbox="allow-scripts allow-same-origin allow-downloads allow-forms" /><el-empty v-else-if="!previewOpening && !previewOpenFailed" :description="t('暂无工具预览')" /></div>
         </section>
         <section v-show="page === 'settings'" class="settings-page" :aria-label="t('设置')">
           <div class="settings-content">

@@ -13,17 +13,16 @@ from service.tools import ui_presets
 
 
 class ProgressTests(unittest.IsolatedAsyncioTestCase):
-    async def test_varying_read_offsets_warn_then_pause_without_source_progress(self):
+    async def test_repeated_pages_warn_then_pause(self):
         guard = agent_runtime.NoProgressMiddleware()
-        state = {'messages': [HumanMessage(content='Build CRM')], 'files': {}}
-        await guard.abefore_model(state, None)
+        state = {'messages': []}
         hints = []
-        for index in range(14):
+        for index in range(15):
             state['messages'].extend([
-                AIMessage(content='', tool_calls=[{'name': 'read_file', 'args': {'offset': index}, 'id': str(index)}]),
-                ToolMessage(content='same source', tool_call_id=str(index)),
+                AIMessage(content='', tool_calls=[{'name': 'read_tool_file', 'args': {'project': 'demo', 'name': 'counter', 'offset': index}, 'id': str(index)}]),
+                ToolMessage(content=json.dumps({'path': 'backend/main.py', 'file_fingerprint': 'same', 'total_lines': 100, 'lines': [{'line': 1, 'text': 'same source'}]}), tool_call_id=str(index)),
             ])
-            if index == 13:
+            if index == 14:
                 with self.assertRaises(agent_model.PublicAgentError):
                     await guard.abefore_model(state, None)
             else:
@@ -31,43 +30,42 @@ class ProgressTests(unittest.IsolatedAsyncioTestCase):
                 if hint:
                     hints.append(hint)
         self.assertEqual(1, len(hints))
-        self.assertIn('deliver_draft', hints[0]['messages'][0].content)
-        # New invocation starts with a clean investigation budget.
-        await agent_runtime.NoProgressMiddleware().abefore_model(state, None)
 
-    async def test_delivery_hint_requires_complete_successful_draft_and_is_once(self):
+    async def test_distinct_source_pages_are_progress_and_writes_reset_coverage(self):
         guard = agent_runtime.NoProgressMiddleware()
-        prefix = '/drafts/demo/crm/'
-        state = {'messages': [
-            AIMessage(content='', tool_calls=[{'name': 'write_file', 'args': {'file_path': prefix + 'frontend/App.vue'}, 'id': 'write'}]),
-            ToolMessage(content='Updated', tool_call_id='write'),
-        ], 'files': {prefix + 'frontend/App.vue': {'content': ['<template>CRM</template>']}}}
-        self.assertIsNone(await guard.abefore_model(state, None))
-        for path in ('tool.json', 'backend/main.py'):
-            state['files'][prefix + path] = {'content': ['synthetic']}
-        state['messages'][-1] = ToolMessage(content='Error: rejected', tool_call_id='write', status='error')
-        self.assertIsNone(await guard.abefore_model(state, None))
-        state['messages'][-1] = ToolMessage(content='Updated', tool_call_id='write')
-        hint = await guard.abefore_model(state, None)
-        self.assertIn('deliver_draft', hint['messages'][0].content)
-        self.assertIsNone(await guard.abefore_model(state, None))
-        state['messages'].append(HumanMessage(content='Explain this tool'))
-        self.assertIsNone(await agent_runtime.NoProgressMiddleware().abefore_model(state, None))
-
-    async def test_changed_source_resets_idle_budget(self):
-        guard = agent_runtime.NoProgressMiddleware()
-        state = {'messages': [], 'files': {}}
-        for index in range(30):
-            state['files']['/drafts/demo/crm/frontend/App.vue'] = {'content': [str(index)]}
-            state['messages'].append(AIMessage(content='', tool_calls=[{'name': 'write_file', 'args': {}, 'id': str(index)}]))
-            state['messages'].append(ToolMessage(content='Updated', tool_call_id=str(index)))
+        state = {'messages': []}
+        for index in range(20):
+            state['messages'].extend([
+                AIMessage(content='', tool_calls=[{'name': 'read_tool_file', 'args': {'project': 'demo', 'name': 'counter'}, 'id': str(index)}]),
+                ToolMessage(content=json.dumps({'path': 'backend/main.py', 'file_fingerprint': 'same', 'total_lines': 21, 'lines': [{'line': index+1, 'text': 'source'}]}), tool_call_id=str(index)),
+            ])
             self.assertIsNone(await guard.abefore_model(state, None))
+        state['messages'].extend([
+            AIMessage(content='', tool_calls=[{'name': 'write_tool_file', 'args': {}, 'id': 'write'}]),
+            ToolMessage(content='{"success":true}', tool_call_id='write'),
+        ])
+        await guard.abefore_model(state, None)
+        self.assertEqual({}, guard.pages)
+
+    async def test_completed_context_keeps_fresh_read_visible_to_model(self):
+        messages = [HumanMessage(content='Repair current source', id='user')]
+        for index in range(3):
+            messages.extend([
+                AIMessage(content='', id=f'call-{index}', tool_calls=[{'name': 'read_tool_file', 'args': {'project': 'demo', 'name': 'tool', 'path': 'frontend/App.vue'}, 'id': str(index)}]),
+                ToolMessage(content='const current = true;\n' * 4000, tool_call_id=str(index), id=f'read-{index}'),
+            ])
+        change = await agent_runtime.CompletedContextMiddleware().abefore_model({'messages': messages}, None)
+        current = next(item for item in change['messages'] if item.id == 'read-2')
+        self.assertTrue(current.content.startswith('const current = true;'))
+        self.assertIn('offset=', current.content)
+        self.assertNotIn('read omitted', current.content)
+        self.assertEqual('const current = true;\n' * 4000, messages[-1].content)
 
     async def test_completed_payload_compaction_preserves_pending_code_and_metadata(self):
         messages = [
             AIMessage(content='', id='written', tool_calls=[{'name': 'write_tool', 'args': {'files': {'frontend/App.vue': 'x' * 80000}}, 'id': 'done'}]),
             ToolMessage(content='{"revision":"saved"}', tool_call_id='done', id='receipt'),
-            AIMessage(content='', id='pending', tool_calls=[{'name': 'write_file', 'args': {'content': 'pending source'}, 'id': 'pending-call'}]),
+            AIMessage(content='', id='pending', tool_calls=[{'name': 'write_tool_file', 'args': {'content': 'pending source'}, 'id': 'pending-call'}]),
         ]
         change = await agent_runtime.CompletedContextMiddleware().abefore_model({'messages': messages}, None)
         self.assertEqual('written', change['messages'][0].id)
@@ -75,7 +73,7 @@ class ProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(item.id == 'pending' for item in change['messages']))
         self.assertEqual('x' * 80000, messages[0].tool_calls[0]['args']['files']['frontend/App.vue'])
 
-    async def test_budget_resume_skips_history_preparation_and_keeps_virtual_files(self):
+    async def test_budget_resume_skips_history_preparation_and_keeps_real_files(self):
         with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}):
             ai_chat.save_chat('synthetic', [{'role': 'user', 'content': 'Create CRM'}])
             packets = []
@@ -84,10 +82,10 @@ class ProgressTests(unittest.IsolatedAsyncioTestCase):
                 packets.append(packet)
                 results = [m for m in packet['messages'] if m['role'] == 'tool']
                 if not results:
-                    delta = {'tool_calls': [{'index': 0, 'id': 'write', 'function': {'name': 'write_file', 'arguments': json.dumps({'file_path': '/drafts/demo/crm/notes.txt', 'content': 'saved progress'})}}]}
+                    delta = {'tool_calls': [{'index': 0, 'id': 'write', 'function': {'name': 'write_tool_file', 'arguments': json.dumps({'project': 'demo', 'name': 'crm', 'path': 'backend/helpers.py', 'content': 'saved progress'})}}]}
                     finish = 'tool_calls'
                 elif len(results) == 1:
-                    delta = {'tool_calls': [{'index': 0, 'id': 'read', 'function': {'name': 'read_file', 'arguments': json.dumps({'file_path': '/drafts/demo/crm/notes.txt'})}}]}
+                    delta = {'tool_calls': [{'index': 0, 'id': 'read', 'function': {'name': 'read_tool_file', 'arguments': json.dumps({'project': 'demo', 'name': 'crm', 'path': 'backend/helpers.py'})}}]}
                     finish = 'tool_calls'
                 else:
                     self.assertEqual(2, len(results))

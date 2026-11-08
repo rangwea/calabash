@@ -1,4 +1,4 @@
-"""Offline execution tests against the real Deep Agents graph."""
+"""Offline execution tests against the single-agent execution graph."""
 
 import asyncio
 import json
@@ -89,12 +89,12 @@ class DeepAgentTests(unittest.IsolatedAsyncioTestCase):
             await self.collect(messages, "repeated")
         self.assertEqual("Ready", messages[-1]["content"])
 
-    async def test_conversations_have_isolated_virtual_files(self):
+    async def test_conversations_have_isolated_working_files(self):
         async def script(data, n):
             user = next(m["content"] for m in data["messages"] if m["role"] == "user")
             if not any(m["role"] == "tool" for m in data["messages"]):
                 await asyncio.sleep(0.01)
-                return call("write_file", {"file_path": "/draft.py", "content": user}, user)
+                return call("write_tool_file", {"project": "demo", "name": user, "path": "backend/helpers.py", "content": user}, user)
             return answer(user)
 
         first, second = [{"role": "user", "content": "alpha"}], [{"role": "user", "content": "beta"}]
@@ -104,12 +104,12 @@ class DeepAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("beta", second[-1]["content"])
         self.assertNotEqual(first[0]["agent_run_id"], second[0]["agent_run_id"])
 
-    async def test_followup_can_read_its_previous_virtual_draft(self):
+    async def test_followup_can_read_its_previous_working_draft(self):
         def script(data, n):
             if n == 1:
-                return call("write_file", {"file_path": "/draft.py", "content": "original-draft"}, "create")
+                return call("write_tool_file", {"project": "demo", "name": "counter", "path": "backend/helpers.py", "content": "original-draft"}, "create")
             if n == 3:
-                return call("read_file", {"file_path": "/draft.py"}, "read-again")
+                return call("read_tool_file", {"project": "demo", "name": "counter", "path": "backend/helpers.py"}, "read-again")
             return answer()
 
         messages = [{"role": "user", "content": "Create draft"}]
@@ -126,7 +126,7 @@ class DeepAgentTests(unittest.IsolatedAsyncioTestCase):
 
         def script(data, n):
             if n == 1:
-                return call("write_file", {"file_path": "/large.py", "content": source}, "large-draft")
+                return call("write_tool_file", {"project": "demo", "name": "counter", "path": "backend/helpers.py", "content": source}, "large-draft")
             self.assertLess(len(json.dumps(data["messages"])), 40000)
             self.assertNotIn(source, json.dumps(data["messages"]))
             return answer()
@@ -143,7 +143,7 @@ class DeepAgentTests(unittest.IsolatedAsyncioTestCase):
 
         async def script(data, n):
             if n == 1:
-                return call("write_file", {"file_path": "/draft.py", "content": "retained"}, "write-once")
+                return call("write_tool_file", {"project": "demo", "name": "counter", "path": "backend/helpers.py", "content": "retained"}, "write-once")
             if n == 2:
                 waiting.set()
                 await asyncio.Future()

@@ -106,10 +106,18 @@ async def open_tool(body: Target):
     return {'url': worker.url, 'revision': worker.revision}
 
 
+@router.get('/{project}/{name}/runtime')
+async def runtime_status(project: str, name: str, chat_id: str | None = None):
+    if chat_id is not None and not ai_chat.chat_exists(chat_id):
+        raise HTTPException(404, 'Conversation unavailable')
+    from service.tools.tool_health import snapshot
+    return await snapshot(project, name, chat_id)
+
+
 @router.get('/{project}/{name}/status')
 async def status(project: str, name: str):
     worker = workers.items.get(workers.key(project, name))
-    return await workers.status(worker) if worker else {'running': False}
+    return await workers.status(worker) if worker and worker.process.poll() is None else {'running': False}
 
 
 @router.post('/{project}/{name}/close')

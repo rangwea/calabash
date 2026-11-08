@@ -7,9 +7,9 @@ from core.local_paths import app_dir
 from service.tools.tool_bundles import identity
 
 _lock = threading.RLock()
-WRITE_TOOLS = {'write_tool', 'patch_tool_file', 'deliver_draft'}
+WRITE_TOOLS = {'write_tool', 'write_tool_file', 'patch_tool_file'}
 READ_TOOLS = {'list_tools', 'read_tool', 'read_tool_file', 'search_code', 'read_ui_reference', 'read_ui_preset',
-              'read_component_api', 'read_api_contract', 'read_build_diagnostics', 'list_attachments', 'read_attachment', 'read_task_context'}
+              'read_component_api', 'read_api_contract', 'read_build_diagnostics', 'list_attachments', 'read_attachment', 'read_task_context', 'read_tool_template'}
 VERIFY_TOOLS = {'validate_tool', 'check_tool_build', 'inspect_preview', 'verify_preview', 'interact_preview', 'read_tool_logs'}
 ROLES = {'main', 'analysis', 'implementation', 'repair', 'verification'}
 

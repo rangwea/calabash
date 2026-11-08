@@ -19,8 +19,8 @@ import httpx
 
 from core.i18n import t
 from core.local_paths import app_dir
-from service.tools.owned_process import spawn, stop
 from service.tools import tool_bundles as bundles
+from service.tools.owned_process import spawn, stop
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,8 +62,8 @@ def build_diagnostics(root):
         handle.seek(max(0, handle.seek(0, 2) - 65536))
         output = handle.read().decode('utf-8', errors='replace')
     result = []
-    for match in re.finditer(r'(frontend/[a-zA-Z0-9_./-]+)\((\d+),(\d+)\): error (TS\d+):', output):
-        path, line, column, code = match.groups()
+    for match in re.finditer(r'(frontend/[a-zA-Z0-9_./-]+)\((\d+),(\d+)\): error (TS\d+):([^\r\n]*)', output):
+        path, line, column, code, detail = match.groups()
         try:
             bundles.safe_path(path)
         except ValueError:
@@ -73,6 +73,8 @@ def build_diagnostics(root):
                    'TS2339': '属性不存在，请检查对象或组件接口',
                    'TS2307': '无法解析模块，请使用内置库或正确的相对路径'}.get(code, 'TypeScript 检查失败，请检查此处代码')
         item = {'file': path, 'line': int(line), 'column': int(column), 'code': code, 'message': message}
+        from service.tools.type_diagnostics import type_evidence
+        item.update(type_evidence(detail))
         if item not in result:
             result.append(item)
         if len(result) >= 20:
@@ -82,8 +84,8 @@ def build_diagnostics(root):
         try:
             value = json.loads(diagnostic.read_text())
             item = {'code': 'VITE', 'message': 'Vue 编译失败，请检查此处语法或导入'}
-            if value.get('code') == 'API_CONTRACT':
-                item = {'code': 'API_CONTRACT', 'message': str(value.get('message', '接口契约检查失败'))[:300]}
+            if value.get('code') in {'API_CONTRACT', 'SOURCE'}:
+                item = {'code': value['code'], 'message': str(value.get('message', '源码检查失败'))[:300]}
             if isinstance(value.get('file'), str) and value['file'].startswith(('frontend/', 'backend/')):
                 item['file'] = bundles.safe_path(value['file'])
             for key in ('line', 'column'):
@@ -96,9 +98,17 @@ def build_diagnostics(root):
 
 
 async def build_bundle(files):
-    bundles.validate(files)
     root = app_dir() / 'builds' / uuid4().hex
     root.mkdir(parents=True, mode=0o700)
+    try:
+        bundles.validate(files)
+    except (ValueError, SyntaxError) as error:
+        diagnostic = {'code': 'SOURCE', 'message': 'Working source is incomplete or invalid. Check tool.json and the required frontend/App.vue and backend/main.py files.'}
+        if isinstance(error, SyntaxError):
+            diagnostic.update(file=error.filename, line=error.lineno, message='Python syntax error. Read this line in the working source and correct it.')
+        (root / 'build.log').write_text('Working source validation failed', encoding='utf-8')
+        (root / 'build-diagnostics.json').write_text(json.dumps(diagnostic), encoding='utf-8')
+        raise FrontendBuildError(root) from error
     for relative, content in files.items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -225,6 +235,13 @@ class ToolWorkers:
                     raise ValueError(t('工具界面已断开，请等待当前任务完成后重新打开'))
                 await previous.stop()
                 self.items.pop(key, None)
+            if chat_id and not bundles.directory(project, name, chat_id).exists():
+                from service.tools import work_drafts
+                owner = 'preview-' + uuid4().hex
+                try:
+                    work_drafts.ensure(project, name, owner)
+                finally:
+                    work_drafts.release(owner)
             source = bundles.read(project, name, chat_id)
             meta = bundles.validate(source['files'])
             from service.capabilities.tool_capabilities import require_tool_capabilities
@@ -234,10 +251,18 @@ class ToolWorkers:
             log_run = None
             try:
                 root.mkdir(parents=True, mode=0o700)
+                frontend_root = bundles.directory(project, name, chat_id) if chat_id else root
+                # Backend modules are a read-only execution cache, never an
+                # authoring directory. Lazy imports must not mix edited code
+                # into an already running job before the user refreshes.
                 for relative, content in source['files'].items():
+                    if chat_id and not relative.startswith('backend/'):
+                        continue
                     path = root / relative
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(content)
+                    if relative.startswith('backend/'):
+                        path.chmod(0o400)
                 from service.tools.api_contracts import prepare
                 prepare(root, source['files'])
                 node, script = frontend_runtime()
@@ -249,7 +274,7 @@ class ToolWorkers:
                 port = free_port(); token = secrets.token_urlsafe(32); host_token = secrets.token_urlsafe(32)
                 frontend_port = free_port() if chat_id else None
                 origin = f'http://127.0.0.1:{frontend_port or port}'
-                config = {'root': str(root), 'project': project, 'name': name, 'port': port,
+                config = {'root': str(root), 'source_root': str(root), 'project': project, 'name': name, 'port': port,
                           'token': token, 'origin': origin, 'revision': source['revision'], 'host_token': host_token}
                 configs = app_dir() / 'worker-config'
                 configs.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -274,7 +299,7 @@ class ToolWorkers:
             try:
                 threading.Thread(target=capture, args=(process.stdout,), daemon=True).start()
                 if chat_id:
-                    worker.frontend = await spawn([node, str(script), 'serve', str(root), str(port), str(frontend_port)], group=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    worker.frontend = await spawn([node, str(script), 'serve', str(root), str(port), str(frontend_port), str(frontend_root)], group=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                     threading.Thread(target=capture, args=(worker.frontend.stdout,), daemon=True).start()
                 async with httpx.AsyncClient(trust_env=False) as client:
                     for _ in range(200):

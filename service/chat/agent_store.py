@@ -24,6 +24,7 @@ def connect():
     db.execute("CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, chat_id TEXT NOT NULL)")
     db.execute("CREATE TABLE IF NOT EXISTS receipts(run_id TEXT, call_id TEXT, arguments TEXT NOT NULL, result TEXT, PRIMARY KEY(run_id,call_id))")
     db.execute("CREATE TABLE IF NOT EXISTS code_targets(run_id TEXT,project TEXT,name TEXT,binding TEXT NOT NULL,PRIMARY KEY(run_id,project,name))")
+    db.execute("CREATE TABLE IF NOT EXISTS source_observations(chat_id TEXT,project TEXT,name TEXT,path TEXT,fingerprint TEXT NOT NULL,PRIMARY KEY(chat_id,project,name,path))")
     db.commit()
     return db
 
@@ -69,6 +70,7 @@ def delete_chat(chat_id):
                 for run_id in runs:
                     saver.delete_thread(run_id)
         delete_runs(runs)
+        db.execute("DELETE FROM source_observations WHERE chat_id=?", (chat_id,))
         for run_id in runs:
             db.execute("DELETE FROM receipts WHERE run_id=?", (run_id,))
             db.execute("DELETE FROM code_targets WHERE run_id=?", (run_id,))
@@ -84,3 +86,14 @@ def target(run_id, project, name):
 def bind_target(run_id, project, name, binding):
     with closing(connect()) as db, db:
         db.execute('INSERT OR IGNORE INTO code_targets VALUES(?,?,?,?)', (run_id, project, name, json.dumps(binding)))
+
+
+def observe_source(chat_id, project, name, path, fingerprint):
+    with closing(connect()) as db, db:
+        db.execute('INSERT OR REPLACE INTO source_observations VALUES(?,?,?,?,?)', (chat_id, project, name, path, fingerprint))
+
+
+def observed_source(chat_id, project, name, path):
+    with closing(connect()) as db:
+        row = db.execute('SELECT fingerprint FROM source_observations WHERE chat_id=? AND project=? AND name=? AND path=?', (chat_id, project, name, path)).fetchone()
+    return row[0] if row else None

@@ -8,6 +8,7 @@ from langchain.tools import ToolRuntime, tool
 
 from service.chat import agent_store, ai_chat
 from service.tools import tool_bundles as bundles
+from service.tools import work_drafts
 
 
 def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identity=None, role='main', workflow=None):
@@ -18,7 +19,6 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
     if workflow.role != role:
         raise ValueError('Task workflow role mismatch')
     source_reads = {}
-    staged = {}
     diagnosed = {}
     from service.chat.source_credentials import SourceCredentials
     credentials = SourceCredentials()
@@ -26,7 +26,7 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
         return json.dumps(value, ensure_ascii=False)
 
     def read(project, name):
-        value = bundles.read(project, name, chat_id)
+        value = work_drafts.ensure(project, name, run_id) if role in {"main", "implementation", "repair"} else bundles.read(project, name, chat_id)
         return {**value, 'files': {path: credentials.redact(content) for path, content in value['files'].items()}}
 
     def guard(project, name):
@@ -41,7 +41,7 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
 
     @tool
     def read_tool(project: str, name: str) -> str:
-        """List current draft/published file paths, line counts and whole-bundle revision without sending entire source. Then use read_tool_file/search_code or stage_tool. Does not execute code."""
+        """List current draft/published file paths, line counts and whole-bundle revision without sending entire source. Then use read_tool_file/search_code. This is the one real working draft; no staging is needed. Does not execute code."""
         guard(project, name)
         source = read(project, name)
         return result({'revision': source['revision'], 'source': source['source'], 'files': [
@@ -55,8 +55,10 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
             raise ValueError('Invalid page')
         source = read(project, name)
         source_reads[(project, name)] = source['revision']
+        raw = work_drafts.snapshot(project, name)['files'][path] if bundles.directory(project, name, chat_id).exists() else bundles.read(project, name)['files'][path]
+        work_drafts.observe(chat_id, project, name, path, raw)
         lines = source['files'][path].splitlines()
-        return result({'path': path, 'revision': source['revision'], 'source': source['source'],
+        return result({'path': path, 'source': source['source'], 'file_fingerprint': work_drafts.fingerprint(raw), 'total_lines': len(lines), 'next_offset': min(offset + limit, len(lines)),
                        'lines': [{'line': i + 1, 'text': value[:1000]} for i, value in enumerate(lines) if offset <= i < offset + limit]})
 
     @tool
@@ -77,93 +79,77 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
                         return result({'revision': source['revision'], 'matches': matches, 'truncated': True})
         return result({'revision': source['revision'], 'matches': matches})
 
-    async def save(project, name, files, revision, runtime):
+    async def save(project, name, changes, runtime, *, create_only=False):
         guard(project, name)
         from service.tools import ui_presets
         try:
-            existing = bundles.read(project, name, chat_id)['files']
+            existing = work_drafts.ensure(project, name, run_id)['files']
         except bundles.ToolUnavailable:
             existing = None
-        files = ui_presets.apply(files, messages, existing)
-        files = {path: credentials.restore(content) for path, content in files.items()}
+        if 'frontend/calabash-theme.css' in changes and not create_only:
+            raise ValueError('Theme tokens are host-managed. Change tool.json only when the user requests a new style.')
+        changes = dict(changes)
+        if 'tool.json' in changes:
+            themed = ui_presets.apply(changes, messages, existing if existing and 'tool.json' in existing else None)
+            if existing and 'frontend/calabash-theme.css' in existing:
+                work_drafts.observe(chat_id, project, name, 'frontend/calabash-theme.css', existing['frontend/calabash-theme.css'])
+            changes = themed
+        if existing:
+            for content in existing.values():
+                credentials.redact(content)
+        changes = {path: credentials.restore(content) for path, content in changes.items()}
         from service.tools.bundle_debug import repair_grants
         grant = repair_grants.get(chat_id)
-        if grant and (grant['worker'].project, grant['worker'].name) == (project, name) and diagnosed.get((project, name)) != revision:
+        current = work_drafts.snapshot(project, name) if existing else None
+        if grant and (grant['worker'].project, grant['worker'].name) == (project, name) and diagnosed.get((project, name)) != (current or {}).get('revision'):
             return result({'error': 'Read current source and approved run logs before editing. Changed external source requires manual retry and new consent.'})
-        digest = hashlib.sha256(result([project, name, files, revision]).encode()).hexdigest()
+        digest = hashlib.sha256(result([project, name, changes]).encode()).hexdigest()
         receipt = agent_store.begin(run_id, runtime.tool_call_id, digest)
         if receipt is not None:
             return result(receipt)
         try:
-            path = bundles.directory(project, name, chat_id)
-            manual = path.exists() or bundles.directory(project, name).exists()
-            # First draft derived from published source still needs its published revision.
-            if not path.exists() and bundles.directory(project, name).exists():
-                current = bundles.read(project, name)
-                if revision != current['revision']:
-                    raise ValueError('Published revision changed')
-                expected = ''
-            else:
-                expected = revision
-            saved = bundles.write(project, name, files, expected, chat_id)
-            url = f'/preview/{project}/{name}?chat={chat_id}'
-            saved.update(success=True, preview_url=url, requires_manual_run=manual, runtime_verified=False)
+            source = work_drafts.write_files(chat_id, run_id, project, name, changes, create_only=create_only)
+            files = source['files']
+            ready = all(files.get(path, '').strip() for path in ('tool.json', 'frontend/App.vue', 'backend/main.py'))
+            saved = {'success': True, 'changed_files': list(changes), 'ready_for_check': ready, 'runtime_verified': False}
             if grant:
-                diagnosed[(project, name)] = saved['revision']
-            ai_chat.remember_preview(chat_id, url)
-            ai_chat.bind_tool_chat(project, name, chat_id, bundles.validate(files).get('title', name))
-            runtime.stream_writer({'kind': 'manual_preview' if manual else 'preview', 'value': saved})
+                diagnosed[(project, name)] = source['revision']
+            if ready:
+                url = f'/preview/{project}/{name}?chat={chat_id}'
+                payload = {**saved, 'revision': source['revision'], 'preview_url': url, 'requires_manual_run': existing is not None}
+                ai_chat.remember_preview(chat_id, url)
+                try:
+                    title = json.loads(files['tool.json']).get('title', name)
+                except (ValueError, AttributeError):
+                    title = name
+                ai_chat.bind_tool_chat(project, name, chat_id, title)
+                runtime.stream_writer({'kind': 'manual_preview' if existing is not None else 'preview', 'value': payload})
         except (ValueError, OSError, SyntaxError) as error:
-            saved = {'error': str(error)[:300], 'executed': False}
+            saved = {'error': str(error)[:500], 'executed': False}
         agent_store.finish(run_id, runtime.tool_call_id, saved)
         return result(saved)
 
     @tool
-    async def write_tool(project: str, name: str, files: dict[str, str], runtime: ToolRuntime, revision: str = '') -> str:
-        """Save complete Vue/Python source bundle to this conversation draft only. Requires current revision for edits. Never publishes or runs it. Required files: tool.json, frontend/App.vue, backend/main.py. Prefer patch_tool_file for existing tools."""
-        return await save(project, name, files, revision, runtime)
+    async def write_tool(project: str, name: str, files: dict[str, str], runtime: ToolRuntime) -> str:
+        """Create a NEW complete tool directly in its real working directory. Never use to replace an existing draft. Required tool.json, frontend/App.vue, backend/main.py. Existing code: read_tool_file then patch_tool_file or write_tool_file. No staging, delivery or revision arguments."""
+        bundles.validate(files, project, name)
+        return await save(project, name, files, runtime, create_only=True)
 
     @tool
-    async def patch_tool_file(project: str, name: str, path: str, old: str, new: str, revision: str, runtime: ToolRuntime) -> str:
-        """Replace exactly one literal occurrence in one tool source file, preserving all other files and UI. Requires current whole-bundle revision. Does not execute or publish."""
+    async def write_tool_file(project: str, name: str, path: str, content: str, runtime: ToolRuntime) -> str:
+        """Create or replace one real working source file. Read existing files first; the host checks fingerprints automatically. Partial new tools remain on disk across interruptions. No stage/deliver step or revision argument. Never executes or publishes."""
+        bundles.safe_path(path)
+        return await save(project, name, {path: content}, runtime)
+
+    @tool
+    async def patch_tool_file(project: str, name: str, path: str, old: str, new: str, runtime: ToolRuntime) -> str:
+        """Replace one unique literal occurrence in the real working source. Read this file first. The host automatically rejects stale reads; do not pass a revision. Saves immediately without executing or publishing."""
         guard(project, name); bundles.safe_path(path)
         source = read(project, name)
-        if source['revision'] != revision or not old or source['files'].get(path, '').count(old) != 1:
-            return result({'error': 'Source changed or match not unique. Read latest file.'})
-        source['files'][path] = source['files'][path].replace(old, new, 1)
-        return await save(project, name, source['files'], revision, runtime)
-
-    @tool
-    def stage_tool(project: str, name: str, runtime: ToolRuntime) -> str:
-        """Stage current source into conversation-only virtual /drafts/project/name/ files, redacting credentials. Refreshes stale virtual files. Read/edit these with virtual filesystem tools; deliver_draft saves without emitting all code again."""
-        guard(project, name)
-        from deepagents.backends import StateBackend
-        source = read(project, name)
-        prefix = f'/drafts/{project}/{name}/'
-        backend = StateBackend()
-        for path in runtime.state.get('files', {}):
-            if path.startswith(prefix) and path[len(prefix):] not in source['files']:
-                backend.delete(path)
-        for path, content in source['files'].items():
-            backend.write(prefix + path, content)
-        source_reads[(project, name)] = source['revision']
-        staged[(project, name)] = source['revision']
-        return result({'directory': prefix, 'paths': list(source['files']), 'revision': source['revision'], 'source': source['source']})
-
-    @tool
-    async def deliver_draft(project: str, name: str, runtime: ToolRuntime, revision: str = '') -> str:
-        """Save /drafts/project/name/ virtual source files to this conversation preview without emitting all code in another tool call. New tools need required files; edits need latest revision from stage_tool/read_tool. Never runs or publishes."""
-        guard(project, name)
-        from deepagents.backends.utils import file_data_to_string
-        prefix = f'/drafts/{project}/{name}/'
-        if (bundles.directory(project, name, chat_id).exists() or bundles.directory(project, name).exists()) and staged.get((project, name)) != revision:
-            raise ValueError('Stage current source before delivering an existing virtual draft')
-        files = {path[len(prefix):]: file_data_to_string(value) for path, value in runtime.state.get('files', {}).items() if path.startswith(prefix)}
-        saved = await save(project, name, files, revision, runtime)
-        value = json.loads(saved)
-        if value.get('success'):
-            staged[(project, name)] = value['revision']
-        return saved
+        if not old or source['files'].get(path, '').count(old) != 1:
+            return result({'error': 'Match not unique. Read or search this current file.'})
+        changed = source['files'][path].replace(old, new, 1)
+        return await save(project, name, {path: changed}, runtime)
 
     @tool
     def validate_tool(project: str, name: str) -> str:
@@ -202,6 +188,8 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
         if not selected and target:
             guard(target['project'], target['name'])
             source = bundles.read(target['project'], target['name'], chat_id)['files']
+            if 'tool.json' not in source:
+                return result(ui_presets.reference(ui_presets.default()))
             meta = json.loads(source['tool.json']).get('ui')
             if not meta:
                 return result({'id': None, 'rules': 'Existing custom UI: preserve current scoped styles and layout. Do not apply the global default to this tool.'})
@@ -221,6 +209,13 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
     def set_task_brief(goal: str, requirements: list[str], preserve: list[str], acceptance: list[str]) -> str:
         """Record concise user-grounded requirements, must-preserve behavior/UI and acceptance checks for a complex task. Never invent user approval. No credentials, source bodies, logs or business data. Simple edits need not call this."""
         return result(workflow.brief(goal, requirements, preserve, acceptance, credentials.redact))
+
+    @tool
+    def read_tool_template(project: str, name: str) -> str:
+        """Read the single compiled Vue script-setup/typed FastAPI starter for NEW tools. Returns three source files, never writes or replaces existing work. Adapt requirements then use write_tool. Existing tools must be patched, not reset from this template."""
+        guard(project, name)
+        from service.tools.tool_templates import base_template
+        return result({'files': base_template(project, name), 'runtime_verified': False})
 
     @tool
     def read_ui_reference(name: str = 'vue-tool.md') -> str:
@@ -336,10 +331,10 @@ def build_tools(chat_id, messages, run_id, repair_session=None, *, model_identit
         agent_usage.record_checks(run_id, observed['revision'], value)
         return result(value)
 
-    operations = [list_tools, read_tool, read_tool_file, search_code, write_tool, patch_tool_file,
+    operations = [list_tools, read_tool, read_tool_file, search_code, write_tool, write_tool_file, patch_tool_file,
             validate_tool, check_tool_build, read_build_diagnostics, read_ui_reference, read_ui_preset, read_task_context, set_task_brief, list_attachments, read_attachment,
-            inspect_preview, interact_preview, verify_preview, read_tool_logs, read_component_api, read_api_contract,
-            stage_tool, deliver_draft]
+            inspect_preview, interact_preview, verify_preview, read_tool_logs, read_component_api, read_api_contract, read_tool_template,
+            ]
 
     def sync_wrapper(operation):
         @wraps(operation)

@@ -15,8 +15,10 @@ from fastapi.staticfiles import StaticFiles
 
 
 def create_tool_app(config):
+    sys.dont_write_bytecode = True
     from service.tools.tool_sdk import ToolSDK
     root = Path(config['root'])
+    source_root = Path(config.get('source_root', root))
     sdk = ToolSDK(config['project'], config['name'])
     sdk.host_token = config.get('host_token', '')
     @asynccontextmanager
@@ -26,7 +28,7 @@ def create_tool_app(config):
         await sdk.shutdown()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     from service.tools.api_errors import failure, install
-    install(app, root)
+    install(app, source_root)
 
     @app.middleware('http')
     async def authorize(request: Request, call_next):
@@ -48,7 +50,7 @@ def create_tool_app(config):
         try:
             response = await call_next(request)
         except Exception as error:  # noqa: BLE001 - isolate arbitrary user-tool failures at the HTTP boundary.
-            response = failure(request, error, root)
+            response = failure(request, error, source_root)
         if bootstrap:
             response.set_cookie(cookie, config['token'], httponly=True, samesite='strict')
         response.headers['Referrer-Policy'] = 'no-referrer'
@@ -71,7 +73,7 @@ def create_tool_app(config):
         script = frontend_runtime()[1].with_name('tool_runtime_guard.js')
         return Response('const guardLanguage = ' + json.dumps(language()) + ';\n' + script.read_text(encoding='utf-8'), media_type='text/javascript', headers={'Cache-Control': 'no-store'})
 
-    source = root / 'backend/main.py'
+    source = source_root / 'backend/main.py'
     sys.path.insert(0, str(source.parent))
     module_name = 'calabash_user_tool_' + hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:16]
     spec = importlib.util.spec_from_file_location(module_name, source)

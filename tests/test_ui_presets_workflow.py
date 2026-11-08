@@ -51,7 +51,7 @@ class PresetsWorkflowTests(unittest.TestCase):
         for role in ('analysis', 'verification'):
             tools=build_tools('chat', [], 'run', role=role)
             names={tool.name for tool in tools}
-            self.assertFalse(names & {'write_tool','patch_tool_file','deliver_draft','stage_tool'})
+            self.assertFalse(names & {'write_tool','write_tool_file','patch_tool_file'})
             self.assertIn('read_task_context',names)
             self.assertEqual(role=='analysis','set_task_brief' in names)
             self.assertEqual(role=='verification','check_tool_build' in names)

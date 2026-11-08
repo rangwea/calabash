@@ -1,4 +1,4 @@
-"""Bounded, non-executing inspection of source snapshots, including virtual drafts."""
+"""Bounded, non-executing inspection of current working source."""
 
 import ast
 import hashlib

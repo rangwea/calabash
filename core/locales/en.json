@@ -1,4 +1,5 @@
 {
+  "AI 正在修改工具…": "AI is updating the tool…",
   "工具界面已断开，请等待当前任务完成后重新打开": "The tool interface disconnected. Wait for the current task to finish, then reopen it.",
   "正在生成回复": "Generating a reply",
   "模型未返回可用内容，请重试或选择其他模型": "The model returned no usable content. Retry or choose another model.",
@@ -510,5 +511,11 @@
   "界面风格": "Style",
   "仅用于新工具；已有工具保留原来的风格。创建时输入 @ 可单独选择。": "Applies to new tools only. Existing tools keep their style. Type @ when creating to choose another.",
   "了解当前任务": "Reviewing the task",
-  "整理需求与验收条件": "Organizing requirements and acceptance checks"
+  "整理需求与验收条件": "Organizing requirements and acceptance checks",
+  "正在打开工具…": "Opening the tool…",
+  "工具暂时未能打开，可以重新打开或让 AI 帮你修复": "The tool could not open. Try reopening it or ask AI to fix it.",
+  "工具界面暂时断开，后台任务仍在运行，请等待完成后重新打开": "The tool view is disconnected. A background task is still running. Wait for it to finish before reopening.",
+  "暂时无法确认工具连接，请稍后检查或重新打开": "The tool connection could not be checked. Wait a moment or try reopening it.",
+  "工具连接已中断，可以重新打开；未保存的界面输入可能需要重新填写": "The tool connection was lost. You can reopen it. Unsaved form entries may need to be entered again.",
+  "重新打开": "Reopen"
 }

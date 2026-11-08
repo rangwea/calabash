@@ -24,22 +24,23 @@ process.on('SIGINT', shutdown)
 
 const libraryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const within = (base, file) => { const path = relative(base, file); return path === '' || path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path) }
-const [mode, sourceRoot, backendPort, port] = process.argv.slice(2)
+const [mode, sourceRoot, backendPort, port, workingSource] = process.argv.slice(2)
 if (!['build', 'serve'].includes(mode) || !sourceRoot) throw new Error('Invalid compiler invocation')
 // Canonicalize macOS /var and /private/var aliases before Vite computes assets.
 const root = realpathSync(sourceRoot)
+const frontend = resolve(realpathSync(workingSource || sourceRoot), 'frontend')
 const config = {
   configFile: false, root, cacheDir: resolve(root, 'node_modules/.vite'), plugins: [
     { name: 'calabash-source-boundary', enforce: 'pre',
       resolveId(source, importer) {
-        if (!importer || !within(resolve(root, 'frontend'), importer.split('?')[0])) return
+        if (!importer || !within(frontend, importer.split('?')[0])) return
         if (source === '@calabash/api') return
         if (isAbsolute(source) && source.split('?')[0] === resolve(root, 'calabash-api.ts')) return
         if (source === '\0plugin-vue:export-helper' || source === '/@vite/client') return
-        if (isAbsolute(source) && within(resolve(root, 'frontend'), source.split('?')[0])) return
+        if (isAbsolute(source) && within(frontend, source.split('?')[0])) return
         if (isAbsolute(source) && ['vue', 'element-plus', '@element-plus/icons-vue', 'echarts'].some(name => within(resolve(libraryRoot, 'node_modules', name), source.split('?')[0]))) return
         if (source.startsWith('.')) {
-          if (!within(resolve(root, 'frontend'), resolve(dirname(importer.split('?')[0]), source))) throw new Error('Tool imports must stay inside frontend/')
+          if (!within(frontend, resolve(dirname(importer.split('?')[0]), source))) throw new Error('Tool imports must stay inside frontend/')
         } else if (!['vue', 'element-plus', '@element-plus/icons-vue', 'echarts'].some(name => source === name || source.startsWith(name + '/'))) {
           throw new Error('Use only bundled frontend libraries and relative frontend files: ' + source.slice(0, 120))
         }
@@ -51,7 +52,7 @@ const config = {
           const generated = ['/entry.ts', '/probe.js', '/runtime-ui.mjs', '/calabash-api.ts', '/calabash-client.ts']
           if (path.startsWith('/@fs/')) {
             const file = resolve(process.platform === 'win32' ? path.slice(5) : path.slice(4))
-            if (!within(resolve(libraryRoot, 'node_modules'), file) && !within(resolve(root, 'frontend'), file) && !generated.some(name => file === resolve(root, '.' + name))) { res.statusCode = 403; return res.end() }
+            if (!within(resolve(libraryRoot, 'node_modules'), file) && !within(frontend, file) && !generated.some(name => file === resolve(root, '.' + name))) { res.statusCode = 403; return res.end() }
           } else if (!(path === '/' || generated.includes(path) || path.startsWith('/frontend/') || path.startsWith('/api/') || path.startsWith('/@') || path.startsWith('/node_modules/.vite/'))) { res.statusCode = 404; return res.end() }
           res.setHeader('Referrer-Policy', 'no-referrer'); next()
         })
@@ -59,6 +60,7 @@ const config = {
     }, vue()],
   resolve: { alias: {
     '@calabash/api': resolve(root, 'calabash-api.ts'),
+    '@tool': frontend,
     vue: resolve(libraryRoot, 'node_modules/vue/dist/vue.esm-bundler.js'),
     'element-plus': resolve(libraryRoot, 'node_modules/element-plus'),
     '@element-plus/icons-vue': resolve(libraryRoot, 'node_modules/@element-plus/icons-vue/dist/index.js'),
@@ -66,15 +68,15 @@ const config = {
   } },
   build: { outDir: resolve(root, 'dist'), emptyOutDir: true },
   server: { host: '127.0.0.1', port: Number(port), strictPort: true, cors: false,
-    fs: { strict: true, allow: [root, resolve(libraryRoot, 'node_modules')] },
+    fs: { strict: true, allow: [root, frontend, resolve(libraryRoot, 'node_modules')] },
     proxy: { '/api': `http://127.0.0.1:${Number(backendPort)}` } },
 }
 writeFileSync(resolve(root, 'index.html'), '<!doctype html><html><head><script src="/api/sdk/runtime-guard.js"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#263445}html{--el-color-primary:#0f6cbd}.calabash-files{display:grid;gap:10px;margin:12px 0}.calabash-results,.calabash-job-status{margin:12px 0;font-size:13px}.calabash-results>div{padding:6px 0}.el-dialog{max-width:calc(100vw - 32px)}</style></head><body><div id="app"></div><script type="module" src="/entry.ts"></script></body></html>')
 copyFileSync(resolve(libraryRoot, 'component/frontend_probe.js'), resolve(root, 'probe.js'))
 copyFileSync(resolve(libraryRoot, 'scripts/tool_runtime_ui.mjs'), resolve(root, 'runtime-ui.mjs'))
 copyFileSync(resolve(libraryRoot, 'scripts/tool_api_client.ts'), resolve(root, 'calabash-client.ts'))
-const themeImport = existsSync(resolve(root, 'frontend/calabash-theme.css')) ? "import './frontend/calabash-theme.css';" : ''
-writeFileSync(resolve(root, 'entry.ts'), `import {createApp} from 'vue';import ElementPlus from 'element-plus';import 'element-plus/dist/index.css';import App from './frontend/App.vue';import * as components from './runtime-ui.mjs';import {installProbe} from './probe.js';${themeImport}document.querySelector('#app').className='calabash-tool';const transport=window.fetch.bind(window);const errors=[];const probe=installProbe(window,e=>{if(errors.length<40)errors.push(e)});const page=crypto.randomUUID();const app=createApp(App).use(ElementPlus);for(const [name,component] of Object.entries(components))app.component(name,component);app.mount('#app');async function poll(){while(true){try{const command=await(await transport('/api/sdk/debug/next')).json();if(command.id){let result=command.operation==='snapshot'?{page,...probe.snapshot(),events:errors}:probe.operate(command.request);await transport('/api/sdk/debug/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:command.id,result})});}}catch{}await new Promise(r=>setTimeout(r,250));}}poll();`)
+const themeImport = existsSync(resolve(frontend, 'calabash-theme.css')) ? "import '@tool/calabash-theme.css';" : ''
+writeFileSync(resolve(root, 'entry.ts'), `import {createApp} from 'vue';import ElementPlus from 'element-plus';import 'element-plus/dist/index.css';import App from '@tool/App.vue';import * as components from './runtime-ui.mjs';import {installProbe} from './probe.js';${themeImport}document.querySelector('#app').className='calabash-tool';const transport=window.fetch.bind(window);const errors=[];const probe=installProbe(window,e=>{if(errors.length<40)errors.push(e)});const page=crypto.randomUUID();const app=createApp(App).use(ElementPlus);for(const [name,component] of Object.entries(components))app.component(name,component);app.mount('#app');async function poll(){while(true){try{const command=await(await transport('/api/sdk/debug/next')).json();if(command.id){let result=command.operation==='snapshot'?{page,...probe.snapshot(),events:errors}:probe.operate(command.request);await transport('/api/sdk/debug/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:command.id,result})});}}catch{}await new Promise(r=>setTimeout(r,250));}}poll();`)
 if (mode === 'build') {
   const paths = Object.fromEntries(['vue', 'element-plus', '@element-plus/icons-vue', 'echarts'].flatMap(name => [[name, [resolve(libraryRoot, 'node_modules', name)]], [name + '/*', [resolve(libraryRoot, 'node_modules', name, '*')]]]))
   paths['@calabash/api'] = [resolve(root, 'calabash-api.ts')]
