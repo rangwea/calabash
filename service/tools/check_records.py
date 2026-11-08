@@ -76,7 +76,7 @@ def read(project, name, chat_id, revision):
         'TS2353': '组件不支持此属性或事件，请查询组件接口',
         'TS2339': '属性不存在，请检查对象或组件接口',
         'TS2307': '无法解析模块，请使用内置库或正确的相对路径',
-        'VITE': 'Vue 编译失败，请检查此处语法或导入',
+        'VITE': 'React 编译失败，请检查此处语法或导入',
     }
     diagnostics = []
     issues = value.get('diagnostics', [])

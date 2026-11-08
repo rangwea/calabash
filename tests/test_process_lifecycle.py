@@ -80,9 +80,8 @@ class ProcessTests(unittest.IsolatedAsyncioTestCase):
         worker.process.poll.return_value = 1
         worker.frontend.poll.return_value = None
         manager.items[key] = worker
-        with patch('service.tools.tool_workers.asyncio.sleep', side_effect=asyncio.CancelledError):
-            with self.assertRaises(asyncio.CancelledError):
-                await manager.monitor()
+        with patch('service.tools.tool_workers.asyncio.sleep', side_effect=asyncio.CancelledError), self.assertRaises(asyncio.CancelledError):
+            await manager.monitor()
         worker.stop.assert_awaited_once()
         self.assertNotIn(key, manager.items)
 
@@ -93,27 +92,14 @@ class ProcessTests(unittest.IsolatedAsyncioTestCase):
         worker.frontend.poll.return_value = 1
         manager.items[manager.key('demo', 'counter', 'chat')] = worker
         manager.status = AsyncMock(return_value={'running': True})
-        with patch('service.tools.tool_workers.asyncio.sleep', side_effect=asyncio.CancelledError):
-            with self.assertRaises(asyncio.CancelledError):
-                await manager.monitor()
+        with patch('service.tools.tool_workers.asyncio.sleep', side_effect=asyncio.CancelledError), self.assertRaises(asyncio.CancelledError):
+            await manager.monitor()
         worker.stop.assert_not_awaited()
 
-    async def test_exit_acknowledges_only_after_drain_and_cleanup(self):
-        from service.tools.exit_handshake import watch
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'stop-jobs').touch()
-            workers = SimpleNamespace(stopping=False, prepare_exit=AsyncMock(side_effect=[False, True]), shutdown=AsyncMock())
-            checks, runs = SimpleNamespace(close=AsyncMock()), SimpleNamespace(close=AsyncMock())
-            with patch.dict(os.environ, {'CALABASH_SELECTION_DIR': directory}):
-                await watch(workers, checks, runs)
-            self.assertTrue(workers.stopping)
-            self.assertEqual(workers.prepare_exit.await_count, 2)
-            workers.shutdown.assert_awaited_once()
-            self.assertTrue((root / 'exit-ready').is_file())
 
     async def test_prepare_exit_blocks_sdk_admission(self):
         from fastapi import HTTPException, Request
+
         from service.tools.tool_sdk import ToolSDK
         with tempfile.TemporaryDirectory() as directory, patch('core.local_paths.Path.home', return_value=Path(directory)):
             sdk = ToolSDK('demo', 'counter')
@@ -151,6 +137,7 @@ class ProcessTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_safe_exit_finishes_current_item_and_rejects_new_batch(self):
         from fastapi import HTTPException, Request
+
         from service.tools.tool_sdk import ToolSDK
         with tempfile.TemporaryDirectory() as directory, patch('core.local_paths.Path.home', return_value=Path(directory)):
             sdk = ToolSDK('demo', 'counter')

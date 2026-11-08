@@ -36,19 +36,6 @@ class TemplateTests(unittest.TestCase):
                 self.assertEqual(422, client.post('/api/message', json={'text': 123}).status_code)
                 self.assertEqual(422, client.post('/api/message', json={'text': 'ok', 'unknown': True}).status_code)
 
-    def test_agent_template_is_readonly_and_available_to_roles(self):
-        import json
-
-        from service.chat.bundle_agent_tools import build_tools
-        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {}):
-            os.environ['HOME'] = temporary
-            for role in ('main', 'analysis', 'implementation', 'repair', 'verification'):
-                tools = build_tools('starterchat', [], 'starterrun', role=role)
-                operation = next(tool for tool in tools if tool.name == 'read_tool_template')
-                value = json.loads(operation.invoke({'project': 'demo', 'name': 'starter'}))
-                self.assertEqual(base_template('demo', 'starter'), value['files'])
-                self.assertFalse(value['runtime_verified'])
-            self.assertFalse((Path(temporary) / '.calabash/drafts').exists())
 
     def test_type_evidence_does_not_return_source_literals(self):
         from service.tools.type_diagnostics import type_evidence
@@ -69,12 +56,12 @@ class TemplateBuildTests(unittest.IsolatedAsyncioTestCase):
         built = await build_bundle(files)
         self.assertTrue((built / 'dist/index.html').is_file())
         broken = dict(files)
-        broken['frontend/App.vue'] = files['frontend/App.vue'].replace('text: text.value.trim()', 'text: 123').replace('type="primary"', 'type="invalid-variant"')
+        broken['frontend/App.tsx'] = files['frontend/App.tsx'].replace('text: text.trim()', 'text: 123').replace('type="primary"', 'type="invalid-variant"')
         with self.assertRaises(FrontendBuildError) as caught:
             await build_bundle(broken)
         diagnostics = caught.exception.diagnostics
         self.assertTrue(any(item.get('actual_type') == 'number' and item.get('expected_type') == 'string' for item in diagnostics), diagnostics)
-        self.assertTrue(any(item['line'] > 30 for item in diagnostics), diagnostics)
+        self.assertTrue(any(item['line'] > 0 for item in diagnostics), diagnostics)
         from service.tools import check_records
 
         revision = 'a' * 64
@@ -82,6 +69,6 @@ class TemplateBuildTests(unittest.IsolatedAsyncioTestCase):
         restored = check_records.read('demo', 'starter', 'starterchat', revision)['diagnostics']
         self.assertTrue(any(item.get('expected_type') == 'string' for item in restored))
         for item in diagnostics:
-            self.assertEqual('frontend/App.vue', item['file'])
+            self.assertEqual('frontend/App.tsx', item['file'])
             self.assertGreater(item['line'], 0)
             self.assertTrue(item['code'].startswith('TS'))

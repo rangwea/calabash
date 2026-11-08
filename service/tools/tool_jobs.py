@@ -82,7 +82,6 @@ class ToolJobs:
         try:
             self._notify()
             for job in candidates:
-                tool_activity.check_stop_request()
                 if self.cancelling:
                     job.status = "cancelled"
                     self._notify()

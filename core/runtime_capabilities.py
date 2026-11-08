@@ -38,7 +38,7 @@ def agent_guidance() -> str:
         "document.ocr 尚未实现；不把 FFmpeg 当作语音转写或视频理解模型"
         + "。不要将开发环境已安装或系统 PATH 中的包/程序当成内置能力，不运行 pip/uv/brew/npm 等安装命令，"
         "不要求用户安装系统工具。需要未提供的能力时如实说明限制和已有能力的替代方案，不编造已完成。"
-        "界面使用 Vue 和 Element Plus；XLSX 使用 openpyxl 或 pandas 的 openpyxl engine；旧版 xls/doc、扫描 PDF 和音视频理解不能冒充已支持。"
+        "界面使用 React 和 Ant Design；XLSX 使用 openpyxl 或 pandas 的 openpyxl engine；旧版 xls/doc、扫描 PDF 和音视频理解不能冒充已支持。"
         "Python 工具与宿主共享系统权限，不是沙箱；库可用不等于已取得网络、文件或破坏性操作授权。"
     )
 
@@ -124,9 +124,6 @@ def check_runtime() -> dict:
                 finally:
                     document.close()
                 checks.append("pdf_rendering")
-                from service.chat.agent_selfcheck import check_runtime as check_agent
-                check_agent()
-                checks.append("agent_checkpoint_roundtrip")
         except Exception as error:  # noqa: BLE001 - third-party codecs and renderers have different error types.
             errors["file_roundtrip"] = type(error).__name__
     return {"ok": not errors, "app": {"name": APP_NAME, "version": APP_VERSION}, "libraries": versions, "checks": checks, "errors": errors}

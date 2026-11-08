@@ -453,7 +453,7 @@
   "重新检查": "Check again",
   "允许 Agent 查询当前工具的构建诊断并修复草稿？修改后由你手动刷新和保存。": "Allow the Agent to query build diagnostics and repair this draft? Refresh and save manually afterward.",
   "请修复当前工具的构建错误，保留现有界面和业务功能。先读取当前源码，调用 check_tool_build 获取当前版本诊断，修复后再次检查。不要发布或执行业务。": "Fix this tool’s build errors while preserving its interface and business behavior. Read current source, call check_tool_build for current diagnostics, repair, then check again. Do not publish or run business actions.",
-  "Vue 编译失败，请检查此处语法或导入": "Vue compilation failed. Check syntax or imports at this location.",
+  "React 编译失败，请检查此处语法或导入": "React compilation failed. Check syntax or imports at this location.",
   "工具正在处理任务，请完成后再保存": "The tool is working. Save after it finishes.",
   "请先关闭这个工具，再删除": "Close this tool before deleting it.",
   "工具已更新，请刷新预览后再保存": "The tool was updated. Refresh the preview before saving.",

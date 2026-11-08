@@ -83,35 +83,78 @@ async def serve(reader=None, writer=None):
     reader = reader or sys.stdin.buffer
     writer = writer or sys.stdout
     ensure_local_dirs()
+    monitor = asyncio.create_task(workers.monitor())
+    pending = set()
+    locks = {}
+
+    def resource(method, params):
+        if method == 'agent.call':
+            args = params.get('arguments', {})
+            if args.get('project') and args.get('name'):
+                return ('tool', args['project'], args['name'])
+            return ('session', params.get('session'))
+        if method in {'agent.release', 'workspace.preview', 'workspace.publish'}:
+            from service.tools import harness_workspace as workspace
+            target = workspace.state(params.get('session'))
+            return ('tool', target['project'], target['name']) if target else ('session', params.get('session'))
+        if method.startswith('tools.') and 'project' in params:
+            return ('tool', params['project'], params.get('name'))
+        return None
+
+    async def respond(request):
+        request_id = request.get('id')
+        try:
+            method, params = request['method'], request['params']
+            if not isinstance(method, str) or not isinstance(params, dict):
+                raise TypeError('Invalid request')
+            key = resource(method, params)
+            if key:
+                async with locks.setdefault(key, asyncio.Lock()):
+                    result = await dispatch(method, params)
+            else:
+                result = await dispatch(method, params)
+            response = {'id': request_id, 'result': result}
+        except Exception:
+            logger.exception('Harness tool operation failed')
+            response = {'id': request_id, 'error': {'code': 'operation_failed', 'message': 'Unable to complete this tool operation.'}}
+        writer.write(json.dumps(response, ensure_ascii=False) + '\n')
+        writer.flush()
+
     try:
         while True:
             line = await asyncio.to_thread(reader.readline, MAX_REQUEST + 1)
-            if not line:
+            if not line or len(line) > MAX_REQUEST or not line.endswith(b'\n'):
                 break
-            request_id = None
             try:
-                if len(line) > MAX_REQUEST or not line.endswith(b'\n'):
-                    # Do not parse the tail as a second command after an oversized frame.
-                    break
                 request = json.loads(line)
                 if not isinstance(request, dict) or set(request) != {'id', 'method', 'params'}:
                     raise ValueError('Invalid request envelope')
-                request_id = request['id']
-                if not isinstance(request_id, str) or not 1 <= len(request_id) <= 80:
+                if not isinstance(request['id'], str) or not 1 <= len(request['id']) <= 80:
                     raise ValueError('Invalid request identifier')
-                result = await dispatch(request['method'], request['params'])
-                response = {'id': request_id, 'result': result}
-            except Exception:
-                logger.exception('Harness tool operation failed')
-                response = {'id': request_id, 'error': {'code': 'operation_failed', 'message': 'Unable to complete this tool operation.'}}
-            writer.write(json.dumps(response, ensure_ascii=False) + '\n')
-            writer.flush()
+            except (ValueError, TypeError):
+                writer.write(json.dumps({'id': None, 'error': {'code': 'operation_failed', 'message': 'Invalid request'}}) + '\n')
+                writer.flush()
+                continue
+            if request['method'] == 'app.prepare_exit':
+                await asyncio.gather(*pending, return_exceptions=True)
+                await respond(request)
+                continue
+            if len(pending) >= 32:
+                writer.write(json.dumps({'id': request['id'], 'error': {'code': 'busy', 'message': 'Please retry shortly'}}) + '\n')
+                writer.flush()
+                continue
+            task = asyncio.create_task(respond(request))
+            pending.add(task)
+            task.add_done_callback(pending.discard)
     finally:
-        # EOF withdraws admission, but allows the current file to finish.
+        # A disconnected renderer/host does not cancel a source write or business file operation.
+        await asyncio.gather(*pending, return_exceptions=True)
         while not await workers.prepare_exit():
             await asyncio.sleep(.25)
         from service.tools import harness_workspace as workspace
         workspace.release_all()
+        monitor.cancel()
+        await asyncio.gather(monitor, return_exceptions=True)
         await workers.shutdown()
         from service.tools.tool_checks import checks
         await checks.close()

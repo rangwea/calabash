@@ -1,50 +1,18 @@
-# 构建与发布
+# v1.3 构建与发布状态
 
-[English](RELEASING.md) | 中文
-
-构建者需要先按[开发与贡献指南](CONTRIBUTING.zh-CN.md)安装开发环境。最终用户无需这些工具。
-
-## 本地构建
+旧安装包构建保留在 v1.2 分支。v1.3 仅使用 Electron/DSH，不再构建旧宿主。
 
 ```bash
-npm run desktop:build
+uv sync --frozen
+npm ci
+npm run electron:prepare
+npm run electron:build
+npm run test:harness
+npm run electron:dev
 ```
 
-构建先用 PyInstaller 打包后端并检查内置运行库，再由 Tauri 生成安装包。默认 macOS 产物位于 `src-tauri/target/release/bundle/`。
+上游版本和包管理器由 electron/harness.lock.json 固定。源码与产物在 build/harness 下，不能提交；通过 Calabash overlay 和插件维护修改。
 
-[GitHub Release 工作流](.github/workflows/release.yml)支持：
+当前命令完成 Electron 开发构建与运行验证，不代表可分发安装包。GitHub workflow 验证三平台源码构建，不自动创建 Release。正式安装包还需接入 Calabash Python 运行库、编译运行库和资源路径，并完成实际安装验收；签名、公证另行处理。禁止把缺少工具运行库的上游安装包作为 Calabash 发布。
 
-- 手动运行 **Build release app**，生成三个平台的安装包 Artifacts，保留 14 天。
-- 推送与 `package.json` 版本一致的 `v<版本号>` 标签，全部构建成功后创建 Release 草稿并上传安装包。
-- 同一标签重跑只更新草稿，不覆盖已发布的 Release；验收各平台安装包后再手动发布。
-
-使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外发布令牌。可选能力插件独立分发，不打进主 App。
-
-## DMG 打包失败后的重试
-
-若编译已成功，仅 DMG 生成失败，保留详细日志后可以单独重试安装包步骤：
-
-```bash
-npm run desktop:bundle -- --bundles dmg
-```
-
-此命令复用已编译的应用和 Python 后端，不重新构建 Python 或 Rust，
-不修改安全设置，也不绕过签名或公证。不要同时运行多个打包命令。
-重试成功本身并不能证明之前失败的根因。
-
-## 发布前检查
-
-1. 将版本同步到根 package.json、package-lock.json、pyproject.toml、uv.lock、src-tauri/Cargo.toml 和 Cargo.lock。Tauri 配置直接读取根 package.json。
-2. 运行相关检查并提交，确认远程分支包含 Release 工作流和版本改动。
-3. 创建与应用版本完全一致的标签，再推送触发构建：
-
-```bash
-# 将 X.Y.Z 替换为 package.json 中的版本
-git tag -a vX.Y.Z -m "Calabash vX.Y.Z"
-git push origin main refs/tags/vX.Y.Z
-```
-
-4. 在 GitHub Actions 确认全部原生构建成功。下载并验收各平台安装包，验证启动、窗口行为、工具运行与结果交付。
-5. 核对 Release 草稿附件和说明，再手动发布。不要覆盖或移动已发布标签。
-
-开发者分发签名与 Apple 公证仍属于后续发布工作，当前工作流未接入；不得绕过系统安全提示。
+应用版本统一更新 package.json、package-lock.json、pyproject.toml、uv.lock 和 electron/workspace/package.json；DSH 固定版本不随应用版本改写。发布需用户明确授权。

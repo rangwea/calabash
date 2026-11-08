@@ -9,7 +9,7 @@ from unittest.mock import patch
 from service.tools import tool_bundles as bundles
 from service.tools.tool_checks import ToolChecks
 from service.tools.tool_workers import FrontendBuildError, build_diagnostics
-from tests.test_vue_workspace import fixture
+from tests.test_tool_bundles import fixture
 
 
 class CheckTests(unittest.IsolatedAsyncioTestCase):
@@ -48,7 +48,7 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_check_blocks_publish_and_explicit_retry_recovers(self):
         root = self.artifact('failed')
-        (root / 'build.log').write_text('/private/user/frontend/App.vue(12,7): error TS2322: secret-literal\n')
+        (root / 'build.log').write_text('/private/user/frontend/App.tsx(12,7): error TS2322: secret-literal\n')
         async def failed(files):
             raise FrontendBuildError(root)
         with patch('service.tools.tool_checks.build_bundle', failed):
@@ -77,7 +77,7 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         with patch('service.tools.tool_checks.build_bundle', build), patch('service.tools.tool_checks.compiler_version', return_value='v1'):
             old = self.checks.ensure('demo', 'counter', 'chat', self.source)
             await old.task
-            changed = {**self.source['files'], 'frontend/App.vue': '<template>New UI</template>'}
+            changed = {**self.source['files'], 'frontend/App.tsx': 'export default function App(){return <main>New UI</main>}'}
             source = {'files': changed, 'revision': bundles.revision(changed)}
             new = self.checks.ensure('demo', 'counter', 'chat', source)
             self.assertNotEqual(old.revision, new.revision)
@@ -89,20 +89,20 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_strict_compiler_reports_errors_then_builds(self):
         files = fixture()
-        files['frontend/App.vue'] = '<script setup lang="ts">const count: number = "wrong"</script><template><p>{{count}}</p></template>'
+        files['frontend/App.tsx'] = 'const count: number = "wrong";export default function App(){return <p>{count}</p>}'
         source = {'files': files, 'revision': bundles.revision(files)}
         entry = self.checks.ensure('demo', 'counter', 'chat', source)
         await entry.task
         self.assertEqual('failed', entry.state)
         issue = entry.diagnostics[0]
-        self.assertEqual(('frontend/App.vue', 'TS2322', 1), (issue['file'], issue['code'], issue['line']))
-        malformed = {**files, 'frontend/App.vue': '<template><div></template>'}
+        self.assertEqual(('frontend/App.tsx', 'TS2322', 1), (issue['file'], issue['code'], issue['line']))
+        malformed = {**files, 'frontend/App.tsx': 'export default function App(){return <main>}'}
         bad = self.checks.ensure('demo', 'counter', 'chat', {'files': malformed, 'revision': bundles.revision(malformed)})
         await bad.task
         self.assertEqual('failed', bad.state)
-        self.assertEqual('VITE', bad.diagnostics[0]['code'])
-        self.assertEqual('frontend/App.vue', bad.diagnostics[0]['file'])
-        files = {**files, 'frontend/App.vue': files['frontend/App.vue'].replace('"wrong"', '1')}
+        self.assertTrue(bad.diagnostics[0]['code'].startswith('TS'))
+        self.assertEqual('frontend/App.tsx', bad.diagnostics[0]['file'])
+        files = {**files, 'frontend/App.tsx': files['frontend/App.tsx'].replace('"wrong"', '1')}
         source = {'files': files, 'revision': bundles.revision(files)}
         passed = self.checks.ensure('demo', 'counter', 'chat', source)
         await passed.task
@@ -115,7 +115,7 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         files = fixture()
         saved = bundles.write('demo', 'counter', files, chat_id='chat')
         root = self.artifact('persisted')
-        (root / 'build.log').write_text('frontend/App.vue(4,2): error TS2322: local-only-secret')
+        (root / 'build.log').write_text('frontend/App.tsx(4,2): error TS2322: local-only-secret')
         async def build(files):
             raise FrontendBuildError(root)
         with patch('service.tools.tool_checks.build_bundle', build):
@@ -146,8 +146,8 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
 
     def test_diagnostics_do_not_return_arbitrary_paths_or_source_text(self):
         root = self.artifact('diagnostics')
-        (root / 'build.log').write_text('frontend/../../secret.ts(1,1): error TS2322: token\nfrontend/App.vue(4,2): error TS2353: password\n')
+        (root / 'build.log').write_text('frontend/../../secret.ts(1,1): error TS2322: token\nfrontend/App.tsx(4,2): error TS2353: password\n')
         issues = build_diagnostics(root)
         self.assertEqual(1, len(issues))
-        self.assertEqual('frontend/App.vue', issues[0]['file'])
+        self.assertEqual('frontend/App.tsx', issues[0]['file'])
         self.assertNotIn('password', str(issues))

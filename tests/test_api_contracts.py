@@ -76,19 +76,6 @@ class CRMContractTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(200, (await client.delete(f'/api/customers/{customer_id}')).status_code)
             self.assertEqual(404, (await client.get(f'/api/customers/{customer_id}')).status_code)
 
-    async def test_agent_can_read_current_contract_without_running_backend(self):
-        from service.chat.bundle_agent_tools import build_tools
-        from service.tools import tool_bundles
-        files = fixture()
-        files['backend/main.py'] += '\nraise RuntimeError("must not run on contract lookup")\n'
-        saved = tool_bundles.write('demo', 'crm_contract', files, chat_id='contractchat')
-        tools = build_tools('contractchat', [], 'synthetic', role='analysis')
-        operation = next(tool for tool in tools if tool.name == 'read_api_contract')
-        import json
-        result = json.loads(operation.invoke({'project': 'demo', 'name': 'crm_contract', 'operation': 'edit_customer'}))
-        self.assertEqual(saved['revision'], result['revision'])
-        self.assertEqual('edit_customer', result['operations'][0]['name'])
-        self.assertIn('CustomerInput', result['models'])
 
     async def test_errors_keep_operation_and_frames_without_input_or_exception_values(self):
         source = self.root / 'backend/main.py'
@@ -121,7 +108,7 @@ class CRMContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_typescript_build_rejects_wrong_body_then_accepts_typed_crm(self):
         files = fixture()
-        invalid = {**files, 'frontend/App.vue': files['frontend/App.vue'].replace('body: {name: name.value}', 'body: {name: 123}')}
+        invalid = {**files, 'frontend/App.tsx': files['frontend/App.tsx'].replace('body:{name}', 'body:{name:123}')}
         with self.assertRaises(FrontendBuildError) as caught:
             await build_bundle(invalid)
         self.assertTrue(any(item.get('code') == 'TS2322' for item in caught.exception.diagnostics))

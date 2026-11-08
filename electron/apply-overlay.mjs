@@ -32,6 +32,13 @@ export async function applyOverlay(root, upstream) {
   } else await replaceOnce(lockPath, 'importers:\n', 'importers:\n' + importer);
   await replaceOnce(join(upstream, 'apps/desktop-host/src/quit-inspection.ts'), 'const activeTasks = hasDesktopActiveTasks(liveAgents, jobs)', "const activeTasks = hasDesktopActiveTasks(liveAgents, jobs) || await (ctx.get('calabashWorkspace') as { activeTasks(): Promise<boolean> } | undefined)?.activeTasks() === true");
   await replaceOnce(join(upstream, 'packages/boot/app-boot/src/index.ts'), "const requiredStartupEntryIds = new Set<string>([", "const requiredStartupEntryIds = new Set<string>([\n  'calabash-workspace',");
+  // Calabash supplies defaults, not a launcher veto over explicit user choices.
+  const profileContext = join(upstream, 'packages/boot/app-boot/src/profile-context.ts');
+  await replaceOnce(profileContext,
+    '...readBundlePatches(binName, context, initialProfile),',
+    "...readBundlePatches(binName, context, initialProfile),\n    ...(process.env.CALABASH_LOCAL_WORKSPACE === '1' ? context.overlays : []),");
+  await replaceOnce(profileContext, '...context.overlays,',
+    "...(process.env.CALABASH_LOCAL_WORKSPACE === '1' ? [] : context.overlays),");
   const patch = join(upstream, 'calabash.patch.yml');
   await copyFile(join(root, 'electron/overlays/calabash.patch.yml'), patch);
   await replaceOnce(join(upstream, 'apps/desktop-host/src/index.ts'), 'patchFiles: [],', `patchFiles: [${JSON.stringify(patch)}],`);

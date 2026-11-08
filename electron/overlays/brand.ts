@@ -1,4 +1,4 @@
-/** Calabash occupies official public branding slots; generated tool UI stays Vue. */
+/** Calabash occupies official public branding slots; generated tool UI stays React. */
 import type { Context } from '@deepseek-ai/cordis'
 import { createElement } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'

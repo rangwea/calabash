@@ -8,6 +8,9 @@ import { requestedStyle } from './style-selection.ts'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session'
+import { join } from 'node:path'
+import { WorkspaceState } from './workspace-state.ts'
+import { HostTasks } from './tasks.ts'
 import { PythonBridge } from './bridge.ts'
 import type { AgentArguments } from './types.ts'
 export type { ToolEntry, ToolTarget, Preview, AgentArguments } from './types.ts'
@@ -19,6 +22,12 @@ export default class CalabashWorkspace extends TypertRemoteService {
   static inject = ['tools', 'sessionProjections']
   private styleReady: Promise<unknown>
   private bridge = new PythonBridge()
+  private tasks = new HostTasks(process.env.DSH_HOME ? join(process.env.DSH_HOME, 'calabash') : undefined)
+  private workspace = new WorkspaceState(process.env.DSH_HOME ? join(process.env.DSH_HOME, 'calabash') : undefined)
+  @Remote
+  async loadWorkspace(): Promise<string> { return JSON.stringify(this.workspace.read()) }
+  @Remote
+  async saveWorkspace(input: string): Promise<void> { if (input.length > 10000) throw new Error('Workspace too large'); this.workspace.write(JSON.parse(input)) }
   constructor(ctx: Context) {
     super(ctx, 'calabashWorkspace')
     this.styleReady = ctx.sessionProjections.register<'calabashStyle', string | null>({
@@ -28,17 +37,17 @@ export default class CalabashWorkspace extends TypertRemoteService {
         : current,
       wire: { viewSchema: z.string().nullable(), view: current => current, summary: false },
     })
-    ctx.effect(() => () => this.bridge.stop())
+    ctx.effect(() => async () => { await this.tasks.drain(); await this.bridge.stop() })
     ctx.on('session/event', (session, event) => {
       if (event.type === 'turn/end') void this.bridge.call('agent.release', { session: session.id }).catch(() => undefined)
     })
     ctx.tools.register(defineTool({
       name: 'calabash_tool',
-      description: 'Create and edit Calabash local office tools (Vue + Element Plus + Python). FIRST call instructions; use read_tool_template for a new tool. Read current source before editing. Use check_tool_build before finishing. Source is saved as a draft; user manually previews and saves to tool list. Never execute, publish, install dependencies or access arbitrary files. One tool per conversation.',
+      description: 'Create and edit Calabash local office tools (React + Ant Design + Python). FIRST call instructions; use read_tool_template for a new tool. Read current source before editing. Use check_tool_build before finishing. Source is saved as a draft; user manually previews and saves to tool list. Never execute, publish, install dependencies or access arbitrary files. One tool per conversation.',
       parameters: {
         operation: { type: 'string', required: true, enum: operations, description: 'Bounded Calabash operation.' },
-        reference: { type: 'string', description: 'One built-in reference: vue-tool.md, design.md, api-contract.md, file-workflow.md, lifecycle.md, quality-gate.md, frontend-debug.md.' },
-        component: { type: 'string', description: 'Element Plus component, such as el-table.' },
+        reference: { type: 'string', description: 'One built-in reference: react-tool.md, design.md, api-contract.md, file-workflow.md, lifecycle.md, quality-gate.md, frontend-debug.md.' },
+        component: { type: 'string', description: 'Ant Design component, such as Table.' },
         property_name: { type: 'string', description: 'One component prop or event.' },
         preset: { type: 'string', description: 'Built-in style pack identity, or omit for default.' },
         project: { type: 'string', description: 'Tool project, default for new office tools.' },
@@ -66,10 +75,27 @@ export default class CalabashWorkspace extends TypertRemoteService {
     return this.ctx.sessionProjections.snapshot(session, ['calabashStyle']).values.calabashStyle ?? null
   }
   async agent(operation: string, args: AgentArguments, session: string, callId: string, requestedPreset: string | null = null): Promise<string> {
-    return JSON.stringify(await this.bridge.call('agent.call', { session, call_id: callId, operation, arguments: args, requested_preset: requestedPreset }))
+    const input = { session, call_id: callId, operation, arguments: args, requested_preset: requestedPreset }
+    const resource = args.project && args.name ? `tool:${args.project}/${args.name}` : `session:${session}`
+    const id = this.tasks.submit('agent.call', input, resource, `agent:${session}:${callId}`, () => this.bridge.call('agent.call', input))
+    return JSON.stringify(await this.tasks.wait(id))
   }
+  /** UI submits a bounded operation once and can requery it after a disconnect/observer timeout. */
+  @Remote
+  async startOperation(operation: string, input: string, requestId: string): Promise<string> {
+    if (!/^[a-zA-Z0-9-]{1,80}$/.test(requestId) || input.length > 300000) throw new Error('Invalid task request')
+    const params = JSON.parse(input) as Record<string, unknown>
+    const allowed = ['tools.open', 'tools.close', 'workspace.preview', 'workspace.publish', 'library.action']
+    if (!allowed.includes(operation) || operation === 'library.action' && params.operation !== 'import') throw new Error('Unsupported task')
+    const resource = params.project && params.name ? `tool:${String(params.project)}/${String(params.name)}` : params.session ? `session:${String(params.session)}` : 'library:import'
+    return this.tasks.submit(operation, params, resource, `ui:${requestId}`, () => this.bridge.call(operation, params))
+  }
+  @Remote
+  async listTasks(): Promise<string> { return JSON.stringify(this.tasks.list()) }
+  @Remote
+  async task(id: string): Promise<string> { return JSON.stringify(this.tasks.inspect(id)) }
   /** Host quit inspection includes long-running Python tool jobs. */
-  async activeTasks(): Promise<boolean> { if (!this.bridge.started) return false; return await this.bridge.call('app.active_tasks', {}) === true }
+  async activeTasks(): Promise<boolean> { if (this.tasks.busy) return true; if (!this.bridge.started) return false; return await this.bridge.call('app.active_tasks', {}) === true }
   /** Bilingual style catalog for the composer; no user paths or source. */
   @Remote
   async uiPresets(): Promise<string> { return JSON.stringify(await this.bridge.call('ui.presets', {})) }

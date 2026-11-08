@@ -28,7 +28,7 @@ class Check:
 
 def compiler_version():
     node, script = frontend_runtime()
-    paths = [Path(node), script, script.parent / 'tool_runtime_ui.mjs', script.parent / 'tool_api_client.ts',
+    paths = [Path(node), script, script.parent / 'tool_runtime_ui.tsx', script.parent / 'tool_api_client.ts',
              Path(__file__).with_name('api_contracts.py'),
              script.parent.parent / 'component/frontend_probe.js', ROOT / 'package-lock.json']
     return tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in paths if p.exists())
@@ -114,7 +114,7 @@ class ToolChecks:
         for entry in self.entries.values():
             if not entry.task.done():
                 entry.task.cancel()
-        await asyncio.gather(*(e.task for e in self.entries.values()), return_exceptions=True)
+        await asyncio.gather(*(e.task for e in self.entries.values() if not e.task.done()), return_exceptions=True)
         for entry in self.entries.values():
             if entry.root and entry.root.parent == app_dir() / 'builds' and not entry.root.is_symlink():
                 shutil.rmtree(entry.root, ignore_errors=True)

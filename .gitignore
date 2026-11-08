@@ -24,9 +24,5 @@ files/*.zip
 /tools/
 .nicegui/
 
-# Desktop frontend / Tauri
+# JavaScript dependencies
 node_modules/
-desktop-ui/dist/
-src-tauri/target/
-src-tauri/gen/
-src-tauri/binaries/

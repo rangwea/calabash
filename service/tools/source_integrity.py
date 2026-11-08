@@ -29,7 +29,7 @@ def reject_placeholders(content):
 
 def validate_source_file(path, content):
     reject_placeholders(content)
-    if path.endswith('.vue'):
-        visible = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
-        if not re.search(r'<(?:template|script)(?:\s|/?>)', visible):
-            raise ValueError(f'{path}: Vue source needs a template or script block. Source was not saved; write real component code.')
+    if path == 'frontend/App.tsx':
+        visible = re.sub(r'/\*.*?\*/|(?m:^\s*//[^\n]*)', '', content, flags=re.DOTALL)
+        if '<!--' in visible or not re.search(r'\bexport\s+(?:default\b|\{[^}]*\bdefault\b)', visible):
+            raise ValueError(f'{path}: React entry must export a default component. Write real source, not a summary.')

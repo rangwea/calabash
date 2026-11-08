@@ -72,6 +72,7 @@ def prepare(directory: Path, plugin: Path | None = None) -> None:
         )
     if plugin:
         from PIL import Image, ImageDraw, ImageFont
+
         from service.capabilities.capability_packs import official_manager
 
         manager = official_manager()

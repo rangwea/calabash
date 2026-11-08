@@ -1,4 +1,4 @@
-"""Versioned Vue/Python source bundles. Reading/importing never executes code."""
+"""Versioned React/Python source bundles. Reading/importing never executes code."""
 
 import ast
 import hashlib
@@ -24,7 +24,7 @@ _lock = threading.RLock()
 class ToolUnavailable(ValueError):
     def __init__(self):
         self.code = 'tool_not_found'
-        super().__init__('No Vue draft or published tool exists. List tools or create a new Vue draft; do not guess source paths.')
+        super().__init__('No React draft or published tool exists. List tools or create a new React draft; do not guess source paths.')
 
 
 def identity(value):
@@ -41,7 +41,7 @@ def safe_path(value):
         raise ValueError('Invalid tool path')
     if any(not part or part.rstrip('. ') != part for part in value.split('/')):
         raise ValueError('Invalid tool path')
-    if value != 'tool.json' and not (value.startswith('frontend/') and path.suffix in {'.vue', '.ts', '.css', '.json'} or value.startswith('backend/') and path.suffix == '.py'):
+    if value != 'tool.json' and not (value.startswith('frontend/') and path.suffix in {'.tsx', '.ts', '.css', '.json'} or value.startswith('backend/') and path.suffix == '.py'):
         raise ValueError('Unsupported tool source')
     return value
 
@@ -70,8 +70,8 @@ def validate(files, project=None, name=None, *, check_source=True):
     if total > MAX_TOTAL:
         raise ValueError('Tool bundle too large')
     manifest = validate_manifest(files, project, name)
-    if not files.get('frontend/App.vue') or not files.get('backend/main.py'):
-        raise ValueError('App.vue and backend/main.py are required')
+    if not files.get('frontend/App.tsx') or not files.get('backend/main.py'):
+        raise ValueError('App.tsx and backend/main.py are required')
     tree = ast.parse(files['backend/main.py'])
     if not any(isinstance(node, ast.FunctionDef) and node.name == 'setup' for node in tree.body):
         raise ValueError('Backend must define setup(app, sdk), without starting a server')
@@ -82,7 +82,7 @@ def validate_manifest(files, project=None, name=None):
     manifest = json.loads(files.get('tool.json', '{}'))
     if not isinstance(manifest, dict):
         raise ValueError('tool.json must be an object')  # noqa: TRY004 - bounded source-validation errors use ValueError.
-    if manifest.get('format') != 'calabash-vue-tool' or manifest.get('version') != 1:
+    if manifest.get('format') != 'calabash-react-tool' or manifest.get('version') != 1:
         raise ValueError('Unsupported tool format')
     for key in ('project', 'name'):
         identity(manifest.get(key))

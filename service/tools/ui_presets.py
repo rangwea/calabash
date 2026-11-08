@@ -91,4 +91,4 @@ def reference(identity):
     identity = preset['id']
     return {**preset, 'rules': (ROOT / identity / 'guide.md').read_text(encoding='utf-8'),
             'tokens': (ROOT / identity / 'tokens.css').read_text(encoding='utf-8'),
-            'example': (ROOT / identity / 'example.vue').read_text(encoding='utf-8')}
+            'example': (ROOT / identity / 'example.tsx').read_text(encoding='utf-8')}

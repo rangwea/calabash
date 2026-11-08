@@ -1,4 +1,4 @@
-"""Real strict build + published Vue/Python worker through the Harness boundary."""
+"""Real strict build + published React/Python worker through the Harness boundary."""
 import os
 import shutil
 import tempfile
@@ -11,10 +11,10 @@ import httpx
 from backend.harness_bridge import dispatch
 from service.tools import tool_bundles as bundles
 from service.tools.tool_workers import build_bundle, workers
-from tests.test_vue_workspace import fixture
+from tests.test_tool_bundles import fixture
 
 
-@unittest.skipUnless(shutil.which('node') and Path('node_modules/vue').is_dir(), 'Frontend compiler required')
+@unittest.skipUnless(shutil.which('node') and Path('node_modules/react').is_dir(), 'Frontend compiler required')
 class HarnessToolRoundtripTests(unittest.IsolatedAsyncioTestCase):
     async def test_build_open_execute_and_safe_close(self):
         with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}):

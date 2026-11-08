@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import math
 import struct
-import subprocess
 import zlib
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
-ICONS_DIR = ROOT / "src-tauri" / "icons"
+ICONS_DIR = ROOT / "electron" / "icons"
 
 BACKGROUND = (8, 9, 11, 255)
 WHITE = (255, 255, 255, 255)
@@ -119,24 +117,11 @@ def main() -> None:
     ICONS_DIR.mkdir(parents=True, exist_ok=True)
     _save_png("icon.png", 1024)
 
-    subprocess.run(["npm", "exec", "tauri", "icon", str(ICONS_DIR / "icon.png")], cwd=ROOT, check=True)
+    from PIL import Image
 
-    cleanup_paths = [
-        ICONS_DIR / "android",
-        ICONS_DIR / "ios",
-        *ICONS_DIR.glob("Square*Logo.png"),
-        ICONS_DIR / "StoreLogo.png",
-    ]
-    for path in cleanup_paths:
-        if path.is_dir():
-            for child in sorted(path.rglob("*"), reverse=True):
-                if child.is_file():
-                    child.unlink()
-                elif child.is_dir():
-                    child.rmdir()
-            path.rmdir()
-        elif path.exists():
-            path.unlink()
+    with Image.open(ICONS_DIR / "icon.png") as image:
+        image.save(ICONS_DIR / "icon.ico", sizes=[(n, n) for n in (16, 32, 48, 64, 128, 256)])
+        image.save(ICONS_DIR / "icon.icns")
 
     print(f"Generated icons in {ICONS_DIR}")
 

@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import secrets
 from pathlib import Path
 from threading import Lock
@@ -76,7 +75,6 @@ class ToolSDK:
 
     def status(self):
         return {'running': bool(self.task and not self.task.done()),
-                'native_host': bool(os.environ.get('CALABASH_SELECTION_DIR')),
                 'status': self.jobs.status if self.jobs else 'idle',
                 'progress': self.jobs.progress if self.jobs else 0,
                 'counts': self.jobs.counts if self.jobs else {}}
@@ -89,9 +87,7 @@ class ToolSDK:
 
     def start_batch(self, values, handler):
         with self._start_lock:
-            from service.tools import tool_activity
-            directory = tool_activity._directory()
-            if self._stopping or (directory and (directory / 'stop-jobs').exists()):
+            if self._stopping:
                 from core.i18n import t
                 raise HTTPException(409, t('应用正在安全退出，暂不接受新任务'))
             if self._publishing:
@@ -253,9 +249,9 @@ class ToolSDK:
         paths = body.get('paths')
         if not isinstance(paths, list) or len(paths) > 20 or len(paths) + len(self._inputs) > 20:
             raise HTTPException(400, 'Input limit reached')
-        from service.files.conversation_files import _snapshot
+        from service.files.input_snapshot import snapshot
         for selected in paths:
-            original, path, info = _snapshot(selected)
+            original, path, info = snapshot(selected)
             signature = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
             if any(item['path'] == path and item['signature'] == signature for item in self._inputs.values()):
                 continue

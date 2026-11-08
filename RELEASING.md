@@ -1,52 +1,18 @@
-# Building and releasing
+# v1.3 build and release status
 
-English | [中文](RELEASING.zh-CN.md)
-
-Set up the development environment in [Contributing](CONTRIBUTING.md) first. End users do not need these build tools.
-
-## Local build
+The previous installer pipeline remains on the v1.2 branch. This branch uses Electron/DSH exclusively.
 
 ```bash
-npm run desktop:build
+uv sync --frozen
+npm ci
+npm run electron:prepare
+npm run electron:build
+npm run test:harness
+npm run electron:dev
 ```
 
-PyInstaller packages the backend and checks bundled runtime libraries, then Tauri creates the installer. Default macOS outputs are under `src-tauri/target/release/bundle/`.
+The upstream commit and package manager are pinned in electron/harness.lock.json. Generated sources/artifacts stay under ignored build/harness. Maintain changes through the Calabash overlay and plugin.
 
-The [GitHub Release workflow](.github/workflows/release.yml) supports:
+These commands validate a development build, not a distributable installer. GitHub CI checks source builds on three platforms and does not create a Release. Shipping installers still requires wiring Calabash Python/compiler runtimes and resource paths, followed by installation acceptance. Signing and notarization are separate. Do not publish an upstream installer missing the Calabash tool runtime.
 
-- Manually running **Build release app** to produce installer artifacts for three platforms, retained for 14 days.
-- Pushing a `v<version>` tag matching `package.json` to create a draft release with installers after all builds succeed.
-- Rerunning a tag to update draft assets only. Published releases are not overwritten. Test each platform’s installer before publishing the draft manually.
-
-It uses the automatically provided `GITHUB_TOKEN`, without an additional publishing token. Optional capability plugins are distributed separately from the main app.
-
-## Retrying a failed DMG bundle
-
-If compilation succeeded but DMG generation failed, retain the verbose output
-and retry only the installer step:
-
-```bash
-npm run desktop:bundle -- --bundles dmg
-```
-
-This reuses the compiled app and bundled Python backend. It does not rebuild
-Python or Rust, change security settings, or bypass signing and notarization.
-Do not run multiple packaging commands concurrently. A successful retry alone
-does not establish the cause of an earlier failure.
-
-## Before publishing
-
-1. Align the version in root package.json, package-lock.json, pyproject.toml, uv.lock, src-tauri/Cargo.toml and Cargo.lock. Tauri reads the root package.json directly.
-2. Run relevant checks and commit. Ensure the remote branch includes the release workflow and version changes.
-3. Create a tag matching the app version and push it to trigger builds:
-
-```bash
-# Replace X.Y.Z with the version in package.json
-git tag -a vX.Y.Z -m "Calabash vX.Y.Z"
-git push origin main refs/tags/vX.Y.Z
-```
-
-4. Confirm all native builds succeed in GitHub Actions. Download and test each platform’s installer, including startup, window behavior, tools and output delivery.
-5. Review draft assets and notes, then publish manually. Do not overwrite or move published tags.
-
-Developer distribution signing and Apple notarization remain separate future release work and are not configured in the current workflow. Do not bypass operating-system security prompts.
+Align application versions in package.json, package-lock.json, pyproject.toml, uv.lock and electron/workspace/package.json. Do not change the pinned DSH version to the app version. Publishing requires explicit user authorization.

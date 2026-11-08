@@ -1,6 +1,4 @@
 import asyncio
-import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,7 +15,7 @@ class OutputTests(unittest.TestCase):
         self.patch = patch("service.files.tool_outputs.app_dir", return_value=Path(self.temp.name))
         self.patch.start()
         self.addCleanup(self.patch.stop)
-        patcher = patch("service.chat.ai_chat.app_dir", return_value=Path(self.temp.name))
+        patcher = patch("service.files.output_history.app_dir", return_value=Path(self.temp.name))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -55,16 +53,6 @@ class OutputTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             b.path(key)
 
-    def test_ticket_contains_only_authorized_output(self):
-        outputs = ToolOutputs()
-        key = outputs.write("report.txt", lambda path: path.write_text("ok"))
-        with patch.dict(os.environ, {"CALABASH_SELECTION_DIR": self.temp.name}):
-            token = outputs.save_ticket(key)
-        ticket = Path(self.temp.name) / f"output-{token}.json"
-        data = json.loads(ticket.read_text())
-        self.assertEqual(data["path"], str(outputs.path(key)))
-        self.assertEqual(data["size"], 2)
-        self.assertEqual(ticket.stat().st_mode & 0o777, 0o600)
 
     def test_excel_merge_export_preserves_inputs(self):
         import pandas as pd

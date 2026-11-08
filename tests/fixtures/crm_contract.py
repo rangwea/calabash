@@ -90,44 +90,31 @@ def setup(app, sdk):
             return {'deleted': True}
 '''
 
-FRONTEND = '''<script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { api, type Customer, type CustomerDetail } from '@calabash/api'
-const customers = ref<Customer[]>([])
-const current = ref<CustomerDetail | null>(null)
-const name = ref('')
-const query = ref('')
-const note = ref('')
-const busy = ref(false)
-const error = ref('')
-async function perform(action: () => Promise<void>) {
-  if (busy.value) return
-  busy.value = true; error.value = ''
-  try { await action() } catch (problem) { error.value = problem instanceof Error ? problem.message : 'Please retry' }
-  finally { busy.value = false }
+FRONTEND = '''
+import {useEffect,useState} from 'react'
+import {Alert,Button,Card,Input,Space,Table,Typography} from 'antd'
+import {api,type Customer,type CustomerDetail} from '@calabash/api'
+export default function App(){
+ const [customers,setCustomers]=useState<Customer[]>([]),[current,setCurrent]=useState<CustomerDetail|null>(null)
+ const [name,setName]=useState(''),[query,setQuery]=useState(''),[note,setNote]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('')
+ async function perform(action:()=>Promise<void>){if(busy)return;setBusy(true);setError('');try{await action()}catch{setError('Please retry')}finally{setBusy(false)}}
+ async function load(){setCustomers(await api.list_customers({query:{q:query}}))}
+ async function select(id:number){const customer=await api.customer_detail({params:{customer_id:id}});setCurrent(customer);setName(customer.name)}
+ async function create(){const saved=await api.create_customer({body:{name}});await load();await select(saved.id)}
+ async function save(){if(!current)return;await api.edit_customer({params:{customer_id:current.id},body:{name,stage:'Contacted'}});await load();await select(current.id)}
+ async function followup(){if(!current)return;await api.add_followup({params:{customer_id:current.id},body:{note}});setNote('');await select(current.id)}
+ useEffect(()=>{let active=true;void api.list_customers({query:{q:''}}).then(rows=>{if(active)setCustomers(rows)}).catch(()=>{if(active)setError('Please retry')});return()=>{active=false}},[])
+ return <main style={{padding:24,maxWidth:960,margin:'auto',display:'grid',gap:16}}><Typography.Title level={2}>Customer workspace</Typography.Title>{error&&<Alert type="error" title={error}/>}
+ <Space><Input value={query} placeholder="Filter customers" onChange={e=>setQuery(e.target.value)}/><Button loading={busy} onClick={()=>void perform(load)}>Search</Button></Space>
+ <Table<Customer> rowKey="id" dataSource={customers} columns={[{title:'Customer',dataIndex:'name'},{title:'Stage',dataIndex:'stage'}]} onRow={row=>({onClick:()=>void perform(()=>select(row.id))})}/>
+ <Card title={current?'Customer detail':'New customer'}><Space orientation="vertical"><Input value={name} placeholder="Customer name" onChange={e=>setName(e.target.value)}/><Space><Button disabled={busy||!name} onClick={()=>void perform(create)}>Add customer</Button><Button disabled={busy||!current||!name} onClick={()=>void perform(save)}>Save changes</Button></Space>
+ {current&&<><h3>Follow-ups</h3><ul>{current.followups.map(item=><li key={item.id}>{item.note}</li>)}</ul><Input value={note} placeholder="Follow-up note" onChange={e=>setNote(e.target.value)}/><Button disabled={busy||!note} onClick={()=>void perform(followup)}>Add follow-up</Button></>}
+ </Space></Card></main>
 }
-async function load() { customers.value = await api.list_customers({query: {q: query.value}}) }
-async function select(id: number) { current.value = await api.customer_detail({params: {customer_id: id}}); name.value = current.value.name }
-async function create() { const saved = await api.create_customer({body: {name: name.value}}); await load(); await select(saved.id) }
-async function save() { if (!current.value) return; await api.edit_customer({params: {customer_id: current.value.id}, body: {name: name.value, stage: 'Contacted'}}); await load(); await select(current.value.id) }
-async function followup() { if (!current.value) return; await api.add_followup({params: {customer_id: current.value.id}, body: {note: note.value}}); note.value = ''; await select(current.value.id) }
-onMounted(() => perform(load))
-</script>
-<template>
-<main class="crm"><header><h1>Customer workspace</h1><span>Local CRM · Synthetic acceptance</span></header>
-<el-alert v-if="error" :title="error" type="error" :closable="false" />
-<section class="toolbar"><el-input v-model="query" placeholder="Filter customers" /><el-button :loading="busy" @click="perform(load)">Search</el-button></section>
-<el-table :data="customers" row-key="id" @row-click="row => perform(() => select(row.id))"><el-table-column prop="name" label="Customer" /><el-table-column prop="stage" label="Stage" /></el-table>
-<el-empty v-if="!customers.length" description="Add your first customer" />
-<section class="editor"><h2>{{ current ? 'Customer detail' : 'New customer' }}</h2>
-<el-input v-model="name" placeholder="Customer name" /><el-button :disabled="busy || !name" @click="perform(create)">Add customer</el-button><el-button :disabled="busy || !current || !name" @click="perform(save)">Save changes</el-button>
-<template v-if="current"><h3>Follow-ups</h3><ul><li v-for="item in current.followups" :key="item.id">{{ item.note }}</li></ul><el-input v-model="note" placeholder="Follow-up note" /><el-button :disabled="busy || !note" @click="perform(followup)">Add follow-up</el-button></template>
-</section></main>
-</template>
-<style scoped>.crm{padding:24px;max-width:960px;margin:auto}header{display:flex;align-items:center;justify-content:space-between}header span{color:#687887}.toolbar{display:flex;gap:12px;margin:20px 0}.editor{padding:20px;border:1px solid #dfe6ed;border-radius:12px;margin-top:20px}.editor .el-input{max-width:300px;margin-right:12px}h1{font-size:22px}h2{font-size:18px}</style>
 '''
 
 
+
 def fixture():
-    return {'tool.json': json.dumps({'format': 'calabash-vue-tool', 'version': 1, 'project': 'demo', 'name': 'crm_contract', 'title': 'Synthetic CRM'}),
-            'backend/main.py': BACKEND, 'frontend/App.vue': FRONTEND}
+    return {'tool.json': json.dumps({'format': 'calabash-react-tool', 'version': 1, 'project': 'demo', 'name': 'crm_contract', 'title': 'Synthetic CRM'}),
+            'backend/main.py': BACKEND, 'frontend/App.tsx': FRONTEND}

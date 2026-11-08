@@ -6,9 +6,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from core.local_paths import app_dir
-from service.chat.source_credentials import SourceCredentials
 from service.tools import tool_bundles as bundles
 from service.tools import work_drafts
+from service.tools.source_credentials import SourceCredentials
 from service.tools.tool_checks import checks
 from service.tools.tool_workers import workers
 
@@ -78,7 +78,7 @@ def source(session, project, name):
 
 async def agent_call(session, call_id, operation, arguments, *, requested_preset=None):
     """Model calls cannot run, publish, delete, install or access arbitrary paths."""
-    from service.chat import agent_store
+    from service.tools import operation_store
     if not isinstance(arguments, dict):
         raise TypeError('Invalid arguments')
     session_owner = owner(session)
@@ -95,12 +95,12 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
     if operation == 'list_tools':
         return bundles.list_tools()
     if operation == 'read_ui_reference':
-        reference = arguments.get('reference', 'vue-tool.md')
-        if reference not in {'vue-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md', 'api-contract.md'}:
+        reference = arguments.get('reference', 'react-tool.md')
+        if reference not in {'react-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md', 'api-contract.md'}:
             raise ValueError('Unknown built-in reference')
         return {'reference': reference, 'content': (Path(__file__).resolve().parents[2] / 'agent/skills/calabash/references' / reference).read_text()[:32000]}
     if operation == 'read_component_api':
-        from service.tools.vue_component_api import read_api
+        from service.tools.react_component_api import read_api
         return read_api(arguments.get('component', ''), arguments.get('property_name', ''), offset=arguments.get('offset', 0))
     if operation == 'read_ui_preset':
         target = state(session)
@@ -154,7 +154,7 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         changes = {path: credentials.restore(content)}
         if explicit and path != 'tool.json' and current.get('tool.json'):
             # An explicit style request owns this metadata change even when the
-            # model only edits App.vue. Never rely on the model to update it.
+            # model only edits App.tsx. Never rely on the model to update it.
             work_drafts.observe(session_owner, project, name, 'tool.json', current['tool.json'])
             changes['tool.json'] = current['tool.json']
         if 'tool.json' in changes:
@@ -162,14 +162,13 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
             if current.get('frontend/calabash-theme.css'):
                 work_drafts.observe(session_owner, project, name, 'frontend/calabash-theme.css', current['frontend/calabash-theme.css'])
         bind(session, project, name)
-        agent_store.register(session_owner, session_owner)
         digest = hashlib.sha256(json.dumps([operation, arguments, explicit], sort_keys=True).encode()).hexdigest()
-        receipt = agent_store.begin(session_owner, call_id, digest)
+        receipt = operation_store.begin(session_owner, call_id, digest)
         if receipt is not None:
             return receipt
         saved = work_drafts.write_files(session_owner, session_owner, project, name, changes)
-        result = {'saved': True, 'runtime_verified': False, 'ready_for_check': all(saved['files'].get(p) for p in ('tool.json', 'frontend/App.vue', 'backend/main.py'))}
-        agent_store.finish(session_owner, call_id, result)
+        result = {'saved': True, 'runtime_verified': False, 'ready_for_check': all(saved['files'].get(p) for p in ('tool.json', 'frontend/App.tsx', 'backend/main.py'))}
+        operation_store.finish(session_owner, call_id, result)
         return result
     value = source(session, project, name)
     if operation == 'read_tool':

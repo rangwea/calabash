@@ -80,12 +80,10 @@
     "wave"
   ],
   "platform_helpers": [
-    "component.tool_files.ToolFileInput",
-    "component.tool_results.ToolResults",
-    "component.tool_results.ToolJobStatus",
+    "@calabash/ui: CalabashFiles, CalabashResults, CalabashJobStatus, CalabashChart",
+    "service.tools.tool_sdk.ToolSDK",
     "service.tools.tool_jobs.ToolJobs",
-    "service.tools.tool_jobs.ToolTask",
-    "component.file_access.choose_path"
+    "service.tools.tool_jobs.ToolTask"
   ],
   "optional_packs": [
     {

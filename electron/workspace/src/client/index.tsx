@@ -1,6 +1,6 @@
-/** Public DSH slots: tool workspace plus a conversation-scoped Vue preview tab. */
+/** Public DSH slots: tool workspace plus a conversation-scoped React preview tab. */
 import type { Context } from '@deepseek-ai/cordis'
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -16,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import css from './tools.module.css'
+import { createOperations } from './operations.ts'
 import { inspectArchive, exportArchive } from './library-transfer.ts'
 import { registerUIStyles } from './ui-styles.tsx'
 import type { UIPreset, ToolEntry, Preview, ToolTarget } from '../types.ts'
@@ -25,6 +26,7 @@ const tab = '@calabash/preview'
 export const inject = ['slots', 'remote', 'layout', 'sidebarRight', 'sidebarRightTabs', 'locale', 'inputTriggers', 'sessions', 'uiWorkspace', 'workspaces', 'contextMenus']
 const button: CSSProperties = { border: '1px solid #dce3e9', borderRadius: 6, padding: '6px 12px', background: '#fff', color: '#46596a', cursor: 'pointer', fontSize: 13 }
 const row: CSSProperties = { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }
+type WorkspaceTab = ToolTarget & { url?: string; revision?: string }
 const frame: CSSProperties = { width: '100%', height: '100%', minHeight: 0, border: 0, background: '#fff', flex: 1 }
 function validPreview(value: Preview): Preview {
   const url = new URL(value.url)
@@ -39,15 +41,18 @@ export async function apply(ctx: Context): Promise<void> {
 function install(ctx: Context): void {
   const wire = ctx.remote.calabashWorkspace
   const unwrap = (result: RemoteResult<string>): string => { if (!result.ok) throw new Error('Tool operation failed'); return result.value }
+  const operation = createOperations(wire, value => unwrap(value as RemoteResult<string>))
   const api = {
     list: async () => unwrap(await wire.list()),
-    open: async (project: string, name: string) => unwrap(await wire.open(project, name)),
-    close: async (project: string, name: string) => unwrap(await wire.close(project, name)),
+    open: async (project: string, name: string) => operation('tools.open', { project, name }),
+    close: async (project: string, name: string) => operation('tools.close', { project, name }),
     state: async (session: string) => unwrap(await wire.state(session)),
-    preview: async (session: string, refresh: boolean) => unwrap(await wire.preview(session, refresh)),
-    publish: async (session: string, expected: string, replace: string, confirmed: boolean) => unwrap(await wire.publish(session, expected, replace, confirmed)),
+    preview: async (session: string, refresh: boolean) => operation('workspace.preview', { session, refresh }),
+    publish: async (session: string, expected: string, replace: string, confirmed: boolean) => operation('workspace.publish', { session, expected, replace_revision: replace, confirmed }),
   }
-  const library = async (operation: string, args: Record<string, unknown>) => unwrap(await wire.library(operation, JSON.stringify(args)))
+  const library = async (action: string, args: Record<string, unknown>) => action === 'import'
+    ? operation('library.action', { operation: action, arguments: args })
+    : unwrap(await wire.library(action, JSON.stringify(args)))
   registerUIStyles(ctx, async () => JSON.parse(unwrap(await wire.uiPresets())) as UIPreset[])
   const copy = (zh: string, en: string) => ctx.locale.getSnapshot().active === 'zh' ? zh : en
   function useCopy() {
@@ -58,12 +63,13 @@ function install(ctx: Context): void {
     const menus = useContextMenu()
     const t = useCopy()
     const [tools, setTools] = useState<ToolEntry[]>([])
-    const [tabs, setTabs] = useState<Preview[]>([])
+    const [tabs, setTabs] = useState<WorkspaceTab[]>([])
     const [active, setActive] = useState('')
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const collapsed = tabs.length > 0 && sidebarCollapsed
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
+    const [hostPending, setHostPending] = useState(0)
     const [query, setQuery] = useState('')
     const input = useRef<HTMLInputElement>(null)
     const actionLock = useRef(false)
@@ -72,17 +78,42 @@ function install(ctx: Context): void {
     const answer = (accepted: boolean) => { confirmation?.resolve(accepted); setConfirmation(null) }
     const key = (value: ToolTarget) => `${value.project}/${value.name}`
     const load = async () => { try { setTools(JSON.parse(await api.list()) as ToolEntry[]); setError('') } catch { setError(t('工具列表暂时不可用，请重试。', 'Unable to load tools. Please retry.')) } }
-    useEffect(() => { void load() }, [])
+    useEffect(() => {
+      let disposed = false, pending = false
+      const update = async () => {
+        if (pending) return
+        pending = true
+        try { const tasks = JSON.parse(unwrap(await wire.listTasks())) as {state:string}[]; if (!disposed) setHostPending(tasks.filter(task => task.state === 'queued' || task.state === 'running').length) }
+        catch { /* A reconnect must not interrupt host work. */ }
+        finally { pending = false }
+      }
+      void update(); const timer = setInterval(() => { void update() },1000)
+      return () => { disposed = true; clearInterval(timer) }
+    }, [])
+    const [restored, setRestored] = useState(false)
+    useEffect(() => {
+      void load()
+      void wire.loadWorkspace().then(result => {
+        const saved = JSON.parse(unwrap(result)) as { tabs: ToolTarget[]; active: string; collapsed: boolean; query: string }
+        setTabs(saved.tabs); setActive(saved.active); setSidebarCollapsed(saved.collapsed); setQuery(saved.query)
+        setRestored(true)
+      }).catch(() => { setError(t('工作区暂时无法恢复，请稍后重试。', 'Unable to restore the workspace. Please retry later.')) })
+    }, [])
+    useEffect(() => {
+      if (!restored) return
+      const timer = setTimeout(() => { void wire.saveWorkspace(JSON.stringify({ tabs: tabs.map(({project,name}) => ({project,name})), active, collapsed: sidebarCollapsed, query })).then(result => { if (!result.ok) setError(t('工作区暂时未能保存。', 'Unable to save the workspace.')) }).catch(() => {}) }, 200)
+      return () => clearTimeout(timer)
+    }, [tabs, active, sidebarCollapsed, query, restored])
     const open = async (tool: ToolEntry) => {
       const id = key(tool)
-      if (tabs.some(value => key(value) === id)) { setActive(id); return }
+      if (tabs.some(value => key(value) === id && value.url)) { setActive(id); return }
       if (busy) return
       setBusy(true); setError('')
-      try { const value = validPreview(JSON.parse(await api.open(tool.project, tool.name)) as Preview); setTabs(previous => [...previous, value]); setActive(id) }
+      try { const value = validPreview(JSON.parse(await api.open(tool.project, tool.name)) as Preview); setTabs(previous => previous.some(tab => key(tab) === id) ? previous.map(tab => key(tab) === id ? value : tab) : [...previous, value]); setActive(id) }
       catch { setError(t('工具暂时未能打开，请重试。', 'Unable to open this tool. Please retry.')) }
       finally { setBusy(false) }
     }
-    const close = async (tool: Preview) => {
+    const close = async (tool: WorkspaceTab) => {
       if (busy) return
       setBusy(true)
       try { await api.close(tool.project, tool.name); setTabs(previous => previous.filter(value => key(value) !== key(tool))); if (active === key(tool)) setActive('') }
@@ -137,7 +168,7 @@ function install(ctx: Context): void {
       ],
     }), [busy])
     return <section style={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-      <header style={{ ...row, padding: '16px 24px', borderBottom: '1px solid #edf0f4' }}><strong style={{ flex: 1 }}>{t('我的工具', 'My tools')}</strong><input ref={input} type="file" accept=".zip,application/zip" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} /><button style={button} disabled={busy} onClick={() => input.current?.click()}>{t('导入工具', 'Import tool')}</button><button style={button} onClick={() => { void load() }}>{t('刷新列表', 'Refresh')}</button></header>
+      <header style={{ ...row, padding: '16px 24px', borderBottom: '1px solid #edf0f4' }}><strong style={{ flex: 1 }}>{t('我的工具', 'My tools')}</strong>{hostPending > 0 && <span role="status" style={{fontSize:12,color:'#738291'}}>{t('正在处理任务…', 'Processing tasks…')}</span>}<input ref={input} type="file" accept=".zip,application/zip" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} /><button style={button} disabled={busy} onClick={() => input.current?.click()}>{t('导入工具', 'Import tool')}</button><button style={button} onClick={() => { void load() }}>{t('刷新列表', 'Refresh')}</button></header>
       {error && <p role="alert" style={{ margin: 12, color: '#a34635' }}>{error}</p>}
       {confirmation && <div style={{ position: 'fixed', inset: 0, background: '#16243540', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 24 }}><div role="alertdialog" aria-modal="true" aria-label={t('确认操作', 'Confirm action')} style={{ background: '#fff', borderRadius: 12, padding: 24, maxWidth: 420, boxShadow: '0 12px 48px #16243526' }}><p style={{ margin: '0 0 20px', lineHeight: 1.6 }}>{confirmation.message}</p><div style={{ ...row, justifyContent: 'flex-end' }}><button autoFocus style={button} onClick={() => answer(false)}>{t('取消', 'Cancel')}</button><button style={button} onClick={() => answer(true)}>{t('确认', 'Confirm')}</button></div></div></div>}
 
@@ -164,7 +195,7 @@ function install(ctx: Context): void {
           </div>
         </aside>
         {!!tabs.length && <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}><nav style={{ ...row, padding: 8, borderBottom: '1px solid #edf0f4' }}>{tabs.map(value => <span key={key(value)} style={{ ...row, background: active === key(value) ? '#edf4f1' : 'transparent', borderRadius: 6 }}><button style={{ ...button, border: 0, background: 'transparent' }} onClick={() => setActive(key(value))}>{value.name}</button><button style={{ ...button, border: 0, background: 'transparent' }} title={t('关闭工具', 'Close tool')} disabled={busy} onClick={() => { void close(value) }}>×</button></span>)}</nav>
-          {tabs.map(value => <iframe key={key(value)} src={value.url} title={value.name} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" style={{ ...frame, display: active === key(value) ? 'block' : 'none' }} />)}
+          {tabs.map(value => value.url ? <iframe key={key(value)} src={value.url} title={value.name} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" style={{ ...frame, display: active === key(value) ? 'block' : 'none' }} /> : <div key={key(value)} style={{ padding: 24, display: active === key(value) ? 'block' : 'none' }}><p>{t('标签已恢复，工具尚未运行。', 'Tab restored. The tool has not been started.')}</p><button style={button} disabled={busy} onClick={() => { void open(value) }}>{t('打开工具', 'Open tool')}</button></div>)}
         </div>}
       </div>
     </section>
@@ -214,8 +245,30 @@ function install(ctx: Context): void {
       {preview ? <iframe src={preview.url} title={t('工具预览', 'Tool preview')} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" style={frame} /> : <div style={{ padding: 24, color: '#7d8a97', fontSize: 14 }}>{target ? t('草稿已保存。点击打开预览，试用后可保存为正式工具。', 'Draft saved. Open the preview to try it, then save it as a tool.') : t('在对话中描述想创建的工具，草稿会关联到这里。', 'Describe the tool you want in the conversation. Its draft will appear here.')}</div>}
     </section>
   }
-  ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: panel }, Tools)))
-  ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: panel, order: -20, label: () => copy('我的工具', 'My tools') }, ({ size }) => <span style={{ fontSize: size }}>▦</span>)))
+  type Bounds = { left: number; top: number; width: number; height: number }
+  let bounds: Bounds | null = null
+  const listeners = new Set<() => void>()
+  function setBounds(value: Bounds | null) {
+    if (JSON.stringify(value) === JSON.stringify(bounds)) return
+    bounds = value; for (const notify of listeners) notify()
+  }
+  function WorkspaceSeat() {
+    const element = useRef<HTMLDivElement>(null)
+    useLayoutEffect(() => {
+      const update = () => { if (element.current) { const r = element.current.getBoundingClientRect(); setBounds({ left:r.left, top:r.top, width:r.width, height:r.height }) } }
+      const observer = new ResizeObserver(update); if (element.current) observer.observe(element.current)
+      window.addEventListener('resize', update); update()
+      return () => { observer.disconnect(); window.removeEventListener('resize', update); setBounds(null) }
+    }, [])
+    return <div ref={element} style={{ width:'100%', height:'100%' }} />
+  }
+  function WorkspaceLayer(props: { useContextMenu: UseContextMenu }) {
+    const rect = useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => bounds)
+    return <div style={{ position:'fixed', left:rect?.left ?? 0, top:rect?.top ?? 0, width:rect?.width ?? 0, height:rect?.height ?? 0, display:rect ? 'block' : 'none', pointerEvents:'auto', zIndex:1, background:'#fff' }}><Tools {...props} /></div>
+  }
+  ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: panel }, WorkspaceSeat)))
+  ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name:'shell.overlay', id:'calabash.workspace', order:-100 }, WorkspaceLayer)))
+  ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: panel, order: -20, label: () => copy('我的工具', 'My tools') }, ({ size }) => <svg width={size ?? 18} height={size ?? 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2.5" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12a25 25 0 0 0 18 0M10 12v3h4v-3" /></svg>)))
   ctx.effect(() => ctx.sidebarRightTabs.register({ id: tab, kind: 'calabash-preview', title: () => copy('工具预览', 'Tool preview'), keepMounted: true, guide: [{ id: 'preview', order: -20, title: () => copy('工具预览', 'Tool preview'), description: () => copy('试用当前对话中的工具', 'Try the tool from this conversation'), icon: () => <span>▦</span> }] }))
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: tab, inject: (sessionId) => ({ sessionId }) }, Draft)))
 }

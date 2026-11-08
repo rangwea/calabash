@@ -1,12 +1,10 @@
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
-from service.chat import ai_chat
-from service.files import tool_outputs
+from service.files import output_history, tool_outputs
 
 
 class OutputHistoryTests(unittest.TestCase):
@@ -14,7 +12,7 @@ class OutputHistoryTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
-        for module in (ai_chat, tool_outputs):
+        for module in (output_history, tool_outputs):
             patcher = patch.object(module, "app_dir", return_value=self.root)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -34,8 +32,6 @@ class OutputHistoryTests(unittest.TestCase):
         self.assertEqual("one", restored.path(file_id).read_text())
 
     def test_tool_and_chat_scopes_are_isolated(self):
-        ai_chat.save_chat("one", [])
-        ai_chat.save_chat("two", [])
         writer = tool_outputs.ToolOutputs(owner=(self.owner[0], "one"))
         file_id = writer.write("report.txt", lambda path: path.write_text("one"))
         for owner in [self.owner, (self.owner[0], "two"), ("tool:demo/other", "one")]:
@@ -76,32 +72,3 @@ class OutputHistoryTests(unittest.TestCase):
             self.assertFalse(rows[file_id]["available"])
             with self.assertRaises((OSError, ValueError)):
                 restored.path(file_id)
-
-    def test_delete_chat_removes_records_not_files_and_blocks_late_writes(self):
-        ai_chat.save_chat("one", [])
-        writer = tool_outputs.ToolOutputs(owner=(self.owner[0], "one"))
-        file_id = writer.write("report.txt", lambda path: path.write_text("one"))
-        path = writer.path(file_id)
-        ai_chat.delete_chat("one")
-        self.assertEqual([], writer.files())
-        self.assertTrue(path.is_file())
-        with self.assertRaises(KeyError):
-            writer.path(file_id)
-        with self.assertRaises(ValueError):
-            writer.write("late.txt", lambda path: path.write_text("late"))
-        with closing(ai_chat.connect()) as db:
-            self.assertEqual(0, db.execute("SELECT COUNT(*) FROM output_runs WHERE chat_id='one'").fetchone()[0])
-            self.assertEqual(0, db.execute("SELECT COUNT(*) FROM output_files").fetchone()[0])
-
-    def test_chat_deleted_during_write_does_not_register_result(self):
-        ai_chat.save_chat("one", [])
-        writer = tool_outputs.ToolOutputs(owner=(self.owner[0], "one"))
-
-        def export(path):
-            path.write_text("completed after deletion")
-            ai_chat.delete_chat("one")
-
-        with self.assertRaises(ValueError):
-            writer.write("late.txt", export)
-        self.assertEqual([], writer.files())
-        self.assertFalse(list(writer.directory.glob("*.txt")))

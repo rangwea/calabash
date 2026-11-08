@@ -11,7 +11,7 @@ from zipfile import ZipFile
 from service.tools import harness_library as library
 from service.tools import harness_workspace as workspace
 from service.tools import tool_bundles as bundles
-from tests.test_vue_workspace import fixture
+from tests.test_tool_bundles import fixture
 
 
 class LibraryTests(unittest.IsolatedAsyncioTestCase):

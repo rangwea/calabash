@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src-tauri/icons/icon.png" alt="Calabash logo" width="88" height="88">
+  <img src="component/assets/calabash.png" alt="Calabash logo" width="88" height="88">
 </p>
 
 <h1 align="center">Calabash</h1>
@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="License: Elastic License 2.0"></a>
   <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="Desktop builds"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 or newer"></a>
-  <a href="src-tauri/Cargo.toml"><img src="https://img.shields.io/badge/Tauri-2-24a7b8?style=flat-square&amp;logo=tauri&amp;logoColor=white" alt="Tauri 2"></a>
+  <a href="electron/README.md"><img src="https://img.shields.io/badge/Electron-DSH-47848f?style=flat-square&amp;logo=electron&amp;logoColor=white" alt="Electron + DSH"></a>
 </p>
 
 **Everyone should be able to create their own app.**

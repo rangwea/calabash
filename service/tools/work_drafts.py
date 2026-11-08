@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from uuid import uuid4
 
 from core.local_paths import app_dir
-from service.chat import agent_store
+from service.tools import operation_store
 from service.tools import tool_bundles as bundles
 from service.tools.source_integrity import validate_source_file
 
@@ -118,7 +118,7 @@ def ensure(project, name, run_id):
 
 
 def observe(chat_id, project, name, path, content):
-    agent_store.observe_source(chat_id, project, name, path, fingerprint(content))
+    operation_store.observe_source(chat_id, project, name, path, fingerprint(content))
 
 
 def _atomic(path, content):
@@ -161,7 +161,7 @@ def write_files(chat_id, run_id, project, name, changes, *, create_only=False):
             if not isinstance(content, str) or len(content.encode()) > bundles.MAX_FILE:
                 raise ValueError('Invalid workspace source')
             validate_source_file(path, content)
-            if path in current and agent_store.observed_source(chat_id, project, name, path) != fingerprint(current[path]):
+            if path in current and operation_store.observed_source(chat_id, project, name, path) != fingerprint(current[path]):
                 raise ValueError(f'{path}: source changed or has not been read. Read this current file before editing; no revision argument is needed.')
         for path, content in changes.items():
             _atomic(root / path, content)

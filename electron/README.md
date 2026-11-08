@@ -1,6 +1,6 @@
 # Calabash on DeepSeek Harness Electron
 
-The migration entry uses the official DSH Electron shell and chat UI, with a local Calabash plugin. Generated tools remain independent Vue 3 + Element Plus + Python applications. The existing Tauri entry remains available while desktop feature parity and release packaging are completed.
+The migration entry uses the official DSH Electron shell and chat UI, with a local Calabash plugin. Generated tools remain independent React + Ant Design + Python applications. This is the only host in v1.3; the previous implementation lives on the v1.2 branch.
 
 ## Development
 
@@ -35,13 +35,13 @@ Type `@` in the composer to choose Office, Soft or Compact. The native DSH menu 
 
 The Host derives the latest style selection from real user-message events through a DSH Session projection. It survives context compaction and session replay without retaining an extra copy of user text. Model/tool messages cannot change it. A follow-up without a style clears the per-request override and inherits the tool snapshot; it does not reapply the global default.
 
-Selection order is explicit current-message `@` → existing tool metadata/token snapshot → the configured default for a new tool. `read_ui_preset` returns only that selected pack, even when the model requests a different pack. Explicit restyling updates host-owned metadata/tokens on the next source save, including when the model only edits App.vue. Imported custom snapshots remain intact, and changing the global default never restyles an existing tool.
+Selection order is explicit current-message `@` → existing tool metadata/token snapshot → the configured default for a new tool. `read_ui_preset` returns only that selected pack, even when the model requests a different pack. Explicit restyling updates host-owned metadata/tokens on the next source save, including when the model only edits App.tsx. Imported custom snapshots remain intact, and changing the global default never restyles an existing tool.
 
 ## Boundaries
 
 The Host's authenticated, generated Typert Remote exposes listing, opening, closing, conversation target, manual preview and confirmed publication. The private Python stdio transport is never given to tool frames. The model cannot choose its session/call identity, launch or publish tools, delete data, install packages, use Shell, or read arbitrary files. Source edits retain the existing write leases, read fingerprints, credential redaction, operation receipts, theme snapshots and revision-bound compiler checks. Working source lives in the real draft directory; backend workers retain their execution snapshots.
 
-Both root composition **and Agent presets** are restricted. The standard preset retains context compaction, questions and a sequential task list. Generic filesystem/Shell/browser/subagent/workflow/plugin-installation tools and alternate coding presets are removed. Upstream terminal/file-browser surfaces are hidden. Calabash is a required startup plugin, so import failure cannot silently produce an incomplete workspace.
+Both root composition **and Agent presets** are restricted. The standard preset retains context compaction, questions and a sequential task list. Generic filesystem/Shell/browser/subagent/workflow/plugin-installation tools and alternate coding presets are disabled by default. Plugin management and inventory UI remain available. Optional Skill/MCP/browser/Shell tools are disabled by default and may be explicitly enabled by the user through DSH profiles. Third-party host plugins execute trusted code; the authoring-tool allowlist is not a plugin sandbox. Calabash is a required startup plugin, so import failure cannot silently produce an incomplete workspace.
 
 Tool iframes have independent loopback origins and no native preload. Electron embedding uses HttpOnly Secure partitioned session cookies; existing worker origin checks and token validation stay enabled. The Host-only SDK token is not returned to the renderer. Tool jobs participate in quit inspection, and stdio shutdown waits for the current file before process cleanup.
 
@@ -62,3 +62,21 @@ Desktop acceptance additionally verifies the actual Electron buttons: list → o
 ## Attribution
 
 DeepSeek Harness is MIT licensed, Copyright (c) 2026 DeepSeek. Its unchanged license is in `DSH-LICENSE.txt`. Preserve upstream notices and transitive dependency licenses in distributable artifacts. Calabash is independently developed and is not an official DeepSeek application.
+
+## Host orchestration and React tool runtime
+
+TypeScript owns bounded host tasks, durable metadata-only task journals, presentation-state persistence and private child-process supervision. Requeries retain operation identity; a UI observer disconnect does not cancel or replay a write. Python executes bounded source/build/SDK services concurrently, serializing conflicting tool operations. Business file processing remains Python.
+
+New tools use calabash-react-tool / frontend/App.tsx, strict tsc + Vite React builds and bundled Ant Design. @calabash/ui exposes React file-input, results, job-status and chart components. The existing @calabash/api contract generator remains authoritative for Python request/response types. Existing user Vue tools are neither converted nor deleted.
+
+The persistent shell workspace keeps frames mounted while navigating to conversations. Restart restores tool identities without executing them; click Open tool to launch. Native release/Windows installer acceptance and complete original-host feature parity remain separately verified release work.
+
+## v1.3 cleanup
+
+Only Electron/DSH remains as the host. Tauri, the Vue workspace, old Python chat/model/SSE APIs, LangGraph and SQLModel have been removed. Tool source observations and idempotent receipts live in service/tools/operation_store.py. Result history uses its own tool-results.sqlite instead of a chat database. User tools, credentials and historical databases are not migrated or deleted.
+
+Calabash overlay defaults apply before explicit user profile/home patches. The real DSH composer is tested for both defaults and user overrides. Plugin manager and inventory are visible; optional tools remain off unless enabled by the user. This is profile-level configuration, not a new per-session permission editor or a plugin sandbox. The model's plugin installer remains disabled by default.
+
+The current DSH adapter exposes static build diagnostics but not the removed host's runtime-log/preview-interaction consent flow. The Skill names only available operations. Runtime events remain local in ToolSDK logs.
+
+CI now validates Electron sources rather than generating obsolete installers. Complete Electron installer runtime wiring and platform installation acceptance remain release work; no automated Release is produced by this workflow.

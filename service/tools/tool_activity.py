@@ -1,9 +1,5 @@
-"""In-process run ownership and native safe-exit handoff. No task persistence."""
+"""Process-local task admission and safe cancellation. Cross-process exit uses ToolSDK."""
 
-import json
-import os
-from pathlib import Path
-from uuid import uuid4
 
 _active = {}
 _stopping_tools = set()
@@ -27,27 +23,6 @@ class ToolBusyError(RuntimeError):
         super().__init__(reason)
 
 
-def _directory():
-    value = os.environ.get("CALABASH_SELECTION_DIR")
-    return Path(value) if value else None
-
-
-def _publish():
-    directory = _directory()
-    if directory is None:
-        return
-    suffix = os.environ.get('CALABASH_JOB_ID', '')
-    destination = directory / (f'active-jobs-{suffix}.json' if suffix else 'active-jobs.json')
-    temporary = directory / f".jobs-{uuid4().hex}.tmp"
-    try:
-        with temporary.open("x", encoding="utf-8") as handle:
-            temporary.chmod(0o600)
-            json.dump({"active": len(_active)}, handle)
-        temporary.replace(destination)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
 def active_count():
     return len(_active)
 
@@ -66,26 +41,10 @@ def acquire(jobs):
     key = jobs.owner or id(jobs)
     if key in _active:
         raise ToolBusyError()
-    directory = _directory()
-    if directory and (directory / "stop-jobs").exists():
-        raise ToolBusyError("stopping")
     _active[key] = jobs
-    try:
-        _publish()
-    except OSError:
-        del _active[key]
-        raise
 
 
 def release(jobs):
     key = jobs.owner or id(jobs)
     if _active.get(key) is jobs:
         del _active[key]
-    _publish()
-
-
-def check_stop_request():
-    directory = _directory()
-    if directory and (directory / "stop-jobs").exists():
-        for jobs in tuple(_active.values()):
-            jobs.cancel()

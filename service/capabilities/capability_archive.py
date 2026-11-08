@@ -6,7 +6,12 @@ from pathlib import Path
 from threading import Event
 from zipfile import BadZipFile, ZipFile
 
-from service.capabilities.capability_manifest import MAX_FILES, Package, PackError, safe_path
+from service.capabilities.capability_manifest import (
+    MAX_FILES,
+    Package,
+    PackError,
+    safe_path,
+)
 
 
 def cancelled(event: Event) -> None:

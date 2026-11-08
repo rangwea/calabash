@@ -1,6 +1,5 @@
 """Connection probes are read-only and preserve running-task uncertainty."""
 import asyncio
-import os
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -64,25 +63,3 @@ class ToolHealthTests(unittest.IsolatedAsyncioTestCase):
             raise httpx.ConnectError('gone', request=request)
         with patch('service.tools.tool_health.httpx.AsyncClient', side_effect=lambda **options: original(transport=httpx.MockTransport(disconnected))):
             self.assertIsNone((await snapshot('demo', 'synthetic'))['running'])
-
-
-class RuntimeEndpointTests(unittest.IsolatedAsyncioTestCase):
-    async def test_runtime_endpoint_requires_session_and_never_opens_tool(self):
-        from api import bundle_api
-        from core.workspace_app import create_workspace_app
-        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {'HOME': temporary}):
-            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_workspace_app()), base_url='http://127.0.0.1') as client:
-                self.assertEqual(403, (await client.get('/api/workspace/tools/demo/synthetic/runtime')).status_code)
-                await client.get('/')
-                client.headers['X-Calabash-Request'] = 'workspace'
-                with patch.object(workers, 'open', AsyncMock()) as opened:
-                    result = await client.get('/api/workspace/tools/demo/synthetic/runtime')
-                    self.assertEqual('closed', result.json()['state'])
-                    self.assertEqual(404, (await client.get('/api/workspace/tools/demo/synthetic/runtime?chat_id=missing')).status_code)
-                    opened.assert_not_called()
-                dead = SimpleNamespace(process=Mock())
-                dead.process.poll.return_value = 1
-                key = workers.key('demo', 'synthetic')
-                with patch.dict(workers.items, {key: dead}), patch.object(workers, 'status', AsyncMock()) as status:
-                    self.assertEqual({'running': False}, await bundle_api.status('demo', 'synthetic'))
-                    status.assert_not_called()

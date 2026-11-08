@@ -44,3 +44,38 @@ class HarnessBridgeTests(unittest.IsolatedAsyncioTestCase):
             await serve(io.BytesIO(b''), io.StringIO())
             self.assertEqual(2, prepare.await_count)
             shutdown.assert_awaited_once()
+
+
+class ConcurrentBridgeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_slow_request_does_not_block_query_and_eof_drains(self):
+        import asyncio
+        release = asyncio.Event()
+        async def fake(method, params):
+            if method == 'slow':
+                await release.wait()
+                return 'finished'
+            release.set()
+            return 'query'
+        requests = io.BytesIO(b'{"id":"slow","method":"slow","params":{}}\n{"id":"fast","method":"fast","params":{}}\n')
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}), patch('backend.harness_bridge.dispatch', side_effect=fake), patch('backend.harness_bridge.workers.prepare_exit', new=AsyncMock(return_value=True)), patch('backend.harness_bridge.workers.shutdown', new=AsyncMock()):
+            await asyncio.wait_for(serve(requests, output), 2)
+        responses = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(['fast', 'slow'], [value['id'] for value in responses])
+
+    async def test_same_tool_serializes_while_other_tool_can_run(self):
+        import asyncio
+        active, overlap, concurrent = {}, [], []
+        async def fake(method, params):
+            name = params['name']
+            active[name] = active.get(name, 0) + 1
+            overlap.append(active[name])
+            concurrent.append(sum(active.values()))
+            await asyncio.sleep(.02)
+            active[name] -= 1
+            return True
+        data = b''.join(json.dumps({'id': str(i), 'method': 'tools.open', 'params': {'project': 'demo', 'name': name}}).encode() + b'\n' for i, name in enumerate(['first', 'first', 'other']))
+        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}), patch('backend.harness_bridge.dispatch', side_effect=fake), patch('backend.harness_bridge.workers.prepare_exit', new=AsyncMock(return_value=True)), patch('backend.harness_bridge.workers.shutdown', new=AsyncMock()):
+            await serve(io.BytesIO(data), io.StringIO())
+        self.assertEqual(1, max(overlap))
+        self.assertGreater(max(concurrent), 1)

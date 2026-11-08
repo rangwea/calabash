@@ -1,4 +1,4 @@
-"""Lazy per-tool Python processes and host-owned Vue compiler invocations."""
+"""Lazy per-tool Python processes and host-owned React compiler invocations."""
 
 import asyncio
 import json
@@ -83,7 +83,7 @@ def build_diagnostics(root):
     if not result and diagnostic.is_file() and not diagnostic.is_symlink() and diagnostic.stat().st_size < 8192:
         try:
             value = json.loads(diagnostic.read_text())
-            item = {'code': 'VITE', 'message': 'Vue 编译失败，请检查此处语法或导入'}
+            item = {'code': 'VITE', 'message': 'React 编译失败，请检查此处语法或导入'}
             if value.get('code') in {'API_CONTRACT', 'SOURCE'}:
                 item = {'code': value['code'], 'message': str(value.get('message', '源码检查失败'))[:300]}
             if isinstance(value.get('file'), str) and value['file'].startswith(('frontend/', 'backend/')):
@@ -103,7 +103,7 @@ async def build_bundle(files):
     try:
         bundles.validate(files)
     except (ValueError, SyntaxError) as error:
-        diagnostic = {'code': 'SOURCE', 'message': 'Working source is incomplete or invalid. Check tool.json and the required frontend/App.vue and backend/main.py files.'}
+        diagnostic = {'code': 'SOURCE', 'message': 'Working source is incomplete or invalid. Check tool.json and the required frontend/App.tsx and backend/main.py files.'}
         if isinstance(error, SyntaxError):
             diagnostic.update(file=error.filename, line=error.lineno, message='Python syntax error. Read this line in the working source and correct it.')
         (root / 'build.log').write_text('Working source validation failed', encoding='utf-8')
@@ -161,14 +161,11 @@ class Worker:
 
     async def stop(self):
         # Caller checks active jobs first. Process termination is not safe job cancellation.
-        for process, group in ((self.frontend, True), (self.process, False)):
+        for process, group in ((self.frontend, True), (self.process, True)):
             if process:
                 await asyncio.to_thread(stop, process, group=group)
         if self.log_run:
             self.log_run.close()
-        directory = os.environ.get('CALABASH_SELECTION_DIR')
-        if directory:
-            (Path(directory) / f'active-jobs-{self.root.name}.json').unlink(missing_ok=True)
         if self.root.parent == app_dir() / 'runtime' and not self.root.is_symlink():
             await asyncio.to_thread(shutil.rmtree, self.root, ignore_errors=True)
         (app_dir() / 'worker-config' / (self.root.name + '.json')).unlink(missing_ok=True)
@@ -283,8 +280,11 @@ class ToolWorkers:
                 from core import tool_run_logs
                 log_run = tool_run_logs.start(project, name, preview_key=chat_id)
                 environment = {**os.environ, 'CALABASH_JOB_ID': root.name}
-                process = await spawn(command(str(path)), cwd=ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                environment.pop('CALABASH_PROCESS_CHANNEL', None)
+                process = await spawn(command(str(path)), group=True, role='tool', cwd=ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 worker = Worker(project, name, source['revision'], root, process, port, token, None, host_token=host_token, log_run=log_run, frontend_port=frontend_port)
+                from service.tools.owned_process import lifecycle
+                lifecycle('control', process.pid, control={'port': port, 'token': token, 'hostToken': host_token})
             except BaseException:
                 if log_run:
                     log_run.close()
@@ -300,7 +300,7 @@ class ToolWorkers:
             try:
                 threading.Thread(target=capture, args=(process.stdout,), daemon=True).start()
                 if chat_id:
-                    worker.frontend = await spawn([node, str(script), 'serve', str(root), str(port), str(frontend_port), str(frontend_root)], group=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    worker.frontend = await spawn([node, str(script), 'serve', str(root), str(port), str(frontend_port), str(frontend_root)], group=True, role='preview', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                     threading.Thread(target=capture, args=(worker.frontend.stdout,), daemon=True).start()
                 async with httpx.AsyncClient(trust_env=False) as client:
                     for _ in range(200):
@@ -320,6 +320,7 @@ class ToolWorkers:
                 await worker.stop()
                 self.failures[key] = worker
                 raise
+            lifecycle('ready', worker.process.pid)
             self.items[key] = worker
             self.failures.pop(key, None)
             return worker
@@ -388,15 +389,6 @@ class ToolWorkers:
 
     async def monitor(self):
         while True:
-            import time
-
-            from service.tools import bundle_debug
-            for chat_id, grant in tuple(bundle_debug.repair_grants.items()):
-                if time.monotonic() - grant['time'] > 600:
-                    bundle_debug.release_logs(chat_id)
-            for chat_id, grant in tuple(bundle_debug.grants.items()):
-                if time.monotonic() - grant['time'] > 600 or grant['worker'].process.poll() is not None:
-                    bundle_debug.grants.pop(chat_id, None)
             for key, item in tuple(self.items.items()):
                 broken = item.process.poll() is not None or (item.frontend and item.frontend.poll() is not None)
                 if broken:
@@ -408,11 +400,6 @@ class ToolWorkers:
                         await self.close(*key)
                 except (httpx.HTTPError, ValueError):
                     continue  # Unknown state must not terminate a possible writer.
-            directory = os.environ.get('CALABASH_SELECTION_DIR')
-            if directory:
-                for worker in tuple(self.items.values()):
-                    if worker.process.poll() is not None:
-                        (Path(directory) / f'active-jobs-{worker.root.name}.json').unlink(missing_ok=True)
             await asyncio.sleep(.2)
 
 

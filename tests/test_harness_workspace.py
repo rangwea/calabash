@@ -7,7 +7,7 @@ from unittest.mock import patch
 from service.tools import harness_workspace as workspace
 from service.tools import tool_bundles as bundles
 from service.tools import work_drafts
-from tests.test_vue_workspace import fixture
+from tests.test_tool_bundles import fixture
 
 
 class HarnessWorkspaceTests(unittest.IsolatedAsyncioTestCase):
@@ -41,25 +41,25 @@ class HarnessWorkspaceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_before_write_and_session_write_lease(self):
         await self.create()
-        path = bundles.directory('demo', 'counter', 'workspace') / 'frontend/App.vue'
+        path = bundles.directory('demo', 'counter', 'workspace') / 'frontend/App.tsx'
         path.write_text(path.read_text() + '\n')
         with self.assertRaises(ValueError):
-            await self.call('write_tool_file', path='frontend/App.vue', content='<template>Changed</template>')
-        await self.call('read_tool_file', path='frontend/App.vue')
+            await self.call('write_tool_file', path='frontend/App.tsx', content='export default function App(){return <main>Changed</main>}')
+        await self.call('read_tool_file', path='frontend/App.tsx')
         with self.assertRaises(ValueError):
-            await self.call('write_tool_file', session='b', path='frontend/App.vue', content='<template>Other</template>')
-        await self.call('patch_tool_file', path='frontend/App.vue', old='Increment', new='Increase')
-        self.assertIn('Increase', work_drafts.snapshot('demo', 'counter')['files']['frontend/App.vue'])
+            await self.call('write_tool_file', session='b', path='frontend/App.tsx', content='export default function App(){return <main>Other</main>}')
+        await self.call('patch_tool_file', path='frontend/App.tsx', old='Increment', new='Increase')
+        self.assertIn('Increase', work_drafts.snapshot('demo', 'counter')['files']['frontend/App.tsx'])
 
     async def test_stale_fingerprint_rejected_after_another_session_edits(self):
         await self.create()
-        await self.call('read_tool_file', path='frontend/App.vue')
+        await self.call('read_tool_file', path='frontend/App.tsx')
         workspace.release('a')
-        await self.call('read_tool_file', session='b', path='frontend/App.vue')
-        await self.call('patch_tool_file', session='b', path='frontend/App.vue', old='Increment', new='Increase')
+        await self.call('read_tool_file', session='b', path='frontend/App.tsx')
+        await self.call('patch_tool_file', session='b', path='frontend/App.tsx', old='Increment', new='Increase')
         workspace.release('b')
         with self.assertRaises(ValueError):
-            await self.call('write_tool_file', path='frontend/App.vue', content='<template>Stale</template>')
+            await self.call('write_tool_file', path='frontend/App.tsx', content='export default function App(){return <main>Stale</main>}')
 
     async def test_agent_cannot_run_publish_delete_or_read_arbitrary_paths(self):
         for operation in ['run', 'publish', 'delete', 'shell']:
@@ -98,13 +98,13 @@ class HarnessWorkspaceTests(unittest.IsolatedAsyncioTestCase):
     async def test_explicit_followup_style_updates_theme_even_without_model_manifest_edit(self):
         import json
         await self.create()
-        await self.call('read_tool_file', path='frontend/App.vue')
-        await workspace.agent_call('a', 'restyle', 'patch_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'frontend/App.vue', 'old': 'Increment', 'new': 'Increase'}, requested_preset='compact')
+        await self.call('read_tool_file', path='frontend/App.tsx')
+        await workspace.agent_call('a', 'restyle', 'patch_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'frontend/App.tsx', 'old': 'Increment', 'new': 'Increase'}, requested_preset='compact')
         saved = work_drafts.snapshot('demo', 'counter')['files']
         self.assertEqual('compact', json.loads(saved['tool.json'])['ui']['preset'])
-        self.assertIn('Increase', saved['frontend/App.vue'])
-        await self.call('read_tool_file', path='frontend/App.vue')
-        await self.call('patch_tool_file', path='frontend/App.vue', old='Increase', new='Increment')
+        self.assertIn('Increase', saved['frontend/App.tsx'])
+        await self.call('read_tool_file', path='frontend/App.tsx')
+        await self.call('patch_tool_file', path='frontend/App.tsx', old='Increase', new='Increment')
         self.assertEqual(saved['frontend/calabash-theme.css'], work_drafts.snapshot('demo', 'counter')['files']['frontend/calabash-theme.css'])
 
     async def test_bilingual_style_catalog_does_not_change_language_setting(self):

@@ -1,13 +1,11 @@
 """Run-scoped, non-overwriting output files for local tools."""
 
 import hashlib
-import json
 import os
 import re
 import stat
 import subprocess
 import sys
-import time
 from pathlib import Path
 from threading import Lock
 from uuid import uuid4
@@ -49,7 +47,6 @@ class ToolOutputs:
         # A writer already in flight keeps its run when the UI starts another.
         with self._run_lock:
             run_id, directory = self.id, self.directory
-        output_history.check_owner(self.owner)
         if directory.parent.is_symlink():
             raise ValueError("Invalid output location")
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -91,7 +88,7 @@ class ToolOutputs:
         name = row["name"]
         if not name or Path(name).name != name or name in {".", ".."} or "\\" in name:
             raise ValueError("Invalid output filename")
-        directory = self._directory(row["run_id"], row["chat_id"])
+        directory = self._directory(row["run_id"], row["scope_id"])
         path = directory / name
         info = path.lstat()
         signature = (row["device"], row["inode"], row["size"], row["mtime_ns"])
@@ -120,18 +117,6 @@ class ToolOutputs:
             result.append(public)
         return result
 
-    def save_ticket(self, file_id):
-        """Authorize one native save dialog without accepting a UI source path."""
-        path = self.path(file_id)
-        directory = os.environ.get("CALABASH_SELECTION_DIR")
-        if not directory:
-            return None
-        token = uuid4().hex
-        payload = {"path": str(path), "size": path.stat().st_size, "created": time.time()}
-        with open(Path(directory) / f"output-{token}.json", "x", encoding="utf-8") as handle:
-            os.chmod(handle.name, 0o600)
-            json.dump(payload, handle)
-        return token
 
     def open(self, file_id, *, reveal=False):
         path = self.path(file_id)

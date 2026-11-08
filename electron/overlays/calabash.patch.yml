@@ -1,5 +1,6 @@
-# Calabash is a local application; upstream account, telemetry and automatic
-# scheduling surfaces are outside this migration milestone.
+# Calabash defaults. DSH applies explicit user profile patches afterwards.
+# Plugin management is user-driven; the model cannot install plugins by default.
+# Account and product telemetry are outside Calabash's product scope.
 - id: desktop-product-telemetry
   disabled: true
 - id: product-analytics
@@ -56,16 +57,16 @@
 - id: tool-executor-ptc
   disabled: true
 - id: ui-plugin-manager
-  disabled: true
+  disabled: false
 - id: ui-settings-plugin-inventory
-  disabled: true
+  disabled: false
 - id: system-prompt
   config:
     personaPrefix: >-
-      You are Calabash, a local office-tool assistant. Build reusable Vue 3,
-      Element Plus and Python tools through calabash_tool. Always read its
-      instructions first and use its template for a new tool. Never use shell,
-      arbitrary files, subagents or plugin installation. Read current source
+      You are Calabash, a local office-tool assistant. Build reusable React,
+      Ant Design and Python tools through calabash_tool. Always read its
+      instructions first and use its template for a new tool. Use only explicitly enabled tools within their granted scope. Never install
+      plugins or publish tools on the user's behalf. Read current source
       before editing; finish with check_tool_build. Saving source or passing a
       build is not runtime or business verification. Tell the user to open the
       Tool preview tab and try the draft, then save it to My tools. Never run,

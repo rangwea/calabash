@@ -3,7 +3,6 @@
 from pathlib import Path
 
 APP_DIR_NAME = ".calabash"
-DB_FILENAME = "calabash.db"
 
 
 def app_dir() -> Path:
@@ -11,9 +10,6 @@ def app_dir() -> Path:
     return Path.home() / APP_DIR_NAME
 
 
-def database_path() -> Path:
-    """返回本地 SQLite 数据库路径。"""
-    return app_dir() / DB_FILENAME
 
 
 def tools_dir() -> Path:

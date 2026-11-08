@@ -51,7 +51,7 @@ def build_runtime():
                     raise ValueError('Unexpected Node archive entry')
                 (destination / name).write_bytes(source.extractfile(member).read())
     (destination / ('node.exe' if system == 'win' else 'node')).chmod(0o755)
-    pending = [ROOT / 'node_modules' / name for name in ('vite', '@vitejs/plugin-vue', 'vue', 'element-plus', '@element-plus/icons-vue', 'echarts', 'typescript', 'vue-tsc')]
+    pending = [ROOT / 'node_modules' / name for name in ('vite', '@vitejs/plugin-react', 'react', 'react-dom', '@types/react', '@types/react-dom', 'antd', '@ant-design/icons', 'echarts', 'typescript')]
     copied = set()
     while pending:
         package = pending.pop()
@@ -71,7 +71,7 @@ def build_runtime():
                     break
     (destination / 'scripts').mkdir()
     shutil.copy2(ROOT / 'scripts/tool_frontend.mjs', destination / 'scripts/tool_frontend.mjs')
-    shutil.copy2(ROOT / 'scripts/tool_runtime_ui.mjs', destination / 'scripts/tool_runtime_ui.mjs')
+    shutil.copy2(ROOT / 'scripts/tool_runtime_ui.tsx', destination / 'scripts/tool_runtime_ui.tsx')
     shutil.copy2(ROOT / 'scripts/tool_runtime_guard.js', destination / 'scripts/tool_runtime_guard.js')
     shutil.copy2(ROOT / 'scripts/tool_api_client.ts', destination / 'scripts/tool_api_client.ts')
     (destination / 'component').mkdir()

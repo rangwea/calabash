@@ -4,11 +4,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from service.chat.bundle_agent_tools import build_tools
-from service.chat.task_workflow import TaskWorkflow
 from service.tools import tool_bundles as bundles
 from service.tools import ui_presets
-from tests.test_vue_workspace import fixture
+from tests.test_tool_bundles import fixture
 
 
 class PresetsWorkflowTests(unittest.TestCase):
@@ -37,7 +35,7 @@ class PresetsWorkflowTests(unittest.TestCase):
         changed=ui_presets.apply(existing, [], existing)
         self.assertNotIn('ui',json.loads(changed['tool.json']))
         self.assertNotIn('frontend/calabash-theme.css',changed)
-        self.assertEqual(existing['frontend/App.vue'],changed['frontend/App.vue'])
+        self.assertEqual(existing['frontend/App.tsx'],changed['frontend/App.tsx'])
 
     def test_latest_user_style_only_and_unknown_import_snapshot_preserved(self):
         self.assertEqual('soft', ui_presets.requested([{'role':'user','content':'@Office task @Soft later'}]))
@@ -46,44 +44,3 @@ class PresetsWorkflowTests(unittest.TestCase):
         meta=json.loads(files['tool.json']);meta['ui']={'preset':'custom-office','version':8};files['tool.json']=json.dumps(meta)
         kept=ui_presets.apply(fixture(), [], files)
         self.assertEqual(meta['ui'],json.loads(kept['tool.json'])['ui'])
-
-    def test_readonly_roles_cannot_deliver_or_patch_source(self):
-        for role in ('analysis', 'verification'):
-            tools=build_tools('chat', [], 'run', role=role)
-            names={tool.name for tool in tools}
-            self.assertFalse(names & {'write_tool','write_tool_file','patch_tool_file'})
-            self.assertIn('read_task_context',names)
-            self.assertEqual(role=='analysis','set_task_brief' in names)
-            self.assertEqual(role=='verification','check_tool_build' in names)
-        with self.assertRaises(ValueError):
-            build_tools('chat', [], 'run', role='unknown')
-
-    def test_task_brief_does_not_persist_configured_credentials(self):
-        from service.chat import model_providers
-        secret='synthetic-private-credential'
-        model_providers.save({'selected':None,'connections':{'openai':{'key':secret}}})
-        operations=build_tools('chat', [], 'run')
-        brief=next(tool for tool in operations if tool.name=='set_task_brief')
-        value=brief.invoke({'goal': 'Do not expose '+secret, 'requirements':[], 'preserve':[], 'acceptance':[]})
-        self.assertNotIn(secret,value)
-        flow=TaskWorkflow('chat','next')
-        self.assertNotIn(secret,flow.path.read_text())
-        with self.assertRaises(ValueError):
-            build_tools('chat',[], 'run',role='verification',workflow=flow)
-
-    def test_handoff_keeps_constraints_and_invalidates_checks_after_write(self):
-        flow=TaskWorkflow('chat','run')
-        flow.brief('Edit ledger', ['Export CSV'], ['Keep layout'], ['Export includes totals'], lambda x:x)
-        flow.observe('patch_tool_file',{'project':'demo','name':'counter'},json.dumps({'revision':'one'}))
-        self.assertEqual('implementation',flow.public()['phase'])
-        flow.observe('check_tool_build',{},json.dumps({'revision':'one','state':'passed'}))
-        self.assertEqual('passed',flow.public()['checks']['build'])
-        flow.observe('read_tool_logs',{},'{}')
-        flow.observe('patch_tool_file',{'project':'demo','name':'counter'},json.dumps({'revision':'two'}))
-        self.assertEqual('repair',flow.public()['phase'])
-        self.assertIsNone(flow.public()['checks'])
-        flow.finish(True)
-        self.assertFalse(flow.public()['runtime_verified'])
-        resumed=TaskWorkflow('chat','next')
-        self.assertEqual(['Keep layout'],resumed.public()['brief']['preserve'])
-        self.assertFalse(resumed.public()['permissions']['publish'])

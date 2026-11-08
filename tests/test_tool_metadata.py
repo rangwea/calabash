@@ -2,7 +2,7 @@ import json
 import unittest
 
 from service.tools.tool_bundles import validate
-from tests.test_vue_workspace import fixture
+from tests.test_tool_bundles import fixture
 
 
 class ToolMetadataTests(unittest.TestCase):
