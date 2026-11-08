@@ -1,7 +1,7 @@
 {
   "name": "calabash-desktop",
   "productName": "Calabash",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "license": "Elastic-2.0",
   "keywords": [
@@ -25,7 +25,11 @@
     "desktop:dev": "npm run desktop:web:build && tauri dev",
     "desktop:build": "npm run desktop:backend:build && tauri build --verbose",
     "desktop:bundle": "tauri bundle --verbose",
-    "check:frontend": "vue-tsc --project desktop-ui/tsconfig.json --noEmit"
+    "check:frontend": "vue-tsc --project desktop-ui/tsconfig.json --noEmit",
+    "electron:prepare": "node scripts/harness.mjs prepare",
+    "electron:build": "node scripts/harness.mjs build",
+    "electron:dev": "node scripts/harness.mjs start",
+    "test:harness": "node --test tests/harness_launcher.test.mjs && node electron/tests/ui-styles.test.mjs && node electron/tests/agent-roundtrip.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

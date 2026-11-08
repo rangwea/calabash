@@ -1,0 +1,124 @@
+"""Synthetic DSH sessions exercise the same draft/build/publication boundaries."""
+import os
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from service.tools import harness_workspace as workspace
+from service.tools import tool_bundles as bundles
+from service.tools import work_drafts
+from tests.test_vue_workspace import fixture
+
+
+class HarnessWorkspaceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.home = tempfile.TemporaryDirectory()
+        self.env = patch.dict(os.environ, {'HOME': self.home.name})
+        self.env.start()
+        self.counter = 0
+
+    async def asyncTearDown(self):
+        for session in ['a', 'b']:
+            workspace.release(session)
+        self.env.stop()
+        self.home.cleanup()
+
+    async def call(self, operation, session='a', **arguments):
+        self.counter += 1
+        return await workspace.agent_call(session, f'call-{self.counter}', operation, {'project': 'demo', 'name': 'counter', **arguments})
+
+    async def create(self):
+        for path, content in fixture().items():
+            await self.call('write_tool_file', path=path, content=content)
+
+    async def test_draft_creation_is_not_publication_or_execution(self):
+        await self.create()
+        self.assertEqual([], bundles.list_tools())
+        self.assertEqual({'project': 'demo', 'name': 'counter'}, workspace.state('a'))
+        source = work_drafts.snapshot('demo', 'counter')
+        self.assertIn('frontend/calabash-theme.css', source['files'])
+        self.assertEqual('preview', source['source'])
+
+    async def test_read_before_write_and_session_write_lease(self):
+        await self.create()
+        path = bundles.directory('demo', 'counter', 'workspace') / 'frontend/App.vue'
+        path.write_text(path.read_text() + '\n')
+        with self.assertRaises(ValueError):
+            await self.call('write_tool_file', path='frontend/App.vue', content='<template>Changed</template>')
+        await self.call('read_tool_file', path='frontend/App.vue')
+        with self.assertRaises(ValueError):
+            await self.call('write_tool_file', session='b', path='frontend/App.vue', content='<template>Other</template>')
+        await self.call('patch_tool_file', path='frontend/App.vue', old='Increment', new='Increase')
+        self.assertIn('Increase', work_drafts.snapshot('demo', 'counter')['files']['frontend/App.vue'])
+
+    async def test_stale_fingerprint_rejected_after_another_session_edits(self):
+        await self.create()
+        await self.call('read_tool_file', path='frontend/App.vue')
+        workspace.release('a')
+        await self.call('read_tool_file', session='b', path='frontend/App.vue')
+        await self.call('patch_tool_file', session='b', path='frontend/App.vue', old='Increment', new='Increase')
+        workspace.release('b')
+        with self.assertRaises(ValueError):
+            await self.call('write_tool_file', path='frontend/App.vue', content='<template>Stale</template>')
+
+    async def test_agent_cannot_run_publish_delete_or_read_arbitrary_paths(self):
+        for operation in ['run', 'publish', 'delete', 'shell']:
+            with self.assertRaises(ValueError):
+                await self.call(operation)
+        await self.create()
+        with self.assertRaises(ValueError):
+            await self.call('read_tool_file', path='../../secrets')
+        with self.assertRaises(ValueError):
+            await workspace.publish('a', '', '', False)
+
+    async def test_replayed_save_is_not_applied_twice(self):
+        args = {'project': 'demo', 'name': 'counter', 'path': 'tool.json', 'content': fixture()['tool.json']}
+        first = await workspace.agent_call('a', 'same-call', 'write_tool_file', args)
+        second = await workspace.agent_call('a', 'same-call', 'write_tool_file', args)
+        self.assertEqual(first, second)
+        with self.assertRaises(ValueError):
+            workspace.bind('a', 'demo', 'other')
+
+    async def test_style_selection_is_authoritative_and_theme_is_snapshotted(self):
+        import json
+
+        from service.tools import ui_presets
+        ui_presets.set_default('compact')
+        for index, (path, content) in enumerate(fixture().items()):
+            await workspace.agent_call('a', f'soft-{index}', 'write_tool_file', {'project': 'demo', 'name': 'counter', 'path': path, 'content': content}, requested_preset='soft')
+        saved = work_drafts.snapshot('demo', 'counter')['files']
+        self.assertEqual('soft', json.loads(saved['tool.json'])['ui']['preset'])
+        guide = await workspace.agent_call('a', 'style', 'read_ui_preset', {'preset': 'office'}, requested_preset='soft')
+        self.assertEqual(('soft', 'mention'), (guide['id'], guide['selected_by']))
+        ui_presets.set_default('office')
+        inherited = await workspace.agent_call('a', 'inherit', 'read_ui_preset', {'preset': 'compact'})
+        self.assertEqual(('soft', 'snapshot'), (inherited['id'], inherited['selected_by']))
+        self.assertEqual(saved['frontend/calabash-theme.css'], inherited['tokens'])
+
+    async def test_explicit_followup_style_updates_theme_even_without_model_manifest_edit(self):
+        import json
+        await self.create()
+        await self.call('read_tool_file', path='frontend/App.vue')
+        await workspace.agent_call('a', 'restyle', 'patch_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'frontend/App.vue', 'old': 'Increment', 'new': 'Increase'}, requested_preset='compact')
+        saved = work_drafts.snapshot('demo', 'counter')['files']
+        self.assertEqual('compact', json.loads(saved['tool.json'])['ui']['preset'])
+        self.assertIn('Increase', saved['frontend/App.vue'])
+        await self.call('read_tool_file', path='frontend/App.vue')
+        await self.call('patch_tool_file', path='frontend/App.vue', old='Increase', new='Increment')
+        self.assertEqual(saved['frontend/calabash-theme.css'], work_drafts.snapshot('demo', 'counter')['files']['frontend/calabash-theme.css'])
+
+    async def test_bilingual_style_catalog_does_not_change_language_setting(self):
+        from backend.harness_bridge import dispatch
+        from core.i18n import language, set_language
+        set_language('zh-CN')
+        values = await dispatch('ui.presets', {})
+        self.assertEqual('zh-CN', language())
+        office = next(value for value in values if value['id'] == 'office')
+        self.assertEqual('简洁办公', office['title'])
+        self.assertEqual('Office', office['title_en'])
+        self.assertNotEqual(office['description'], office['description_en'])
+
+    async def test_unknown_style_is_rejected_before_any_file_write(self):
+        with self.assertRaises(ValueError):
+            await workspace.agent_call('a', 'bad-style', 'write_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'tool.json', 'content': fixture()['tool.json']}, requested_preset='../outside')
+        self.assertIsNone(workspace.state('a'))

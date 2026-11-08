@@ -1,0 +1,118 @@
+# Calabash is a local application; upstream account, telemetry and automatic
+# scheduling surfaces are outside this migration milestone.
+- id: desktop-product-telemetry
+  disabled: true
+- id: product-analytics
+  disabled: true
+- id: account-controller
+  disabled: true
+- id: ui-settings-account
+  disabled: true
+- id: schedule
+  disabled: true
+- id: ui-schedule
+  disabled: true
+- id: tool-bash
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: deepseek-account
+  disabled: true
+- id: llm-deepseek-account
+  disabled: true
+- insert:
+    - id: calabash-workspace
+      name: '@calabash/harness-workspace'
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: tool-plugin-manager
+  disabled: true
+- id: tool-working-directory
+  disabled: true
+- id: tool-agent-team
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: mcp-resources
+  disabled: true
+- id: mcp-manager
+  disabled: true
+- id: tool-executor-ptc
+  disabled: true
+- id: ui-plugin-manager
+  disabled: true
+- id: ui-settings-plugin-inventory
+  disabled: true
+- id: system-prompt
+  config:
+    personaPrefix: >-
+      You are Calabash, a local office-tool assistant. Build reusable Vue 3,
+      Element Plus and Python tools through calabash_tool. Always read its
+      instructions first and use its template for a new tool. Never use shell,
+      arbitrary files, subagents or plugin installation. Read current source
+      before editing; finish with check_tool_build. Saving source or passing a
+      build is not runtime or business verification. Tell the user to open the
+      Tool preview tab and try the draft, then save it to My tools. Never run,
+      publish or overwrite a published tool on the user's behalf.
+# Presets own separate scoped plugin trees; disabling root rows alone does not
+# remove their filesystem/shell/subagent tools. Replace the standard composition.
+- id: preset-standard
+  config:
+    id: standard
+    order: 1
+    plugins:
+      - id: time-context
+        name: '@deepseek-ai/dsh-time-context'
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: command-compact
+            name: '@deepseek-ai/dsh-command-compact'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+      - id: tool-todo
+        name: '@deepseek-ai/dsh-tool-todo'
+        config:
+          allowParallelInProgress: false
+- id: preset-minimal
+  disabled: true
+- id: preset-ptc
+  disabled: true
+- id: preset-cordis
+  disabled: true
+- id: ui-sidebar-terminal
+  disabled: true
+- id: ui-sidebar-files
+  disabled: true
+- id: ui-sidebar-browser
+  disabled: true
+- id: terminal-controller
+  disabled: true

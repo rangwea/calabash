@@ -36,6 +36,13 @@ def _english():
     return json.loads((Path(__file__).parent / "locales" / "en.json").read_text(encoding="utf-8"))
 
 
-def t(source, **values):
-    translated = _english().get(source, source) if language() == "en" else source
+def translate(source, target_language, /, **values):
+    """Translate without changing the global preference (e.g. bilingual catalogs)."""
+    if target_language not in LANGUAGES:
+        raise ValueError("Unsupported language")
+    translated = _english().get(source, source) if target_language == "en" else source
     return translated.format(**values) if values else translated
+
+
+def t(source, **values):
+    return translate(source, language(), **values)

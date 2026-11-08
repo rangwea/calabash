@@ -52,7 +52,13 @@ def create_tool_app(config):
         except Exception as error:  # noqa: BLE001 - isolate arbitrary user-tool failures at the HTTP boundary.
             response = failure(request, error, source_root)
         if bootstrap:
-            response.set_cookie(cookie, config['token'], httponly=True, samesite='strict')
+            if config.get('partitioned_session'):
+                # Electron's dsh-app top-level origin is cross-site to the tool.
+                # CHIPS keeps this cookie scoped to that embedding site; no CORS
+                # or native permissions are granted to the tool frame.
+                response.headers.append('Set-Cookie', f"{cookie}={config['token']}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned")
+            else:
+                response.set_cookie(cookie, config['token'], httponly=True, samesite='strict')
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         return response

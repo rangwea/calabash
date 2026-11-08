@@ -115,3 +115,11 @@ API 密钥不得写入图状态、检查点配置或日志；模型对象中仅�
 聊天图片支持选择、拖入和粘贴，PNG/JPEG/WebP/GIF，最多每消息 5 张、每张 10 MiB、1600 万像素。模型请求发送去 EXIF、方向校正及缩放后的像素；聊天记录和 Agent 检查点只保存会话内图片引用，不保存 Base64。像素仅在请求边界解析，校验当前会话、已发送绑定和文件快照。视觉能力按具体模型识别，自定义模型可在设置声明；不支持时明确阻止发送，不伪装识图。
 
 预览诊断授权绑定会话、页面、模型与源码版本，十分钟过期。每次点击或输入须宿主单独确认，真实写入、删除与导出需核对本次操作。刷新或修改后重新授权；DOM/媒体局部检查不等于视觉、听觉或完整业务验收。
+
+## dsh Electron 迁移入口
+
+`electron/` 和 `scripts/harness.mjs` 承载固定版本 dsh 官方 Electron 的独立迁移入口；现有 Tauri 入口在交付验收前保留。使用 `npm run electron:prepare`、`npm run electron:build`、`npm run electron:dev`。上游代码只生成在忽略的 build 目录，修改通过有界 overlay 和本地 `@calabash/harness-workspace` 插件维护，不能提交上游构建产物或静默升级依赖。
+
+dsh Agent 通过 `calabash_tool` 和私有 stdio 调用 `service/tools/harness_workspace.py`；不把现有 LangGraph 运行时嵌套在 dsh 内。会话 ID 和调用 ID 来自 dsh 宿主，不能由模型提供。模型仅写草稿和执行静态构建；预览、发布及覆盖由用户点击并确认。标准 Agent 预设也必须移除 Shell、通用文件读写、多 Agent 和在线插件安装，不能只禁用根节点。保留当前文件安全停止、真实草稿、读取指纹、写租约和构建版本绑定。
+
+开发入口使用独立 dsh profile；不要自动迁移模型密钥、读取用户业务数据或消耗真实模型额度验收。`npm run test:harness` 验证真实 Cordis/AgentLoop 与模拟模型，不调用外部模型。

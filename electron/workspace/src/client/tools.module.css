@@ -1,0 +1,98 @@
+/* Tool library navigation is isolated from both DSH and tool iframe styles. */
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.searchRow[data-collapsed='true'] { justify-content: center; padding-inline: 4px; }
+.searchField {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #e5eaf0;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #82909f;
+}
+.searchField[hidden], .list[hidden] { display: none; }
+.searchField:focus-within { border-color: #7da7cf; background: #fff; }
+.searchField svg { flex-shrink: 0; }
+.searchField input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  outline: none;
+  background: transparent;
+  color: #435367;
+  font: inherit;
+  font-size: 13px;
+}
+.searchField input::placeholder { color: #8a96a4; }
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: 0;
+  border-radius: 5px;
+  color: #738291;
+  background: transparent;
+  cursor: pointer;
+}
+.iconButton:hover { background: #e8edf3; color: #465b70; }
+.iconButton:disabled, .openTool:disabled { cursor: default; opacity: .5; }
+.iconButton:focus-visible, .openTool:focus-visible { outline: 2px solid #7da7cf; outline-offset: -2px; }
+.list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 8px 8px; }
+.tool { min-width: 0; margin-bottom: 6px; padding: 2px; border-radius: 7px; background: #f7f8fa; }
+.tool:hover, .tool:focus-within { background: #eef1f5; }
+.tool.selected { background: #edf4fb; box-shadow: inset 2px 0 #5e94c7; }
+.openTool {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 5px;
+  padding: 9px 10px 0;
+  text-align: left;
+  background: transparent;
+  color: #435367;
+  font: inherit;
+  cursor: pointer;
+}
+.toolTitle { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 20px; }
+.selected .toolTitle { color: #315f88; }
+.description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: #83909e; font-size: 12px; line-height: 18px; }
+.actions { display: flex; justify-content: flex-end; gap: 2px; height: 28px; padding: 1px 4px 3px; opacity: 0; pointer-events: none; }
+.tool:hover .actions, .tool:focus-within .actions { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .actions { opacity: 1; pointer-events: auto; } }
+@media (prefers-reduced-motion: no-preference) { .actions { transition: opacity 120ms ease; } }
+
+/* The navigation rail and full library intentionally have different density. */
+.toolCopy { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.libraryPane[data-mode='sidebar'] .openTool { padding: 10px; }
+.libraryPane[data-mode='library'] .searchRow,
+.libraryPane[data-mode='library'] .list { box-sizing: border-box; width: 100%; max-width: 1120px; margin-inline: auto; padding-inline: 24px; }
+.libraryPane[data-mode='library'] .searchRow { padding-block: 18px 10px; }
+.libraryPane[data-mode='library'] .tool { display: flex; align-items: center; gap: 16px; margin: 0; padding: 12px 0; border-radius: 0; border-bottom: 1px solid #edf0f4; background: transparent; }
+.libraryPane[data-mode='library'] .tool:hover,
+.libraryPane[data-mode='library'] .tool:focus-within { background: #f8fafc; }
+.libraryPane[data-mode='library'] .openTool { flex: 1; flex-direction: row; align-items: center; gap: 12px; padding: 8px; }
+.libraryPane[data-mode='library'] .description { -webkit-line-clamp: 1; }
+.libraryPane[data-mode='library'] .actions { flex-shrink: 0; height: auto; padding: 0 8px 0 0; opacity: 1; pointer-events: auto; }
+.toolIcon { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 8px; background: #f0f3f7; color: #718196; }
+@media (max-width: 640px) {
+  .libraryPane[data-mode='library'] .searchRow, .libraryPane[data-mode='library'] .list { padding-inline: 12px; }
+  .libraryPane[data-mode='library'] .tool { gap: 4px; }
+}

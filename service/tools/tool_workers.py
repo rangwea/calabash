@@ -275,7 +275,8 @@ class ToolWorkers:
                 frontend_port = free_port() if chat_id else None
                 origin = f'http://127.0.0.1:{frontend_port or port}'
                 config = {'root': str(root), 'source_root': str(root), 'project': project, 'name': name, 'port': port,
-                          'token': token, 'origin': origin, 'revision': source['revision'], 'host_token': host_token}
+                          'token': token, 'origin': origin, 'revision': source['revision'], 'host_token': host_token,
+                          'partitioned_session': os.environ.get('CALABASH_HARNESS_EMBEDDED') == '1'}
                 configs = app_dir() / 'worker-config'
                 configs.mkdir(parents=True, exist_ok=True, mode=0o700)
                 path = configs / (root.name + '.json'); path.write_text(json.dumps(config)); path.chmod(0o600)
