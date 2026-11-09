@@ -57,10 +57,13 @@ export function CalabashResults() {
   return <details style={{ marginBlock: 12, fontSize: 13 }}><summary>结果文件 · Results ({files.length})</summary>{files.map(file => <div key={file.id} style={{ paddingBlock: 6 }}><a href={'/api/sdk/results/' + encodeURIComponent(file.id)} download={file.name}>{file.name}</a></div>)}</details>
 }
 export function CalabashJobStatus() {
-  const { value: job } = usePolling(() => request<JobState>('/status'), { status: 'idle', running: false, progress: 0 })
+  const { value: job } = usePolling(async () => {
+    const [status, runs] = await Promise.all([request<JobState>('/status'), officeActions.runs()])
+    return { ...status, actionError: runs.find(run => run.status === 'failed')?.error?.message || '' }
+  }, { status: 'idle', running: false, progress: 0, actionError: '' })
   const [error, setError] = useState('')
   if (job.status === 'idle') return null
-  return <section style={{ marginBlock: 12 }}><span role="status">{job.status}</span><Progress percent={Math.round(Math.max(0, Math.min(1, job.progress)) * 100)} />{job.running && <Button onClick={() => { void request('/cancel', { method: 'POST' }).catch(() => setError('停止请求未完成，请重试 · Please retry safe stop.')) }}>安全停止 · Stop safely</Button>}{error && <Alert type="error" title={error} />}</section>
+  return <section style={{ marginBlock: 12 }}><span role="status">{job.status}</span><Progress percent={Math.round(Math.max(0, Math.min(1, job.progress)) * 100)} />{job.running && <Button onClick={() => { void request('/cancel', { method: 'POST' }).catch(() => setError('停止请求未完成，请重试 · Please retry safe stop.')) }}>安全停止 · Stop safely</Button>}{(error || job.actionError) && <Alert type="error" title={error || job.actionError} />}</section>
 }
 export function CalabashChart({ option, height = '280px' }: { option: EChartsOption; height?: string }) {
   const element = useRef<HTMLDivElement>(null), latest = useRef(option)

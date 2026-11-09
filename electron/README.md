@@ -55,7 +55,7 @@ After building:
 npm run test:harness
 ```
 
-The Node test mounts real Cordis services and the production DSH AgentLoop with a synthetic streaming model. It executes six model tool calls through Python stdio, writes a draft and passes strict compilation, without contacting a provider or spending tokens. Python tests cover read leases, stale edits, idempotency, denied operations, partitioned-cookie auth, real preview/backend calls, confirmation/version-bound publication and cleanup. Tests use synthetic source and temporary homes.
+The Node test mounts real Cordis services and the production DSH AgentLoop with a synthetic streaming model. It executes bounded model tool calls, including read-only office Action discovery, through Python stdio, writes a draft and passes strict compilation, without contacting a provider or spending tokens. Python tests cover read leases, stale edits, idempotency, denied operations, partitioned-cookie auth, real preview/backend calls, confirmation/version-bound publication and cleanup. Tests use synthetic source and temporary homes.
 
 Desktop acceptance additionally verifies the actual Electron buttons: list → open/interact; conversation → preview/interact → confirm save → tool appears in the list. This was verified on macOS arm64; Windows packaging and final installed-artifact acceptance remain release work.
 

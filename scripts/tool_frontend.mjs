@@ -3,7 +3,7 @@ import { build, createServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { dirname, resolve, relative, isAbsolute, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { writeFileSync, copyFileSync, realpathSync, existsSync } from 'node:fs'
+import { writeFileSync, readFileSync, copyFileSync, realpathSync, existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 let checker, previewServer, stopping = false
 async function shutdown() {
@@ -48,7 +48,7 @@ const config = {
 }
 writeFileSync(resolve(root, 'index.html'), '<!doctype html><html><head><script src="/api/sdk/runtime-guard.js"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#263445}*{box-sizing:border-box}.calabash-tool{min-width:0}img,video{max-width:100%}</style></head><body><div id="app" class="calabash-tool"></div><script type="module" src="/entry.tsx"></script></body></html>')
 copyFileSync(resolve(libraryRoot, 'component/frontend_probe.js'), resolve(root, 'probe.js'))
-copyFileSync(resolve(libraryRoot, 'scripts/tool_runtime_ui.tsx'), resolve(root, 'runtime-ui.tsx'))
+writeFileSync(resolve(root, 'runtime-ui.tsx'), readFileSync(resolve(libraryRoot, 'scripts/tool_runtime_ui.tsx'), 'utf8') + '\n' + readFileSync(resolve(root, 'office-action-client.ts'), 'utf8'))
 copyFileSync(resolve(libraryRoot, 'scripts/tool_api_client.ts'), resolve(root, 'calabash-client.ts'))
 const themeImport = existsSync(resolve(frontend, 'calabash-theme.css')) ? "import '@tool/calabash-theme.css';" : ''
 writeFileSync(resolve(root, 'entry.tsx'), `import React from 'react';import {createRoot} from 'react-dom/client';import {ConfigProvider,App as AntApp} from 'antd';import 'antd/dist/reset.css';import App from '@tool/App.tsx';import {themeTokens,ToolErrorBoundary} from './runtime-ui';import {installProbe} from './probe.js';${themeImport}const transport=window.fetch.bind(window);const errors=[];const probe=installProbe(window,e=>{if(errors.length<40)errors.push(e)});const page=crypto.randomUUID();createRoot(document.getElementById('app')!).render(<ConfigProvider theme={{token:themeTokens()}}><AntApp><ToolErrorBoundary><App/></ToolErrorBoundary></AntApp></ConfigProvider>);async function poll(){while(true){try{const command=await(await transport('/api/sdk/debug/next')).json();if(command.id){const result=command.operation==='snapshot'?{page,...probe.snapshot(),events:errors}:probe.operate(command.request);await transport('/api/sdk/debug/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:command.id,result})});}}catch{}await new Promise(r=>setTimeout(r,250));}}poll();`)

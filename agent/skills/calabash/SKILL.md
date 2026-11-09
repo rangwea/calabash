@@ -10,6 +10,7 @@ description: 创建、修改和静态检查 Calabash 本地 React + Ant Design +
 ## 创建和修改
 
 - 新工具读取 [React 工具契约](references/react-tool.md) 和 read_tool_template，基于唯一基础模板增量实现。必需文件是 tool.json、frontend/App.tsx（default export）和 backend/main.py（setup(app,sdk)）。使用 React Hooks、严格 TypeScript、Ant Design 和 Python FastAPI；复杂后再拆文件。
+- Excel 数据处理或 Word 模板填充优先用 read_action_api 查询内置 Action，再按需读 [办公 Action](references/office-actions.md)，不重写已有文件处理逻辑。Agent 只查询协议，不执行 Action；由工具内用户操作触发。
 - 使用宿主提供的库与 ToolSDK，不安装依赖、自启服务或执行导入时业务。文件处理按需读 [文件工作流](references/file-workflow.md)。JSON 接口先读 [接口契约](references/api-contract.md)，用 Pydantic 请求/响应模型和 operation_id 生成 @calabash/api，不手写重复类型。
 - 风格由本次用户 @、工具已有快照、全局默认依次确定；read_ui_preset 只读选中一套。遵守 [界面规范](references/design.md)，不直接覆盖宿主管理的主题文件。修复保留已有界面、数据和历史要求，除非用户明确要求改变。
 - 已有工具先 read_tool 查看文件，再按具体问题有界读取 read_tool_file，局部 patch_tool_file。不为补齐上下文反复读遍文件，不从聊天快照重建。陌生组件按具体属性查询 read_component_api；接口不匹配查 read_api_contract。

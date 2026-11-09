@@ -517,5 +517,18 @@
   "工具界面暂时断开，后台任务仍在运行，请等待完成后重新打开": "The tool view is disconnected. A background task is still running. Wait for it to finish before reopening.",
   "暂时无法确认工具连接，请稍后检查或重新打开": "The tool connection could not be checked. Wait a moment or try reopening it.",
   "工具连接已中断，可以重新打开；未保存的界面输入可能需要重新填写": "The tool connection was lost. You can reopen it. Unsaved form entries may need to be entered again.",
-  "重新打开": "Reopen"
+  "重新打开": "Reopen",
+  "当前处理能力不可用，请选择其他操作": "This action is unavailable. Please choose another operation.",
+  "当前处理能力版本不可用，请重新打开工具": "This action version is unavailable. Please reopen the tool.",
+  "请检查处理选项后重试": "Please check the processing options and retry.",
+  "所选文件已变化或不可用，请重新选择": "The selected file has changed or is unavailable. Please select it again.",
+  "请选择支持格式的文件后重试": "Please choose files in a supported format and retry.",
+  "文件超出本次处理范围，请拆分后重试": "The files exceed this processing limit. Please split them and retry.",
+  "无法读取所选文件，请确认文件完整后重试": "Unable to read the selected file. Please check that it is complete and retry.",
+  "所选工作表不存在，请检查后重试": "The selected worksheet does not exist. Please check and retry.",
+  "请检查表格首行，列名不能为空或重复": "Please check the first row. Column names must be nonempty and unique.",
+  "请选择表格中实际存在的列后重试": "Please choose columns that exist in the spreadsheet and retry.",
+  "当前数据处理不支持公式或错误单元格，请先转换为数值": "This data action does not support formula or error cells. Please convert them to values first.",
+  "模板标记无法识别，请使用“{{字段名}}”格式": "The template markers are not recognized. Please use the {{field}} format.",
+  "请补全模板字段对应的内容后重试": "Please supply values for all template fields and retry."
 }

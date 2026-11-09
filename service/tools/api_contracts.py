@@ -189,6 +189,8 @@ def client_source(contract):
 
 
 def prepare(root, files):
+    from service.actions.contracts import frontend_source
+    (root / 'office-action-client.ts').write_text(frontend_source(), encoding='utf-8')
     # Generated files live outside source, exports and source revision hashes.
     typed = any('@calabash/api' in source for path, source in files.items() if path.startswith('frontend/'))
     contract = extract(files) if typed else {'operations': [], 'models': {}}

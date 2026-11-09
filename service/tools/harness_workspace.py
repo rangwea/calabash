@@ -119,11 +119,14 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         # Fixed built-in documents only; never interpret a model-supplied path.
         return {'skill': (root / 'SKILL.md').read_text()[:24000], 'target': state(session),
                 'protocol': 'Use calabash_tool operations only. Read-only reference inspection does not bind a conversation. Only a successful source write or the user opening Tool conversation binds an editing target. For a binding conflict use New tool conversation in Tool preview; the tool list has no blank-tool creation action. Read template for a new tool; read current file before changes. Save drafts, check_tool_build, then tell the user to open preview. Never claim business verification. Never run or publish automatically.'}
+    if operation == 'read_action_api':
+        from service.actions.registry import describe
+        return describe(arguments.get('action_id', ''))
     if operation == 'list_tools':
         return bundles.list_tools()
     if operation == 'read_ui_reference':
         reference = arguments.get('reference', 'react-tool.md')
-        if reference not in {'react-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md', 'api-contract.md'}:
+        if reference not in {'react-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md', 'api-contract.md', 'office-actions.md'}:
             raise ValueError('Unknown built-in reference')
         return {'reference': reference, 'content': (Path(__file__).resolve().parents[2] / 'agent/skills/calabash/references' / reference).read_text()[:32000]}
     if operation == 'read_component_api':

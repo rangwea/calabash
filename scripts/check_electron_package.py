@@ -105,9 +105,11 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             )
             result = json.load(urllib.request.urlopen(request, timeout=10))
             assert result["message"] == "Installed runtime", result
+            from scripts.office_action_smoke import verify
+            verify(origin, token)
             assert call("app.prepare_exit", {}) is True
             print(
-                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview and Python action; no source cwd"
+                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, Python API and Excel→Word Actions; no source cwd"
             )
         finally:
             process.stdin.close()

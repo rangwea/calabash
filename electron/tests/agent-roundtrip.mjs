@@ -43,6 +43,9 @@ try {
   const call = async (operation, args = {}) => JSON.parse(await tool.execute({ operation, ...args }, { agent: { session: manualSession }, callId: `test-${++sequence}` }));
   const instructions = await call('instructions'); assert.ok(instructions.skill.includes('Calabash'));
   assert.deepEqual(await call('list_tools'), []);
+  const action = await call('read_action_api', { action_id: 'office.excel.process' });
+  assert.equal(action.network, false); assert.ok(action.input_schema.properties.input_ids);
+  await assert.rejects(() => call('run_action', { project: 'demo', name: 'counter' }));
   for (const [path, content] of Object.entries(files)) {
     assert.equal((await call('write_tool_file', { project: 'demo', name: 'counter', path, content })).saved, true);
   }
@@ -59,9 +62,10 @@ try {
   await ctx.plugin(LlmRuntime); await ctx.plugin(Sessions);
   await ctx.plugin(Native); await ctx.plugin(Agents); await ctx.plugin(Loop, { agents: [] });
   const loopFiles = { ...files, 'tool.json': JSON.stringify({ ...JSON.parse(files['tool.json']), name: 'loop_counter' }) };
-  const script = [{ operation: 'instructions' }, { operation: 'read_tool_template', project: 'demo', name: 'loop_counter' },
+  const script = [{ operation: 'instructions' }, { operation: 'read_action_api', action_id: 'office.excel.process' }, { operation: 'read_tool_template', project: 'demo', name: 'loop_counter' },
     ...Object.entries(loopFiles).map(([path, content]) => ({ operation: 'write_tool_file', project: 'demo', name: 'loop_counter', path, content })),
     { operation: 'check_tool_build', project: 'demo', name: 'loop_counter' }];
+  const scriptedCalls = script.length;
   class Model extends LlmAdapter {
     requests = [];
     async resolveModel(provider, id) { return { provider, id, name: id }; }
@@ -91,15 +95,15 @@ try {
   agent.followup(createUserMessage({ content: [{ type: 'text', text: '@ui:soft Create a synthetic counter office tool.' }], source: { kind: 'user' } }));
   await idle;
   const recorded = events.filter(item => item.session === 'loop-session').map(item => item.event);
-  assert.equal(recorded.filter(event => event.type === 'tool/call').length, 6);
-  assert.equal(recorded.filter(event => event.type === 'tool/result').length, 6);
+  assert.equal(recorded.filter(event => event.type === 'tool/call').length, scriptedCalls);
+  assert.equal(recorded.filter(event => event.type === 'tool/result').length, scriptedCalls);
   const stats = ctx.sessionProjections.snapshot(agent.session, ['sessionStats']).values.sessionStats;
-  assert.equal(stats.steps, 7);
+  assert.equal(stats.steps, scriptedCalls + 1);
   assert.equal(stats.turns, 1);
   assert.ok(stats.toolMs >= 0 && stats.llmMs >= 0);
   const replayedStats = ctx.sessions.fork(agent.session, undefined, 'stats-replay');
   assert.deepEqual(ctx.sessionProjections.snapshot(replayedStats, ['sessionStats']).values.sessionStats, stats);
-  assert.equal(model.requests.length, 7, 'The real loop must execute every scripted model tool call');
+  assert.equal(model.requests.length, scriptedCalls + 1, 'The real loop must execute every scripted model tool call');
   assert.equal(JSON.parse(await ctx.calabashWorkspace.state('loop-session')).name, 'loop_counter');
   assert.deepEqual(JSON.parse(await ctx.calabashWorkspace.list()), []);
   const style = JSON.parse(await ctx.calabashWorkspace.agent('read_ui_preset', {}, 'loop-session', 'read-style', await ctx.calabashWorkspace.styleFor(agent.session)));
@@ -145,7 +149,7 @@ try {
   console.log('PASS: style projection replays from a fork and clears on a follow-up while the tool snapshot is preserved');
   console.log('PASS: DSH call/result correlation, native session statistics and replay; friendly result cards never interpolate source or errors');
   console.log('PASS: authoritative @ui:soft survives the complete Agent loop without a model-owned preset parameter');
-  console.log('PASS: real DSH AgentLoop + synthetic model → six bounded tool calls → draft + strict build, no real provider');
+  console.log('PASS: real DSH AgentLoop + synthetic model → bounded office discovery and authoring calls → draft + strict build, no real provider');
   console.log('PASS: DSH registry → bounded Agent call → stdio → real draft → strict build; no execution or publication');
 } finally {
   await ctx?.fiber.dispose();

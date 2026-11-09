@@ -1,6 +1,6 @@
 /** DSH owns persistence/timing; these presenters only format safe office-user views. */
 const labels: Record<string, string> = {
-  instructions: '了解工具编写规范', list_tools: '查看工具列表', read_ui_reference: '查阅工具规范',
+  read_action_api: '查询办公能力', instructions: '了解工具编写规范', list_tools: '查看工具列表', read_ui_reference: '查阅工具规范',
   read_component_api: '查询组件用法', read_ui_preset: '选择界面风格', read_tool_template: '获取基础模板',
   read_tool: '查看工具文件', read_tool_file: '读取工具代码', write_tool_file: '保存工具草稿',
   patch_tool_file: '调整工具', check_tool_build: '检查工具', read_build_diagnostics: '查看检查结果',

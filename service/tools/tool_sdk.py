@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from core.local_paths import app_dir
+from service.actions.models import ActionRequest
 from service.tools.tool_jobs import ToolJobs
 
 
@@ -45,11 +46,32 @@ class ToolSDK:
         self.router.add_api_route('/debug/next', self.debug_next, methods=['GET'])
         self.router.add_api_route('/debug/result', self.debug_result, methods=['POST'])
         self.router.add_api_route('/debug/request', self.debug_request, methods=['POST'])
+        from service.actions.runtime import ToolActions
+        self.actions = ToolActions(self)
+        self.router.add_api_route('/actions', self.action_catalog, methods=['GET'])
+        self.router.add_api_route('/actions/{action_id}', self.action_schema, methods=['GET'])
+        self.router.add_api_route('/actions/{action_id}', self.start_action, methods=['POST'])
+        self.router.add_api_route('/action-runs', self.actions.runs, methods=['GET'])
         self.commands = asyncio.Queue(maxsize=20)
         self.pending = {}
         from service.files.tool_outputs import ToolOutputs
         self.outputs = ToolOutputs(owner=(self.owner, None))
         self._inputs = {}
+
+    def action_catalog(self):
+        from service.actions.registry import catalog
+        return catalog()
+
+    def action_schema(self, action_id: str):
+        from service.actions.office import ActionFailure
+        from service.actions.registry import describe
+        try:
+            return describe(action_id)
+        except ActionFailure:
+            raise HTTPException(404, 'Action unavailable') from None
+
+    async def start_action(self, action_id: str, request: ActionRequest):
+        return await self.actions.submit(action_id, request)
 
     async def runtime_issue(self, request: Request):
         from core.logger import get_logger
