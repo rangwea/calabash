@@ -17,6 +17,7 @@ npm ci
 npm run electron:prepare
 npm run electron:build
 npm run electron:dev
+npm run electron:package  # 当前本机打包目标为 macOS arm64
 uvx --offline ruff check
 .venv/bin/python3 -m unittest discover -s tests
 npm run test:harness
@@ -110,3 +111,9 @@ dsh Agent 通过 `calabash_tool` 和私有 stdio 调用 `service/tools/harness_w
 任务由 electron/workspace/src/tasks.ts 调度；同工具串行、不同工具有限并发，任务 ID 用于重查迟到结果。任务日志只存元数据，不存源码、请求/结果正文或密钥。Python stdio 仅执行有界工具服务，查询不排在耗时构建之后。进程生命周期通过独立 fd 3 通道通知 TypeScript 托管器，不通过工具 stdout，不向模型或 iframe 开放。正常退出先停止接收任务并排空；异常退出时先向工具请求安全停止，不强制打断未知的文件写入。
 
 工具标签由宿主保存身份信息，不保存 origin/token。重启只恢复标签，不自动运行。工作区渲染层独立挂载，切换聊天页面不卸载工具 iframe。新工具格式为 calabash-react-tool，frontend/App.tsx 必须 default export；不提供 Vue 执行别名。模板、严格编译器、@calabash/ui 和 Ant Design 声明查询同步维护。
+
+## 安装包运行库
+
+macOS arm64 使用 npm run electron:package 生成自包含 App 和 DMG。Python 为 onedir 冻结执行器，入口 backend/packaged_entry.py；源码与安装版仅共享服务实现。安装版通过资源目录设置 CALABASH_REPOSITORY、CALABASH_PYTHON、CALABASH_PACKAGED_BACKEND 和 CALABASH_FRONTEND_RUNTIME，不查找开发 .venv。编译运行库在 Python 包外单独分发。构建依赖 PyInstaller 只放 packaging 组。scripts/check_electron_package.py 使用临时 HOME/PATH/cwd 验证真实冻结执行器、严格构建、预览和 Python action。
+
+DSH 安装级依赖树由 scripts/package_electron.mjs 材料化，所有链接限定在应用包内；Calabash 是安装级内置依赖，不在用户 profile 建源码链接。安装版 DSH_HOME 为 ~/.calabash/harness，开发版仍用独立 harness-development，不自动迁移凭据。Calabash 不使用上游 DSH 自动更新或强制更新源。当前本地安装包未接入开发者分发签名/公证；不绕过系统安全提示。

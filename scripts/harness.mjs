@@ -40,6 +40,7 @@ export async function overlayFingerprint(root = repositoryRoot) {
   }
   await visit(join(root, 'electron/workspace'));
   await visit(join(root, 'electron/overlays'));
+  await visit(join(root, 'electron/icons'));
   await visit(join(root, 'agent/skills/calabash/references/ui-presets'));
   digest.update(await readFile(join(root, 'electron/apply-overlay.mjs')));
   return digest.digest('hex');

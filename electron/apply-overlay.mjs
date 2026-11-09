@@ -8,6 +8,17 @@ export async function replaceOnce(file, before, after) {
   await writeFile(file, source.replace(before, after));
 }
 export async function applyOverlay(root, upstream) {
+  // Replace native assets as well as the in-page brand component.
+  for (const name of ['icon.png', 'icon-macos.png', 'icon-windows.png']) {
+    await copyFile(join(root, 'electron/icons/icon.png'), join(upstream, 'apps/desktop/resources', name));
+  }
+  const desktopMain = join(upstream, 'apps/desktop/src/main.ts');
+  await replaceOnce(desktopMain, 'const window = new BrowserWindow({',
+    "const window = new BrowserWindow({\n    icon: nativeImage.createFromPath(app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'resources', 'icon.png')),");
+  await replaceOnce(desktopMain, 'app.setAboutPanelOptions({',
+    "if (process.platform === 'darwin') app.dock?.setIcon(nativeImage.createFromPath(applicationIconPath))\n  app.setAboutPanelOptions({");
+  await replaceOnce(join(upstream, 'apps/desktop/scripts/electron-builder-config.mjs'),
+    "productName: 'DeepSeek Harness',", "productName: 'Calabash',");
   await cp(join(root, 'electron/workspace'), join(upstream, 'packages/client/calabash-workspace'), { recursive: true });
   const presetRoot = join(root, 'agent/skills/calabash/references/ui-presets');
   const { readdir } = await import('node:fs/promises');
@@ -41,7 +52,23 @@ export async function applyOverlay(root, upstream) {
     "...(process.env.CALABASH_LOCAL_WORKSPACE === '1' ? [] : context.overlays),");
   const patch = join(upstream, 'calabash.patch.yml');
   await copyFile(join(root, 'electron/overlays/calabash.patch.yml'), patch);
-  await replaceOnce(join(upstream, 'apps/desktop-host/src/index.ts'), 'patchFiles: [],', `patchFiles: [${JSON.stringify(patch)}],`);
+  const hostMain = join(upstream, 'apps/desktop-host/src/index.ts');
+  const hostSource = await readFile(hostMain, 'utf8');
+  await replaceOnce(hostMain, hostSource.includes('patchFiles: [],') ? 'patchFiles: [],' : `patchFiles: [${JSON.stringify(patch)}],`, "patchFiles: [join(runtimeDir, 'calabash.patch.yml')],");
+  await replaceOnce(desktopMain, 'async function main(): Promise<void> {',
+    `async function main(): Promise<void> {
+  if (app.isPackaged) {
+    process.env.CALABASH_LOCAL_WORKSPACE = '1'
+    process.env.DSH_HOME = process.env.CALABASH_HARNESS_HOME ?? join(app.getPath('home'), '.calabash', 'harness')
+    process.env.CALABASH_REPOSITORY = join(process.resourcesPath, 'calabash', 'backend')
+    process.env.CALABASH_PYTHON = join(process.env.CALABASH_REPOSITORY, process.platform === 'win32' ? 'calabash-backend.exe' : 'calabash-backend')
+    process.env.CALABASH_PACKAGED_BACKEND = '1'
+    process.env.CALABASH_FRONTEND_RUNTIME = join(process.resourcesPath, 'calabash', 'frontend-runtime')
+  }`);
+  await replaceOnce(desktopMain, 'resolveDesktopPolicyConfig(policyInput, !app.isPackaged)',
+    "resolveDesktopPolicyConfig(policyInput, !app.isPackaged || process.env.CALABASH_LOCAL_WORKSPACE === '1')");
+  await replaceOnce(desktopMain, 'const automaticCheck = (): void => {',
+    "const automaticCheck = (): void => {\n    if (process.env.CALABASH_LOCAL_WORKSPACE === '1') return");
   await replaceOnce(join(upstream, 'apps/desktop/src/main.ts'), 'const state = await readWelcomeState()', "const state = process.env.CALABASH_LOCAL_WORKSPACE === '1' ? { localePreference: null, loggedIn: false, hasApiKey: false } : await readWelcomeState()");
   await replaceOnce(join(upstream, 'apps/desktop/src/main.ts'), 'if (!enteredWorkspace && needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey }))', "if (process.env.CALABASH_LOCAL_WORKSPACE !== '1' && !enteredWorkspace && needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey }))");
   await replaceOnce(join(upstream, 'apps/desktop/src/main.ts'), "applicationName: 'DeepSeek Harness',", "applicationName: 'Calabash',");

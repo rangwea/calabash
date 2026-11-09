@@ -79,4 +79,10 @@ Calabash overlay defaults apply before explicit user profile/home patches. The r
 
 The current DSH adapter exposes static build diagnostics but not the removed host's runtime-log/preview-interaction consent flow. The Skill names only available operations. Runtime events remain local in ToolSDK logs.
 
-CI now validates Electron sources rather than generating obsolete installers. Complete Electron installer runtime wiring and platform installation acceptance remain release work; no automated Release is produced by this workflow.
+CI now validates Electron sources rather than generating obsolete installers. Apple Silicon runtime integration and local installation acceptance are available below; Intel/Windows packaging and automated Release remain separate work.
+
+## Local macOS installer
+
+`npm run electron:package` builds a self-contained Apple Silicon app and DMG. Python uses an onedir frozen executor; frontend compiler resources are separate. Packaging materializes the exact installed DSH package graph with internal relative links and registers Calabash as an installation-owned dependency. No installed path refers back to the source tree. `uv run python -m scripts.check_electron_package <App path>` verifies a synthetic draft, strict React build, preview and Python action with a temporary HOME/cwd and no Node in PATH. The generated DMG was also checked read-only before installation.
+
+The installed profile is ~/.calabash/harness, separate from harness-development; no model credentials are migrated automatically. Release signing/notarization and other installer platforms remain separate work. Calabash does not use upstream DSH automatic update or mandatory-policy feeds.

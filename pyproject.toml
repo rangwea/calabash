@@ -21,3 +21,8 @@ dependencies = [
     "reportlab>=4.0.0",
     "pypdfium2>=4.0.0",
 ]
+
+[dependency-groups]
+packaging = [
+    "pyinstaller>=6.10.0",
+]

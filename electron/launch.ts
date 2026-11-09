@@ -1,7 +1,7 @@
 /** Runs the official desktop entry without upstream's macOS development re-signing. */
 import { createRequire } from 'node:module'
 import { execFileSync, spawn } from 'node:child_process'
-import { readFileSync, mkdirSync, existsSync, symlinkSync } from 'node:fs'
+import { readFileSync, mkdirSync, existsSync, symlinkSync, copyFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { prepareDevelopmentProject } from './development-project.ts'
@@ -23,6 +23,7 @@ prepareDevelopmentProject({
     nodeVersion: execFileSync(electron, ['-p', 'process.versions.node'], { encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }).trim(), pnpmVersion },
   target: resolveDesktopBuildTarget(),
 })
+copyFileSync(join(root, 'calabash.patch.yml'), join(appRoot, '.desktop-build/development/project/calabash.patch.yml'))
 const pluginLink = join(appRoot, '.desktop-build/development/project/node_modules/@calabash/harness-workspace')
 mkdirSync(resolve(pluginLink, '..'), { recursive: true })
 if (!existsSync(pluginLink)) symlinkSync(join(root, 'packages/client/calabash-workspace'), pluginLink, process.platform === 'win32' ? 'junction' : 'dir')

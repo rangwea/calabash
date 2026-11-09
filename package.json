@@ -25,7 +25,8 @@
     "test:harness": "node --test tests/harness_launcher.test.mjs && node electron/tests/host-state.test.mjs && node electron/tests/bridge-exit.test.mjs && node electron/tests/extension-defaults.test.mjs && node electron/tests/ui-styles.test.mjs && node electron/tests/agent-roundtrip.mjs",
     "dev": "npm run electron:dev",
     "build": "npm run electron:build",
-    "test:python": "python3 -m unittest discover -s tests"
+    "test:python": "python3 -m unittest discover -s tests",
+    "electron:package": "npm run electron:build && uv run --frozen --group packaging python scripts/build_electron_backend.py && uv run --frozen python scripts/build_frontend_runtime.py && node scripts/package_electron.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",

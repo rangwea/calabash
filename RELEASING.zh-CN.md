@@ -1,18 +1,17 @@
-# v1.3 构建与发布状态
+# v1.3 构建与发布
 
-旧安装包构建保留在 v1.2 分支。v1.3 仅使用 Electron/DSH，不再构建旧宿主。
+当前可在 Apple Silicon Mac 上生成自包含 Electron DMG：
 
 ```bash
 uv sync --frozen
 npm ci
 npm run electron:prepare
-npm run electron:build
-npm run test:harness
-npm run electron:dev
+npm run electron:package
+uv run python -m scripts.check_electron_package dist/electron/mac-arm64/Calabash.app
 ```
 
-上游版本和包管理器由 electron/harness.lock.json 固定。源码与产物在 build/harness 下，不能提交；通过 Calabash overlay 和插件维护修改。
+输出为 dist/electron/Calabash-1.3.0-macos-arm64.dmg，应用目录为 dist/electron/mac-arm64/Calabash.app。安装包内置独立 Python 后端、办公库、固定 Node 和 React 编译运行库，无需用户安装 Python、Node 或 uv。编译器单独放在资源目录，不随 Python 每次启动解压。安装路径可以只读，运行数据在用户目录。
 
-当前命令完成 Electron 开发构建与运行验证，不代表可分发安装包。GitHub workflow 验证三平台源码构建，不自动创建 Release。正式安装包还需接入 Calabash Python 运行库、编译运行库和资源路径，并完成实际安装验收；签名、公证另行处理。禁止把缺少工具运行库的上游安装包作为 Calabash 发布。
+打包过程校验固定 DSH 提交、overlay 指纹和包内链接；通过源码构建、冻结运行库自检、安装产物合成工具测试，以及只读 DMG 验收。应用和 DSH 保持独立版本。不得把 .venv、源码绝对路径、用户配置或密钥打入安装包。保留上游 MIT 和依赖许可。
 
-应用版本统一更新 package.json、package-lock.json、pyproject.toml、uv.lock 和 electron/workspace/package.json；DSH 固定版本不随应用版本改写。发布需用户明确授权。
+当前本地构建未做开发者分发签名或公证；不绕过系统安全提示。Intel Mac、Windows 安装包和 GitHub 自动发布还需各平台实现与验收；现有 workflow 仅做源码构建检查。

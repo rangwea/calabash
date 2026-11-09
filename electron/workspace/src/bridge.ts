@@ -15,7 +15,7 @@ export class PythonBridge {
     const cwd = process.env.CALABASH_REPOSITORY
     const python = process.env.CALABASH_PYTHON
     if (!cwd || !python) throw new Error('Calabash tool runtime is unavailable')
-    const child = spawn(python, ['-m', 'backend.harness_bridge'], { cwd, env: { ...process.env, PYTHONUNBUFFERED: '1', CALABASH_HARNESS_EMBEDDED: '1', CALABASH_PROCESS_CHANNEL: '3' }, stdio: ['pipe','pipe','pipe','pipe'], detached: true, windowsHide: true })
+    const child = spawn(python, process.env.CALABASH_PACKAGED_BACKEND === '1' ? [] : ['-m', 'backend.harness_bridge'], { cwd, env: { ...process.env, PYTHONUNBUFFERED: '1', CALABASH_HARNESS_EMBEDDED: '1', CALABASH_PROCESS_CHANNEL: '3' }, stdio: ['pipe','pipe','pipe','pipe'], detached: true, windowsHide: true })
     this.child = child
     let lifecycleBuffer = ''
     const lifecycle = child.stdio[3] as import('node:stream').Readable
