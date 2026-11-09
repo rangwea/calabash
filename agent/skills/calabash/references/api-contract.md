@@ -35,7 +35,7 @@ Each generated method returns `Promise<ResponseType>`. Supply `params` for named
 
 Supported static annotations are str, int, float, bool, None, optional/union types, list[T], dict[str,T], Literal values, and named Pydantic models with inheritance. Use direct named models for request bodies. Use original Python field names without serialization aliases or exclusions. Scalar query parameters use primitives, nullable primitives or Literal. Request and Response injected arguments are omitted from the client. Unsupported annotations produce a local API_CONTRACT diagnostic rather than guessed types. Keep model names unique across backend files. Complex custom serializers, dynamic routing and dependency-injected models need an explicit typed facade using these supported annotations.
 
-Call read_api_contract(project,name) for a bounded operation summary and operation names. Pass operation to expand model declarations. Build with check_tool_build and fix the reported frontend/backend file. Build success verifies static agreement, not actual business behavior.
+Call read_api_contract(project,name) for a bounded summary of the current operation names and declarations. It returns the full current contract and has no per-operation expansion argument. Build with check_tool_build and fix the reported frontend/backend file. Build success verifies static agreement, not actual business behavior.
 
 Use SQLite transactions for concurrent create/edit/delete and multi-record changes. sdk.write_json atomically replaces one JSON document; a separate read then write is not a cross-process transaction. Keep tool data in sdk.data_dir. Reopening and republishing must preserve it.
 

@@ -5,7 +5,7 @@
 <h1 align="center">Calabash</h1>
 
 <p align="center">
-  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.0.0-367767?style=flat-square" alt="App version"></a>
+  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.3.0-367767?style=flat-square" alt="App version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="License: Elastic License 2.0"></a>
   <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="Desktop builds"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 or newer"></a>
@@ -46,11 +46,11 @@ What a particular tool can do depends on its requirements, generated code, selec
 
 ## Getting started
 
-Calabash is in preview. Check [Releases](https://github.com/rangwea/calabash/releases) for publicly available versions. For running from source, see the [contributor guide](CONTRIBUTING.md).
+Calabash is in preview and has no public download yet. The website will add a download entry once a signed, notarized release is available. For running from source, see the [contributor guide](CONTRIBUTING.md).
 
 Desktop packages include the Python backend and built-in runtime libraries. End users do not need Python or uv. Configure your model API and key in Settings, select a model, and start a conversation. No Calabash account is required.
 
-Installer availability for macOS Apple Silicon, macOS Intel and Windows x64 depends on the published release. Current preview packages do not have developer distribution signing or Apple notarization.
+Only a local macOS Apple Silicon package is produced today. macOS Intel and Windows installers, automated releases, developer distribution signing and Apple notarization are not in place yet.
 
 ### Files and data
 

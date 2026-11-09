@@ -10,7 +10,7 @@ The site deliberately has no download button until a public release exists.
 The five recorded examples demonstrate SQLite, spreadsheet, PDF and media
 workflows using synthetic data. Their illustrated chat steps are scripted,
 not recorded model responses or generation-speed claims. Existing GIFs and
-posters remain available while the desktop UI moves to Vue + Element Plus.
+posters show the earlier desktop UI; the current app uses React + Ant Design.
 These examples are not installed App modules.
 
 Both languages have separate GIFs and WebP posters in `assets/demos`.
@@ -19,8 +19,8 @@ see still posters until they explicitly play a demo.
 
 ## Re-record locally
 
-Record the current Vue desktop app using a disposable HOME and synthetic
-Vue/Python tool bundles. Never use the normal user HOME or real model credits.
+Record the current React desktop app using a disposable HOME and synthetic
+React/Python tool bundles. Never use the normal user HOME or real model credits.
 The previous server-side UI demonstration runner has been removed.
 
 `demos/prepare.py` prepares synthetic files. `demos/record-story.cjs` and

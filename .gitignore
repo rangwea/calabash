@@ -17,6 +17,7 @@ logs/
 .files/
 
 .playwright-mcp/
+.workbuddy/
 
 .DS_Store
 files/*.zip

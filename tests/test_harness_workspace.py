@@ -122,3 +122,41 @@ class HarnessWorkspaceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await workspace.agent_call('a', 'bad-style', 'write_tool_file', {'project': 'demo', 'name': 'counter', 'path': 'tool.json', 'content': fixture()['tool.json']}, requested_preset='../outside')
         self.assertIsNone(workspace.state('a'))
+
+    async def test_reference_reads_do_not_bind_create_drafts_or_take_write_lease(self):
+        bundles.write('demo', 'reference', fixture('reference'))
+        published = bundles.read('demo', 'reference')
+        await self.call('read_tool', name='reference')
+        await self.call('read_tool_file', name='reference', path='frontend/App.tsx')
+        await self.call('read_api_contract', name='reference')
+        self.assertIsNone(workspace.state('a'))
+        self.assertFalse(bundles.directory('demo', 'reference', 'workspace').exists())
+        work_drafts.claim('demo', 'reference', workspace.owner('b'))
+        await self.create()
+        self.assertEqual({'project': 'demo', 'name': 'counter'}, workspace.state('a'))
+        self.assertEqual(published, bundles.read('demo', 'reference'))
+        self.assertFalse(bundles.directory('demo', 'reference', 'workspace').exists())
+
+    async def test_bound_conversation_can_read_references_but_cannot_write_another_tool(self):
+        await self.create()
+        bundles.write('demo', 'reference', fixture('reference'))
+        await self.call('read_tool', name='reference')
+        await self.call('read_tool_file', name='reference', path='frontend/App.tsx')
+        await self.call('read_tool_template', name='reference')
+        result = await self.call('write_tool_file', name='reference', path='tool.json', content=fixture('reference')['tool.json'])
+        self.assertFalse(result['saved'])
+        self.assertEqual('tool_binding_conflict', result['error'])
+        self.assertEqual('new_tool_conversation', result['next_action'])
+        self.assertEqual({'project': 'demo', 'name': 'counter'}, workspace.state('a'))
+        self.assertEqual({'project': 'demo', 'name': 'reference'}, workspace.binding('a')['conflict'])
+        self.assertFalse(bundles.directory('demo', 'reference', 'workspace').exists())
+        workspace.release('a')
+        self.assertIsNone(workspace.binding('a')['conflict'])
+
+    async def test_failed_first_write_does_not_bind_conversation(self):
+        with self.assertRaises(ValueError):
+            await self.call('write_tool_file', path='frontend/App.tsx', content='This is not source code')
+        self.assertIsNone(workspace.state('a'))
+        await self.call('write_tool_file', name='other', path='tool.json', content=fixture('other')['tool.json'])
+        self.assertEqual({'project': 'demo', 'name': 'other'}, workspace.state('a'))
+        work_drafts.release(workspace.owner('a'))

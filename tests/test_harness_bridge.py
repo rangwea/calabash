@@ -79,3 +79,24 @@ class ConcurrentBridgeTests(unittest.IsolatedAsyncioTestCase):
             await serve(io.BytesIO(data), io.StringIO())
         self.assertEqual(1, max(overlap))
         self.assertGreater(max(concurrent), 1)
+
+    async def test_same_session_operations_serialize_even_with_different_tool_names(self):
+        import asyncio
+        active, overlap, parallel = {}, [], []
+
+        async def fake(method, params):
+            session = params['session']
+            active[session] = active.get(session, 0) + 1
+            overlap.append(active[session])
+            parallel.append(sum(active.values()))
+            await asyncio.sleep(.02)
+            active[session] -= 1
+            return True
+
+        data = b''.join(json.dumps({'id': str(index), 'method': 'agent.call', 'params': {
+            'session': session, 'arguments': {'project': 'demo', 'name': name}}}).encode() + b'\n'
+            for index, (session, name) in enumerate([('a', 'first'), ('a', 'second'), ('b', 'other')]))
+        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}), patch('backend.harness_bridge.dispatch', side_effect=fake), patch('backend.harness_bridge.workers.prepare_exit', new=AsyncMock(return_value=True)), patch('backend.harness_bridge.workers.shutdown', new=AsyncMock()):
+            await serve(io.BytesIO(data), io.StringIO())
+        self.assertEqual(1, max(overlap))
+        self.assertGreater(max(parallel), 1)

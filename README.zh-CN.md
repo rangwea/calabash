@@ -5,7 +5,7 @@
 <h1 align="center">Calabash</h1>
 
 <p align="center">
-  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.0.0-367767?style=flat-square" alt="应用版本"></a>
+  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.3.0-367767?style=flat-square" alt="应用版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="许可证：Elastic License 2.0"></a>
   <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="桌面构建"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 及以上"></a>
@@ -16,7 +16,7 @@
 
 [English](README.md) | 中文
 
-Calabash turns your ideas into interactive tools with AI—built for you, running on your desktop.
+Calabash 借助 AI 把你的想法变成可交互的工具，为你而建，运行在你自己的电脑上。
 
 ## 从一句话，到一件可以继续用的工具
 
@@ -46,11 +46,11 @@ Calabash turns your ideas into interactive tools with AI—built for you, runnin
 
 ## 开始使用
 
-Calabash 目前处于预览阶段。可在 [Releases](https://github.com/rangwea/calabash/releases) 查看已公开的版本；源码运行请参考[开发指南](CONTRIBUTING.zh-CN.md)。
+Calabash 目前处于预览阶段，官网尚未提供公开下载地址；完成签名与公证后再开放下载。源码运行请参考[开发指南](CONTRIBUTING.zh-CN.md)。
 
 桌面安装包包含 Python 后端和内置运行库，最终用户不需要安装 Python 或 uv。首次使用需在设置中配置模型 API 和密钥，再选择模型开始对话；不需要 Calabash 账号。
 
-macOS Apple Silicon、Intel 与 Windows x64 安装包的可用情况以发布页面为准。目前的预览安装包尚未接入开发者分发签名与 Apple 公证。
+目前仅生成 macOS Apple Silicon 本地安装包；Intel、Windows 安装包、自动发布流程，以及开发者分发签名与 Apple 公证尚未完成。
 
 ### 文件和数据
 

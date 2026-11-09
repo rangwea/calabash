@@ -13,6 +13,7 @@ from service.tools.tool_checks import checks
 from service.tools.tool_workers import workers
 
 _credentials = {}
+_conflicts = {}
 
 
 def owner(session):
@@ -46,6 +47,7 @@ def bind(session, project, name):
     target = state(session)
     if target and (target['project'], target['name']) != (project, name):
         raise ValueError('This conversation is bound to a different tool. Start a new conversation.')
+    _conflicts.pop(owner(session), None)
     path = state_path(session)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.with_name('.' + uuid4().hex + '.tmp')
@@ -61,12 +63,37 @@ def bind(session, project, name):
 def release(session):
     work_drafts.release(owner(session))
     _credentials.pop(owner(session), None)
+    _conflicts.pop(owner(session), None)
 
 
 def release_all():
     for session_owner in tuple(_credentials):
         work_drafts.release(session_owner)
     _credentials.clear()
+    _conflicts.clear()
+
+
+def binding(session):
+    return {'target': state(session), 'conflict': _conflicts.get(owner(session))}
+
+
+def read_source(project, name):
+    """Observe the real source without creating a draft or acquiring a lease."""
+    try:
+        return work_drafts.snapshot(project, name)
+    except bundles.ToolUnavailable:
+        return bundles.read(project, name)
+
+
+def write_conflict(session, project, name):
+    target = state(session)
+    requested = {'project': project, 'name': name}
+    if target and target != requested:
+        _conflicts[owner(session)] = requested
+        return {'saved': False, 'error': 'tool_binding_conflict', 'target': target,
+                'next_action': 'new_tool_conversation',
+                'message': 'This conversation edits another tool. Ask the user to click New tool conversation in Tool preview, or start a new conversation from the sidebar. Do not ask them to create a blank tool in the tool list. No files were changed.'}
+    return None
 
 
 def source(session, project, name):
@@ -91,7 +118,7 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         root = Path(__file__).resolve().parents[2] / 'agent/skills/calabash'
         # Fixed built-in documents only; never interpret a model-supplied path.
         return {'skill': (root / 'SKILL.md').read_text()[:24000], 'target': state(session),
-                'protocol': 'Use calabash_tool operations only. Read template for a new tool; read current file before changes. Save drafts, check_tool_build, then tell the user to open preview. Never claim business verification. Never run or publish automatically.'}
+                'protocol': 'Use calabash_tool operations only. Read-only reference inspection does not bind a conversation. Only a successful source write or the user opening Tool conversation binds an editing target. For a binding conflict use New tool conversation in Tool preview; the tool list has no blank-tool creation action. Read template for a new tool; read current file before changes. Save drafts, check_tool_build, then tell the user to open preview. Never claim business verification. Never run or publish automatically.'}
     if operation == 'list_tools':
         return bundles.list_tools()
     if operation == 'read_ui_reference':
@@ -107,7 +134,7 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         if explicit:
             return {**ui_presets.reference(explicit), 'selected_by': 'mention'}
         if target:
-            existing = source(session, target['project'], target['name'])['files']
+            existing = read_source(target['project'], target['name'])['files']
             meta = json.loads(existing.get('tool.json', '{}')).get('ui')
             if not meta:
                 return {'rules': 'Preserve the existing custom scoped UI; do not replace it with the global default.'}
@@ -126,15 +153,15 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
     credentials = _credentials.setdefault(session_owner, SourceCredentials())
     if operation == 'read_tool_template':
         from service.tools.tool_templates import base_template
-        target = state(session)
-        if target and (target['project'], target['name']) != (project, name):
-            raise ValueError('Conversation already has a tool')
         return {'files': base_template(project, name), 'executed': False}
     if operation in {'write_tool_file', 'patch_tool_file'}:
         from service.tools import ui_presets
+        conflict = write_conflict(session, project, name)
+        if conflict:
+            return conflict
         path = bundles.safe_path(arguments.get('path'))
         try:
-            current = source(session, project, name)['files']
+            current = read_source(project, name)['files']
         except bundles.ToolUnavailable:
             current = {}
         if path == 'frontend/calabash-theme.css':
@@ -161,18 +188,20 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
             changes = ui_presets.apply(changes, style_messages, current or None)
             if current.get('frontend/calabash-theme.css'):
                 work_drafts.observe(session_owner, project, name, 'frontend/calabash-theme.css', current['frontend/calabash-theme.css'])
-        bind(session, project, name)
         digest = hashlib.sha256(json.dumps([operation, arguments, explicit], sort_keys=True).encode()).hexdigest()
         receipt = operation_store.begin(session_owner, call_id, digest)
         if receipt is not None:
             return receipt
+        # Copy a published bundle only when actually editing; reads never claim it.
+        if current:
+            work_drafts.ensure(project, name, session_owner)
         saved = work_drafts.write_files(session_owner, session_owner, project, name, changes)
+        bind(session, project, name)
         result = {'saved': True, 'runtime_verified': False, 'ready_for_check': all(saved['files'].get(p) for p in ('tool.json', 'frontend/App.tsx', 'backend/main.py'))}
         operation_store.finish(session_owner, call_id, result)
         return result
-    value = source(session, project, name)
+    value = read_source(project, name)
     if operation == 'read_tool':
-        bind(session, project, name)
         return {'files': [{'path': p, 'lines': len(c.splitlines())} for p, c in value['files'].items()]}
     if operation == 'read_tool_file':
         path = bundles.safe_path(arguments.get('path'))

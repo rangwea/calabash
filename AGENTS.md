@@ -117,3 +117,5 @@ dsh Agent 通过 `calabash_tool` 和私有 stdio 调用 `service/tools/harness_w
 macOS arm64 使用 npm run electron:package 生成自包含 App 和 DMG。Python 为 onedir 冻结执行器，入口 backend/packaged_entry.py；源码与安装版仅共享服务实现。安装版通过资源目录设置 CALABASH_REPOSITORY、CALABASH_PYTHON、CALABASH_PACKAGED_BACKEND 和 CALABASH_FRONTEND_RUNTIME，不查找开发 .venv。编译运行库在 Python 包外单独分发。构建依赖 PyInstaller 只放 packaging 组。scripts/check_electron_package.py 使用临时 HOME/PATH/cwd 验证真实冻结执行器、严格构建、预览和 Python action。
 
 DSH 安装级依赖树由 scripts/package_electron.mjs 材料化，所有链接限定在应用包内；Calabash 是安装级内置依赖，不在用户 profile 建源码链接。安装版 DSH_HOME 为 ~/.calabash/harness，开发版仍用独立 harness-development，不自动迁移凭据。Calabash 不使用上游 DSH 自动更新或强制更新源。当前本地安装包未接入开发者分发签名/公证；不绕过系统安全提示。
+
+对话绑定只在首次成功写入草稿或用户明确进入工具对话时产生；只读参考、读取模板不绑定、不复制正式源码、不抢写租约。允许只读参考其他工具，跨工具写入返回结构化 tool_binding_conflict 和新建对话指引，不自动解绑已有对话。私有执行器按会话串行处理 Agent 调用，避免并发首次写入分别绑定多个工具。不要引导用户使用不存在的“新建空白工具”操作。

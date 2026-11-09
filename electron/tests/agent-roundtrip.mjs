@@ -23,10 +23,21 @@ try {
   await ctx.plugin(SystemPrompt, { personaPrefix: 'Synthetic Calabash acceptance' });
   await ctx.plugin(Tools);
   await ctx.plugin(Projections);
+  const Stats = await load('packages/session/session-stats/lib/index.js');
+  await ctx.plugin(Stats);
   await ctx.plugin(Plugin);
+  const events = [];
+  ctx.on('session/event', (session, event) => events.push({ session: session.id, event }));
   const manualSession = Session.create('synthetic-session');
   const tool = ctx.tools.get('calabash_tool');
   assert.ok(tool, 'The actual DSH tool registry must expose Calabash');
+  assert.equal(tool.presentCall({ operation: 'read_tool_file' }).title, '读取工具代码');
+  const secret = 'synthetic-private-source';
+  const shown = tool.presentResult({ operation: 'read_tool_file' }, { isError: false, content: [{ type: 'text', text: JSON.stringify({ lines: [{ text: secret }] }) }] });
+  assert.ok(!JSON.stringify(shown).includes(secret), 'DSH UI presenter must not show source bodies');
+  assert.ok(tool.presentResult({ operation: 'check_tool_build' }, { isError: false, content: [{ type: 'text', text: '{"state":"failed"}' }] }).content[0].text.includes('调整'));
+  assert.ok(tool.presentResult({ operation: 'patch_tool_file' }, { isError: false, content: [{ type: 'text', text: '{"saved":false,"error":"tool_binding_conflict"}' }] }).content[0].text.includes('未完成'));
+  assert.ok(!JSON.stringify(tool.presentResult({ operation: 'write_tool_file' }, { isError: true, content: [{ type: 'text', text: secret }] })).includes(secret));
   const files = JSON.parse(execFileSync(process.env.CALABASH_PYTHON, ['-c', 'import json; from tests.test_tool_bundles import fixture; print(json.dumps(fixture()))'], { cwd: root, env: process.env, encoding: 'utf8' }));
   let sequence = 0;
   const call = async (operation, args = {}) => JSON.parse(await tool.execute({ operation, ...args }, { agent: { session: manualSession }, callId: `test-${++sequence}` }));
@@ -79,10 +90,19 @@ try {
   });
   agent.followup(createUserMessage({ content: [{ type: 'text', text: '@ui:soft Create a synthetic counter office tool.' }], source: { kind: 'user' } }));
   await idle;
+  const recorded = events.filter(item => item.session === 'loop-session').map(item => item.event);
+  assert.equal(recorded.filter(event => event.type === 'tool/call').length, 6);
+  assert.equal(recorded.filter(event => event.type === 'tool/result').length, 6);
+  const stats = ctx.sessionProjections.snapshot(agent.session, ['sessionStats']).values.sessionStats;
+  assert.equal(stats.steps, 7);
+  assert.equal(stats.turns, 1);
+  assert.ok(stats.toolMs >= 0 && stats.llmMs >= 0);
+  const replayedStats = ctx.sessions.fork(agent.session, undefined, 'stats-replay');
+  assert.deepEqual(ctx.sessionProjections.snapshot(replayedStats, ['sessionStats']).values.sessionStats, stats);
   assert.equal(model.requests.length, 7, 'The real loop must execute every scripted model tool call');
   assert.equal(JSON.parse(await ctx.calabashWorkspace.state('loop-session')).name, 'loop_counter');
   assert.deepEqual(JSON.parse(await ctx.calabashWorkspace.list()), []);
-  const style = JSON.parse(await ctx.calabashWorkspace.agent('read_ui_preset', { preset: 'office' }, 'loop-session', 'read-style', await ctx.calabashWorkspace.styleFor(agent.session)));
+  const style = JSON.parse(await ctx.calabashWorkspace.agent('read_ui_preset', {}, 'loop-session', 'read-style', await ctx.calabashWorkspace.styleFor(agent.session)));
   assert.equal(style.id, 'soft');
   assert.equal(style.selected_by, 'mention');
   const meta = execFileSync(process.env.CALABASH_PYTHON, ['-c', "import json; from service.tools.work_drafts import snapshot; print(snapshot('demo','loop_counter')['files']['tool.json'])"], { cwd: root, env: process.env, encoding: 'utf8' });
@@ -96,7 +116,7 @@ try {
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Fix the existing counter without changing its style.' }], source: { kind: 'user' } }));
   await nextIdle;
   assert.equal(await ctx.calabashWorkspace.styleFor(agent.session), null, 'A new user request must not inherit the previous @ selection');
-  const inherited = JSON.parse(await ctx.calabashWorkspace.agent('read_ui_preset', { preset: 'office' }, 'loop-session', 'inherit-style'));
+  const inherited = JSON.parse(await ctx.calabashWorkspace.agent('read_ui_preset', {}, 'loop-session', 'inherit-style'));
   assert.equal(inherited.id, 'soft'); assert.equal(inherited.selected_by, 'snapshot');
   // Exercise the renderer's shipping chunk transfer through the real Host and stdio.
   const { inspectArchive, exportArchive } = await load('packages/client/calabash-workspace/lib/types/client/library-transfer.js');
@@ -123,7 +143,8 @@ try {
   assert.deepEqual(JSON.parse(await ctx.calabashWorkspace.list()), []);
   console.log('PASS: shipping ZIP transfer → real Host/stdio → inspect → confirmed strict-build import → export → conversation binding → confirmed deletion');
   console.log('PASS: style projection replays from a fork and clears on a follow-up while the tool snapshot is preserved');
-  console.log('PASS: authoritative @ui:soft survives the complete Agent loop and overrides model-supplied office style');
+  console.log('PASS: DSH call/result correlation, native session statistics and replay; friendly result cards never interpolate source or errors');
+  console.log('PASS: authoritative @ui:soft survives the complete Agent loop without a model-owned preset parameter');
   console.log('PASS: real DSH AgentLoop + synthetic model → six bounded tool calls → draft + strict build, no real provider');
   console.log('PASS: DSH registry → bounded Agent call → stdio → real draft → strict build; no execution or publication');
 } finally {

@@ -203,26 +203,40 @@ function install(ctx: Context): void {
   function Draft({ sessionId }: { sessionId: string }) {
     const t = useCopy()
     const container = useRef<HTMLElement>(null)
+    const currentSession = useRef(sessionId); currentSession.current = sessionId
     const [target, setTarget] = useState<ToolTarget | null>(null)
+    const [conflict, setConflict] = useState<ToolTarget | null>(null)
     const [preview, setPreview] = useState<Preview | null>(null)
     const [busy, setBusy] = useState(false)
     const [notice, setNotice] = useState('')
     useEffect(() => {
+      setTarget(null); setConflict(null); setPreview(null); setNotice(''); setBusy(false)
       let disposed = false, pending = false
       const update = async () => {
         if (pending || document.hidden || !container.current?.getClientRects().length) return
         pending = true
-        try { const value = JSON.parse(await api.state(sessionId)) as ToolTarget | null; if (!disposed) setTarget(value) }
+        try { const value = JSON.parse(unwrap(await wire.binding(sessionId))) as { target: ToolTarget | null; conflict: ToolTarget | null }; if (!disposed) { setTarget(value.target); setConflict(value.conflict) } }
         catch { /* Retry without stacking banners during generation. */ }
         finally { pending = false }
       }
       void update(); const timer = setInterval(() => { void update() }, 2500)
       return () => { disposed = true; clearInterval(timer) }
     }, [sessionId])
+    const newConversation = async () => {
+      if (busy) return
+      setBusy(true); setNotice('')
+      try {
+        const destination = ctx.workspaces.list.getSnapshot().items[0] ?? await ctx.workspaces.initializeDefault()
+        if (!destination) throw new Error('A workspace is required')
+        const session = await ctx.sessions.create({ workspaceId: destination.workspaceId })
+        ctx.uiWorkspace.openSession(session)
+      } catch { setNotice(t('暂时无法新建对话，请重试。', 'Unable to start a new conversation. Please retry.')) }
+      finally { setBusy(false) }
+    }
     const open = async () => {
       if (busy) return
       setBusy(true); setNotice('')
-      try { setPreview(validPreview(JSON.parse(await api.preview(sessionId, preview !== null)) as Preview)) }
+      try { const value = validPreview(JSON.parse(await api.preview(sessionId, preview !== null)) as Preview); if (currentSession.current === sessionId) setPreview(value) }
       catch { setNotice(t('预览暂时未能打开，请让 AI 检查工具后再重试。', 'Unable to open the preview. Ask AI to check the tool, then retry.')) }
       finally { setBusy(false) }
     }
@@ -231,6 +245,7 @@ function install(ctx: Context): void {
       setBusy(true); setNotice('')
       try {
         const all = JSON.parse(await api.list()) as ToolEntry[]
+        if (currentSession.current !== sessionId) return
         const existing = all.find(value => value.project === preview.project && value.name === preview.name)
         const message = existing ? t('已有同名工具，确认用当前预览版本覆盖吗？', 'Replace the existing tool with this preview version?') : t('将当前预览保存到工具列表？', 'Save this preview to your tool list?')
         if (!window.confirm(message)) return
@@ -241,6 +256,7 @@ function install(ctx: Context): void {
     }
     return <section ref={container} style={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
       <header style={{ ...row, padding: 10, borderBottom: '1px solid #edf0f4' }}><strong style={{ flex: 1, fontSize: 13 }}>{target?.name || t('工具预览', 'Tool preview')}</strong><button style={button} disabled={!target || busy} onClick={() => { void open() }}>{busy ? t('正在处理…', 'Working…') : preview ? t('刷新预览', 'Refresh preview') : t('打开预览', 'Open preview')}</button><button style={button} disabled={!preview || busy} onClick={() => { void save() }}>{t('保存到工具列表', 'Save to tools')}</button></header>
+      {target && <div role="status" style={{ ...row, padding: '8px 12px', background: conflict ? '#fff8e8' : '#f6f8fa', fontSize: 12, color: '#697b89' }}><span style={{ flex: 1 }}>{conflict ? t('此对话正在编辑其他工具。创建新工具请新建对话。', 'This conversation edits another tool. Start a new conversation to create a different tool.') : t('此对话已关联一个工具。', 'This conversation is linked to a tool.')}</span><button style={button} disabled={busy} title={t('保留当前工具，新建空白对话', 'Keep this tool and start a blank conversation')} onClick={() => { void newConversation() }}>{t('新建工具对话', 'New tool conversation')}</button></div>}
       {notice && <p role="status" style={{ margin: 12, color: '#697b89', fontSize: 13 }}>{notice}</p>}
       {preview ? <iframe src={preview.url} title={t('工具预览', 'Tool preview')} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" style={frame} /> : <div style={{ padding: 24, color: '#7d8a97', fontSize: 14 }}>{target ? t('草稿已保存。点击打开预览，试用后可保存为正式工具。', 'Draft saved. Open the preview to try it, then save it as a tool.') : t('在对话中描述想创建的工具，草稿会关联到这里。', 'Describe the tool you want in the conversation. Its draft will appear here.')}</div>}
     </section>

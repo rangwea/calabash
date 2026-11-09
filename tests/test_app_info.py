@@ -17,3 +17,12 @@ class AppInfoTests(unittest.TestCase):
         self.assertEqual(APP_NAME, package['productName'])
         for version in [package['version'],lock['version'],lock['packages']['']['version'],python['version'],plugin['version']]:
             self.assertEqual(APP_VERSION, version)
+
+    def test_readme_version_badges_match_app_version(self):
+        for name in ('README.md', 'README.zh-CN.md'):
+            with self.subTest(readme=name):
+                self.assertIn(
+                    f'badge/version-v{APP_VERSION}-',
+                    (ROOT / name).read_text(),
+                    name,
+                )

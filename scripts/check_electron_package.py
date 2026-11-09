@@ -20,7 +20,7 @@ app = (
     if len(sys.argv) > 1
     else pathlib.Path(__file__).resolve().parents[1]
     / "dist/electron/mac-arm64/Calabash.app"
-) / "Contents/Resources"
+).resolve() / "Contents/Resources"
 with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporary:
     env = {
         **os.environ,

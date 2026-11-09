@@ -12,6 +12,10 @@ const upstream=resolve(process.env.CALABASH_HARNESS_SOURCE || join(root,'build/h
 await verifyCheckout(upstream,lock)
 const built=JSON.parse(readFileSync(join(upstream,'.calabash-build.json')))
 if(built.commit!==lock.commit || built.overlay!==await overlayFingerprint(root)) throw new Error('Rebuild Electron before packaging changed overlays')
+// Always prepare official metadata; packaging must not depend on a previous dev launch.
+const prepare=spawnSync(process.execPath,[join(upstream,'node_modules/tsx/dist/cli.mjs'),join(upstream,'apps/desktop/scripts/calabash-prepare-project.ts')],{cwd:upstream,env:process.env,stdio:'inherit'})
+if(prepare.error) throw prepare.error
+if(prepare.status!==0) throw new Error('DSH project preparation failed')
 const stage=join(root,'build/electron-package')
 const app=join(stage,'app'), dsh=join(app,'dsh')
 const output=join(root,'dist/electron')

@@ -41,6 +41,8 @@ async def dispatch(method, params):
             return {'released': True}
         if method == 'workspace.state' and set(params) == {'session'}:
             return workspace.state(params['session'])
+        if method == 'workspace.binding' and set(params) == {'session'}:
+            return workspace.binding(params['session'])
         if method == 'workspace.preview' and set(params) == {'session', 'refresh'} and type(params['refresh']) is bool:
             return await workspace.preview(params['session'], refresh=params['refresh'])
         if method == 'workspace.publish' and set(params) == {'session', 'expected', 'replace_revision', 'confirmed'}:
@@ -89,10 +91,10 @@ async def serve(reader=None, writer=None):
 
     def resource(method, params):
         if method == 'agent.call':
-            args = params.get('arguments', {})
-            if args.get('project') and args.get('name'):
-                return ('tool', args['project'], args['name'])
             return ('session', params.get('session'))
+        if method == 'library.action' and params.get('operation') == 'conversation':
+            session = params.get('arguments', {}).get('session')
+            return ('session', session) if session else None
         if method in {'agent.release', 'workspace.preview', 'workspace.publish'}:
             from service.tools import harness_workspace as workspace
             target = workspace.state(params.get('session'))

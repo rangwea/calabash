@@ -82,6 +82,7 @@ export async function main(action = process.argv[2]) {
     // Keep every upstream version frozen; registry policy verification may fetch metadata.
     await pnpm(['install', '--ignore-scripts', '--frozen-lockfile']);
     await copyFile(join(repositoryRoot, 'electron/launch.ts'), join(upstream, 'apps/desktop/scripts/calabash-launch.ts'));
+    await copyFile(join(repositoryRoot, 'electron/prepare-project.ts'), join(upstream, 'apps/desktop/scripts/calabash-prepare-project.ts'));
     await pnpm(['run', 'build:artifacts']);
     await pnpm(['--filter', '@deepseek-ai/dsh-desktop', 'run', 'prepare:primary-runtime']);
     await writeFile(join(upstream, '.calabash-build.json'), JSON.stringify({ commit: lock.commit, version: lock.version, overlay: await overlayFingerprint() }));
@@ -90,6 +91,7 @@ export async function main(action = process.argv[2]) {
   const built = JSON.parse(await readFile(join(upstream, '.calabash-build.json'), 'utf8').catch(() => { throw new Error('Run npm run electron:build first'); }));
   if (built.commit !== lock.commit || built.overlay !== await overlayFingerprint()) throw new Error('Rebuild the pinned Harness release');
   await copyFile(join(repositoryRoot, 'electron/launch.ts'), join(upstream, 'apps/desktop/scripts/calabash-launch.ts'));
+    await copyFile(join(repositoryRoot, 'electron/prepare-project.ts'), join(upstream, 'apps/desktop/scripts/calabash-prepare-project.ts'));
   await pnpm(['exec', 'tsx', 'apps/desktop/scripts/calabash-launch.ts']);
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

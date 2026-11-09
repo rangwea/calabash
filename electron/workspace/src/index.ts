@@ -5,9 +5,9 @@ import { z } from 'zod'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import { requestedStyle } from './style-selection.ts'
+import { operations, callPresentation, resultPresentation } from './tool-presentation.ts'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session'
 import { join } from 'node:path'
 import { WorkspaceState } from './workspace-state.ts'
 import { HostTasks } from './tasks.ts'
@@ -17,7 +17,6 @@ export type { ToolEntry, ToolTarget, Preview, AgentArguments } from './types.ts'
 
 declare module '@deepseek-ai/dsh-session-projection' { interface SessionProjectionMap { calabashStyle: string | null } }
 declare module '@deepseek-ai/cordis' { interface Context { calabashWorkspace: CalabashWorkspace } }
-const operations = ['instructions', 'list_tools', 'read_ui_reference', 'read_component_api', 'read_ui_preset', 'read_tool_template', 'read_tool', 'read_tool_file', 'write_tool_file', 'patch_tool_file', 'check_tool_build', 'read_build_diagnostics', 'read_api_contract']
 export default class CalabashWorkspace extends TypertRemoteService {
   static inject = ['tools', 'sessionProjections']
   private styleReady: Promise<unknown>
@@ -43,13 +42,12 @@ export default class CalabashWorkspace extends TypertRemoteService {
     })
     ctx.tools.register(defineTool({
       name: 'calabash_tool',
-      description: 'Create and edit Calabash local office tools (React + Ant Design + Python). FIRST call instructions; use read_tool_template for a new tool. Read current source before editing. Use check_tool_build before finishing. Source is saved as a draft; user manually previews and saves to tool list. Never execute, publish, install dependencies or access arbitrary files. One tool per conversation.',
+      description: 'Create and edit Calabash local office tools (React + Ant Design + Python). Read instructions once before authoring; reuse them while available in this conversation. Use read_tool_template for a new tool. Read current source before editing. Use check_tool_build before finishing. Source is saved as a draft; user manually previews and saves to tool list. Never execute, publish, install dependencies or access arbitrary files. One tool per conversation.',
       parameters: {
         operation: { type: 'string', required: true, enum: operations, description: 'Bounded Calabash operation.' },
         reference: { type: 'string', description: 'One built-in reference: react-tool.md, design.md, api-contract.md, file-workflow.md, lifecycle.md, quality-gate.md, frontend-debug.md.' },
         component: { type: 'string', description: 'Ant Design component, such as Table.' },
         property_name: { type: 'string', description: 'One component prop or event.' },
-        preset: { type: 'string', description: 'Built-in style pack identity, or omit for default.' },
         project: { type: 'string', description: 'Tool project, default for new office tools.' },
         name: { type: 'string', description: 'Lowercase tool identity using letters, digits and underscores.' },
         path: { type: 'string', description: 'Source path from read_tool or template, never an absolute path.' },
@@ -66,7 +64,8 @@ export default class CalabashWorkspace extends TypertRemoteService {
         const result = await ctx.calabashWorkspace.agent(operation, arguments_, exec.agent.session.id, exec.callId, await ctx.calabashWorkspace.styleFor(exec.agent.session))
         return result
       },
-      presentCall: args => ({ card: 'generic', title: `Calabash · ${args.operation}`, kind: 'other' }),
+      presentCall: callPresentation,
+      presentResult: resultPresentation,
     }))
   }
   /** Execute one model operation using the owning Agent's session, never model-supplied session metadata. */
@@ -117,6 +116,9 @@ export default class CalabashWorkspace extends TypertRemoteService {
   /** Read the current conversation's target; does not run source. */
   @Remote
   async state(session: string): Promise<string> { return JSON.stringify(await this.bridge.call('workspace.state', { session })) }
+  /** Bound editing target and a safe UI recovery hint; no source or credentials. */
+  @Remote
+  async binding(session: string): Promise<string> { return JSON.stringify(await this.bridge.call('workspace.binding', { session })) }
   /** Build and manually open the current conversation draft. */
   @Remote
   async preview(session: string, refresh: boolean): Promise<string> { return JSON.stringify(await this.bridge.call('workspace.preview', { session, refresh })) }
