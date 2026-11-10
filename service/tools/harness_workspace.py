@@ -136,7 +136,7 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         return bundles.list_tools()
     if operation == 'read_ui_reference':
         reference = arguments.get('reference', 'react-tool.md')
-        if reference not in {'react-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md', 'api-contract.md', 'office-actions.md'}:
+        if reference not in {'react-tool.md', 'design.md', 'frontend-debug.md', 'file-workflow.md', 'lifecycle.md', 'quality-gate.md', 'api-contract.md', 'ai-actions.md'}:
             raise ValueError('Unknown built-in reference')
         return {'reference': reference, 'content': (Path(__file__).resolve().parents[2] / 'agent/skills/calabash/references' / reference).read_text()[:32000]}
     if operation == 'read_component_api':

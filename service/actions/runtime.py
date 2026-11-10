@@ -8,8 +8,8 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from service.actions import registry
+from service.actions.errors import ActionFailure
 from service.actions.models import ActionResult, ActionRun, ActionSubmission
-from service.actions.office import ActionFailure
 
 
 @dataclass
@@ -32,9 +32,7 @@ class ToolActions:
         if type(action_version) is not int or type(protocol_version) is not int or action_version != 1 or protocol_version != 1:
             raise ActionFailure('unsupported_action_version')
         action = registry.get(action_id)
-        if not isinstance(parameters, list) or not 1 <= len(parameters) <= 20:
-            raise ActionFailure('invalid_parameters')
-        if action.kind == 'ai' and len(parameters) != 1:
+        if not isinstance(parameters, list) or len(parameters) != 1:
             raise ActionFailure('invalid_parameters')
         invocations = []
         for value in parameters:
@@ -43,26 +41,11 @@ class ToolActions:
             except ValidationError:
                 # ValidationError strings can include values; never carry them into ToolJobs logs.
                 raise ActionFailure('invalid_parameters') from None
-            if action.kind == 'ai':
-                from service.actions.ai import validate_parameters
-                validate_parameters(parsed)
-            self._inputs(action, parsed)
+            from service.actions.ai import validate_parameters
+            validate_parameters(parsed)
             invocations.append(Invocation(uuid4().hex, action, parsed))
         status = self.sdk.start_batch(invocations, self._execute)
         return ActionSubmission(**status, action_id=action.id, invocation_ids=[item.id for item in invocations]).model_dump()
-
-    def _inputs(self, action, parameters):
-        if action.kind == 'ai':
-            return []
-        ids = getattr(parameters, action.input_field)
-        ids = ids if isinstance(ids, list) else [ids]
-        try:
-            paths = [self.sdk.input_path(identity) for identity in ids]
-        except (KeyError, OSError, ValueError):
-            raise ActionFailure('input_unavailable') from None
-        if any(path.suffix.lower() != action.extension for path in paths):
-            raise ActionFailure('unsupported_format')
-        return paths
 
     async def _execute(self, invocation):
         from core.logger import get_logger
@@ -71,32 +54,22 @@ class ToolActions:
         action = invocation.action
         destination = None
         try:
-            paths = self._inputs(action, invocation.parameters)
-            if action.kind == 'ai':
-                from service.actions.ai import validated_output
-                raw = await self.sdk.ai.request(invocation.id, invocation.parameters)
-                text, suffix = validated_output(invocation.parameters, raw)
-                if self.sdk._cancel_pending:
-                    raise asyncio.CancelledError
-                destination = self.sdk.output_path(invocation.parameters.output_name + suffix)
-                await self.sdk.io(destination.write_text, text, encoding='utf-8')
-                counts = {'characters': len(text)}
-            else:
-                destination = self.sdk.output_path(invocation.parameters.output_name)
-                loop = asyncio.get_running_loop()
-                jobs = self.sdk.jobs
-                def progress(value):
-                    loop.call_soon_threadsafe(jobs.report_progress, min(1.0, max(0.0, value)))
-                counts = await self.sdk.io(action.handler, paths, invocation.parameters, destination, progress)
-            self._inputs(action, invocation.parameters)
+            from service.actions.ai import validated_output
+            raw = await self.sdk.ai.request(invocation.id, invocation.parameters)
+            text, suffix = validated_output(invocation.parameters, raw)
+            if self.sdk._cancel_pending:
+                raise asyncio.CancelledError
+            destination = self.sdk.output_path(invocation.parameters.output_name + suffix)
+            await self.sdk.io(destination.write_text, text, encoding='utf-8')
+            counts = {'characters': len(text)}
             output = self.sdk.add_result(destination)
             invocation.result = ActionResult(invocation_id=invocation.id, action_id=action.id, outputs=[output], counts=counts).model_dump()
-            log.info('Office action id={} invocation={} version=1 status=succeeded duration_ms={}', action.id, invocation.id, round((time.monotonic() - started) * 1000))  # noqa: PLE1205 - Loguru brace formatting.
+            log.info('AI action id={} invocation={} version=1 status=succeeded duration_ms={}', action.id, invocation.id, round((time.monotonic() - started) * 1000))  # noqa: PLE1205 - Loguru brace formatting.
             return invocation.result
         except Exception as error:  # noqa: BLE001 - return only trusted error categories, never parser values.
             code = error.code if isinstance(error, ActionFailure) else 'processing_failed'
             invocation.error = {'code': code, 'message': str(ActionFailure(code))}
-            log.error('Office action id={} invocation={} version=1 status=failed code={} exception={} duration_ms={}',  # noqa: PLE1205 - Loguru brace formatting.
+            log.error('AI action id={} invocation={} version=1 status=failed code={} exception={} duration_ms={}',  # noqa: PLE1205 - Loguru brace formatting.
                          action.id, invocation.id, code, type(error).__name__, round((time.monotonic() - started) * 1000))
             raise ActionFailure(code) from None
         finally:
@@ -110,7 +83,7 @@ class ToolActions:
     def release_ai_inputs(self):
         if self.sdk.jobs:
             for job in self.sdk.jobs.jobs:
-                if isinstance(job.value, Invocation) and job.value.action.kind == 'ai' and job.status != 'running':
+                if isinstance(job.value, Invocation) and job.status != 'running':
                     job.value.parameters = None
 
     def runs(self):

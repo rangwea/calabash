@@ -43,8 +43,8 @@ try {
   const call = async (operation, args = {}) => JSON.parse(await tool.execute({ operation, ...args }, { agent: { session: manualSession }, callId: `test-${++sequence}` }));
   const instructions = await call('instructions'); assert.ok(instructions.skill.includes('Calabash'));
   assert.deepEqual(await call('list_tools'), []);
-  const action = await call('read_action_api', { action_id: 'office.excel.process' });
-  assert.equal(action.network, false); assert.ok(action.input_schema.properties.input_ids);
+  const action = await call('read_action_api', { action_id: 'ai.text' });
+  assert.equal(action.network, 'user_selected_model'); assert.ok(action.input_schema.properties.text);
   await assert.rejects(() => call('run_action', { project: 'demo', name: 'counter' }));
   for (const [path, content] of Object.entries(files)) {
     assert.equal((await call('write_tool_file', { project: 'demo', name: 'counter', path, content })).saved, true);
@@ -62,7 +62,7 @@ try {
   await ctx.plugin(LlmRuntime); await ctx.plugin(Sessions);
   await ctx.plugin(Native); await ctx.plugin(Agents); await ctx.plugin(Loop, { agents: [] });
   const loopFiles = { ...files, 'tool.json': JSON.stringify({ ...JSON.parse(files['tool.json']), name: 'loop_counter' }) };
-  const script = [{ operation: 'instructions' }, { operation: 'read_action_api', action_id: 'office.excel.process' }, { operation: 'read_tool_template', project: 'demo', name: 'loop_counter' },
+  const script = [{ operation: 'instructions' }, { operation: 'read_action_api', action_id: 'ai.text' }, { operation: 'read_tool_template', project: 'demo', name: 'loop_counter' },
     ...Object.entries(loopFiles).map(([path, content]) => ({ operation: 'write_tool_file', project: 'demo', name: 'loop_counter', path, content })),
     { operation: 'check_tool_build', project: 'demo', name: 'loop_counter' }];
   const scriptedCalls = script.length;

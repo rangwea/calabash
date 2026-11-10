@@ -9,7 +9,7 @@ from uuid import uuid4
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from service.actions.office import ActionFailure
+from service.actions.errors import ActionFailure
 
 TTL_SECONDS = 600
 TASK_TITLES = {'summarize': '总结内容', 'classify': '分类内容', 'extract': '提取信息', 'translate': '翻译文本', 'generate': '生成内容'}

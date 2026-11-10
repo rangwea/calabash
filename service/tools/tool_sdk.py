@@ -72,7 +72,7 @@ class ToolSDK:
         return catalog()
 
     def action_schema(self, action_id: str):
-        from service.actions.office import ActionFailure
+        from service.actions.errors import ActionFailure
         from service.actions.registry import describe
         try:
             return describe(action_id)

@@ -64,7 +64,10 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
 
         try:
             assert call("tools.list", {}) == []
-            for path, content in base_template("demo", "installed_smoke").items():
+            from scripts.office_library_smoke import BACKEND
+            files = base_template("demo", "installed_smoke")
+            files["backend/main.py"] += "\n    install_office_smoke(app, sdk)\n" + BACKEND
+            for path, content in files.items():
                 call(
                     "agent.call",
                     {
@@ -111,11 +114,11 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             )
             result = json.load(urllib.request.urlopen(request, timeout=10))
             assert result["message"] == "Installed runtime", result
-            from scripts.office_action_smoke import verify
+            from scripts.office_library_smoke import verify
             verify(origin, token)
             assert call("app.prepare_exit", {}) is True
             print(
-                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, Python API and Excel→Word Actions; no source cwd"
+                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, Python API and tool-owned Excel/Word library processing; no source cwd"
             )
         finally:
             process.stdin.close()

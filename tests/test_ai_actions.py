@@ -11,8 +11,8 @@ import httpx
 from fastapi import FastAPI
 
 from service.actions.ai import validated_output
+from service.actions.errors import ActionFailure
 from service.actions.models import AIParameters
-from service.actions.office import ActionFailure
 from service.tools.tool_sdk import ToolSDK
 
 
@@ -41,6 +41,34 @@ class AIActionsTests(unittest.IsolatedAsyncioTestCase):
 
     async def control(self, pending, operation, **values):
         return await self.client.post('/api/sdk/ai/control', json={'request_id': pending['request_id'], 'digest': pending['digest'], 'operation': operation, **values}, headers={'X-Calabash-Host': 'synthetic-host'})
+
+    async def test_catalog_only_exposes_ai_and_rejects_removed_business_actions(self):
+        from service.actions.contracts import frontend_source
+        from service.tools.harness_workspace import agent_call
+        catalog = await agent_call('synthetic', 'lookup', 'read_action_api', {})
+        self.assertEqual(['ai.text'], [action['id'] for action in catalog['actions']])
+        schema = (await self.client.get('/api/sdk/actions/ai.text')).json()
+        self.assertIn('text', schema['input_schema']['properties'])
+        generated = frontend_source()
+        for removed in ('office.excel.process', 'office.word.fill_template'):
+            self.assertNotIn(removed, generated)
+            response = await self.client.post('/api/sdk/actions/' + removed, json={'parameters': {}})
+            self.assertEqual(422, response.status_code)
+        self.assertEqual([], self.sdk.actions.runs())
+        self.assertFalse(self.sdk.status()['running'])
+        with self.assertRaises(ValueError):
+            await agent_call('synthetic', 'denied', 'run_action', {})
+
+    async def test_submission_rejects_batches_versions_and_unsafe_output_names(self):
+        parameters = {'task': 'summarize', 'text': 'synthetic'}
+        for options in ({'action_version': 2}, {'protocol_version': 2}):
+            with self.assertRaises(ActionFailure):
+                self.sdk.actions.start('ai.text', parameters, **options)
+        with self.assertRaises(ActionFailure):
+            self.sdk.actions.start_batch('ai.text', [parameters, parameters])
+        with self.assertRaises(ActionFailure):
+            self.sdk.actions.start('ai.text', {**parameters, 'output_name': '../result'})
+        self.assertEqual([], self.sdk.actions.runs())
 
     async def test_no_result_before_approval_and_five_tasks_deliver_files(self):
         tasks = [('summarize', {}, 'Summary'), ('translate', {'language': 'English'}, 'Translation'), ('generate', {}, 'Generated'),

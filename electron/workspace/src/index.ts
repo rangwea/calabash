@@ -51,9 +51,9 @@ export default class CalabashWorkspace extends TypertRemoteService {
       name: 'calabash_tool',
       description: 'Create and edit Calabash local office tools (React + Ant Design + Python). Read instructions once before authoring; reuse them while available in this conversation. Use read_tool_template for a new tool. Read current source before editing. Use check_tool_build before finishing; read_preview_diagnostics reports safe current-run page/API evidence without executing business operations. Source is saved as a draft; the visible preview pane opens ready drafts; users confirm saves and business operations. Never execute, publish, install dependencies or access arbitrary files. One tool per conversation.',
       parameters: {
-        action_id: { type: 'string', description: 'Built-in office action identity for read_action_api; omit to list actions. Discovery only, never executes.' },
+        action_id: { type: 'string', description: 'Built-in AI action identity for read_action_api; omit to list actions. Discovery only, never executes.' },
         operation: { type: 'string', required: true, enum: operations, description: 'Bounded Calabash operation.' },
-        reference: { type: 'string', description: 'One built-in reference: react-tool.md, design.md, api-contract.md, file-workflow.md, lifecycle.md, quality-gate.md, frontend-debug.md, office-actions.md.' },
+        reference: { type: 'string', description: 'One built-in reference: react-tool.md, design.md, api-contract.md, file-workflow.md, lifecycle.md, quality-gate.md, frontend-debug.md, ai-actions.md.' },
         component: { type: 'string', description: 'Ant Design component, such as Table.' },
         property_name: { type: 'string', description: 'One component prop or event.' },
         project: { type: 'string', description: 'Tool project, default for new office tools.' },
