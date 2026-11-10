@@ -22,7 +22,7 @@
     "electron:prepare": "node scripts/harness.mjs prepare",
     "electron:build": "node scripts/harness.mjs build",
     "electron:dev": "node scripts/harness.mjs start",
-    "test:harness": "node --test tests/harness_launcher.test.mjs && node electron/tests/host-state.test.mjs && node electron/tests/bridge-exit.test.mjs && node electron/tests/extension-defaults.test.mjs && node electron/tests/ui-styles.test.mjs && node electron/tests/agent-roundtrip.mjs",
+    "test:harness": "node --test tests/harness_launcher.test.mjs && node electron/tests/host-state.test.mjs && node electron/tests/bridge-exit.test.mjs && node electron/tests/extension-defaults.test.mjs && node electron/tests/ui-styles.test.mjs && node electron/tests/agent-roundtrip.mjs && node electron/tests/ai-actions.test.mjs && node electron/tests/ai-interaction.test.mjs && node electron/tests/ai-roundtrip.mjs",
     "dev": "npm run electron:dev",
     "build": "npm run electron:build",
     "test:python": "python3 -m unittest discover -s tests",

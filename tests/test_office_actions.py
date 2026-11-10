@@ -185,7 +185,7 @@ class OfficeActionTests(unittest.IsolatedAsyncioTestCase):
         identity = await self.select('source.xlsx', workbook([['id'], [1]]))
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
             catalog = (await client.get('/api/sdk/actions')).json()
-            self.assertEqual(2, len(catalog['actions']))
+            self.assertEqual(3, len(catalog['actions']))
             self.assertFalse(catalog['actions'][0]['network'])
             schema = (await client.get('/api/sdk/actions/office.excel.process')).json()
             self.assertIn('input_ids', schema['input_schema']['properties'])
@@ -198,7 +198,7 @@ class OfficeActionTests(unittest.IsolatedAsyncioTestCase):
     async def test_agent_can_discover_but_cannot_execute_actions(self):
         from service.tools.harness_workspace import agent_call
         catalog = await agent_call('synthetic', 'lookup', 'read_action_api', {})
-        self.assertEqual(2, len(catalog['actions']))
+        self.assertEqual(3, len(catalog['actions']))
         specification = await agent_call('synthetic', 'detail', 'read_action_api', {'action_id': 'office.word.fill_template'})
         self.assertEqual(describe('office.word.fill_template'), specification)
         self.assertFalse(self.sdk.status()['running'])

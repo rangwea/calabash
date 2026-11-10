@@ -16,10 +16,12 @@ from service.tools.tool_jobs import ToolJobs
 
 
 class ToolSDK:
-    def __init__(self, project, name):
+    def __init__(self, project, name, *, run_id=None, source_revision=""):
         from service.tools.tool_bundles import identity
         self.project, self.name = identity(project), identity(name)
         self.owner = f'tool:{project}/{name}'
+        self.run_id = run_id or uuid4().hex
+        self.source_revision = source_revision
         self.data_dir = app_dir() / 'tool-data' / project / name
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.jobs = None
@@ -48,6 +50,10 @@ class ToolSDK:
         self.router.add_api_route('/debug/request', self.debug_request, methods=['POST'])
         from service.actions.runtime import ToolActions
         self.actions = ToolActions(self)
+        from service.actions.ai import ToolAI
+        self.ai = ToolAI(self)
+        self.router.add_api_route('/ai/requests', self.ai.pending, methods=['GET'])
+        self.router.add_api_route('/ai/control', self.ai.control, methods=['POST'])
         self.router.add_api_route('/actions', self.action_catalog, methods=['GET'])
         self.router.add_api_route('/actions/{action_id}', self.action_schema, methods=['GET'])
         self.router.add_api_route('/actions/{action_id}', self.start_action, methods=['POST'])
@@ -103,6 +109,8 @@ class ToolSDK:
 
     def cancel(self):
         self._cancel_pending = True
+        if self.loop:
+            self.loop.call_soon_threadsafe(self.ai.cancel)
         if self.jobs:
             self.jobs.cancel()
         return self.status()
@@ -126,10 +134,15 @@ class ToolSDK:
             self.jobs = ToolJobs(values, owner=self.owner)
             self._cancel_pending = False
             async def execute():
-                if self._cancel_pending:
-                    self.jobs.status = 'cancelled'
-                    return
-                await self.jobs.run(handler)
+                try:
+                    if self._cancel_pending:
+                        self.jobs.status = 'cancelled'
+                        for job in self.jobs.jobs:
+                            job.status = 'cancelled'
+                        return
+                    await self.jobs.run(handler)
+                finally:
+                    self.actions.release_ai_inputs()
             self.task = self.loop.create_task(execute()) if self.loop is current else asyncio.run_coroutine_threadsafe(execute(), self.loop)
         return self.status()
 

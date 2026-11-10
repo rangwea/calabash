@@ -19,7 +19,7 @@ def create_tool_app(config):
     from service.tools.tool_sdk import ToolSDK
     root = Path(config['root'])
     source_root = Path(config.get('source_root', root))
-    sdk = ToolSDK(config['project'], config['name'])
+    sdk = ToolSDK(config['project'], config['name'], run_id=root.name, source_revision=config.get('revision', ''))
     sdk.host_token = config.get('host_token', '')
     @asynccontextmanager
     async def lifespan(app):

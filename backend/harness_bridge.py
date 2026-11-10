@@ -22,6 +22,12 @@ MAX_REQUEST = 2 * 1024 * 1024
 async def dispatch(method, params):
     if not isinstance(params, dict):
         raise TypeError('Invalid request')
+    if method == 'ai.pending' and not params:
+        from service.tools.ai_host import pending
+        return await pending()
+    if method == 'ai.control' and set(params) == {'worker_id', 'request_id', 'digest', 'operation', 'lease', 'text'}:
+        from service.tools.ai_host import control
+        return await control(**params)
     if method == 'app.active_tasks' and not params:
         for worker in tuple(workers.items.values()):
             if worker.process.poll() is None and (await workers.status(worker)).get('running'):
@@ -117,7 +123,10 @@ async def serve(reader=None, writer=None):
                 result = await dispatch(method, params)
             response = {'id': request_id, 'result': result}
         except Exception:
-            logger.exception('Harness tool operation failed')
+            if request.get('method', '').startswith('ai.'):
+                logger.warning('AI host operation unavailable')
+            else:
+                logger.exception('Harness tool operation failed')
             response = {'id': request_id, 'error': {'code': 'operation_failed', 'message': 'Unable to complete this tool operation.'}}
         writer.write(json.dumps(response, ensure_ascii=False) + '\n')
         writer.flush()

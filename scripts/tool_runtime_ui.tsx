@@ -2,6 +2,7 @@
 import { Component, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Progress, Space, Tag } from 'antd'
 import type { EChartsOption } from 'echarts'
+import { readAIResult, resultFields } from './runtime-ai-result'
 export interface ToolFile { id: string; name: string; status?: string }
 interface JobState { status: string; progress: number; running: boolean }
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -51,10 +52,49 @@ export function CalabashFiles({ onChange }: { onChange?: (files: ToolFile[]) => 
     {(error || state.error) && <Alert type="error" title={error || state.error} showIcon />}
   </section>
 }
+/** Automatically shows current AI Action outputs; ordinary files remain compact. */
 export function CalabashResults() {
-  const { value: files } = usePolling(() => request<ToolFile[]>('/results'), [] as ToolFile[])
-  if (!files.length) return null
-  return <details style={{ marginBlock: 12, fontSize: 13 }}><summary>结果文件 · Results ({files.length})</summary>{files.map(file => <div key={file.id} style={{ paddingBlock: 6 }}><a href={'/api/sdk/results/' + encodeURIComponent(file.id)} download={file.name}>{file.name}</a></div>)}</details>
+  const { value } = usePolling(async () => {
+    const [files, runs] = await Promise.all([request<ToolFile[]>('/results'), officeActions.runs()])
+    const ai = runs.filter(run => run.action_id === 'ai.text' && run.status === 'succeeded').flatMap(run => run.result?.outputs || [])
+    return { files, ai }
+  }, { files: [] as ToolFile[], ai: [] as ToolFile[] })
+  const others = value.files.filter(file => !value.ai.some(result => result.id === file.id))
+  return <section className="calabash-results" style={{ minWidth: 0 }}>
+    {value.ai.map(file => <CalabashAIResult key={file.id} file={file} />)}
+    {others.length > 0 && <details style={{ marginBlock: 12, fontSize: 13 }}><summary>结果文件 · Results ({others.length})</summary>{others.map(file => <div key={file.id} style={{ paddingBlock: 6 }}><a href={'/api/sdk/results/' + encodeURIComponent(file.id)} download={file.name}>{file.name}</a></div>)}</details>}
+  </section>
+}
+function CalabashAIResult({ file }: { file: ToolFile }) {
+  const [text, setText] = useState<string | null>(null), [error, setError] = useState(''), [copied, setCopied] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const fallback = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const controller = new AbortController(); setText(null); setError(''); setCopied(false)
+    void fetch('/api/sdk/results/' + encodeURIComponent(file.id), { signal: controller.signal }).then(readAIResult).then(value => { if (!controller.signal.aborted) setText(value) }).catch(() => { if (!controller.signal.aborted) setError('暂时无法显示结果，可以重试或下载查看 · Unable to display. Retry or download.') })
+    return () => controller.abort()
+  }, [file.id, retry])
+  const copy = async () => {
+    if (text === null) return
+    try { await navigator.clipboard.writeText(text); setCopied(true) }
+    catch {
+      // Cross-origin tool frames may have Clipboard API disabled. User click only;
+      // copy never requests clipboard read permission or expands iframe access.
+      const field = fallback.current
+      if (!field) return
+      field.hidden = false; field.focus(); field.select()
+      try { if (document.execCommand('copy')) { setCopied(true); field.hidden = true } }
+      catch { /* Leave selected plain text available for manual copy. */ }
+    }
+  }
+  const fields = text !== null && file.name.endsWith('.json') ? resultFields(text) : []
+  return <section className="calabash-ai-result" aria-label="AI 处理结果 · AI result" style={{ marginBlock: 12, padding: 16, border: '1px solid var(--calabash-border, #dce3e9)', borderRadius: 8, minWidth: 0, overflowWrap: 'anywhere' }}>
+    <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}><strong>处理结果 · Result</strong><Space><Button disabled={text === null} onClick={() => { void copy() }}>{copied ? '已复制 · Copied' : '复制 · Copy'}</Button><Button href={'/api/sdk/results/' + encodeURIComponent(file.id)} download={file.name}>下载 · Download</Button></Space></Space>
+    {text === null && !error && <p role="status">正在显示结果… · Loading result…</p>}
+    {error && <Alert type="warning" title={error} action={<Button onClick={() => setRetry(value => value + 1)}>重试 · Retry</Button>} />}
+    {fields.length ? <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(70px, 1fr) minmax(0, 3fr)', gap: 10, maxHeight: 360, overflow: 'auto' }}>{fields.map(([name,value]) => <div key={name} style={{ display: 'contents' }}><dt style={{ color: '#6b7787' }}>{name}</dt><dd style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{value}</dd></div>)}</dl> : text !== null && <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 360, overflow: 'auto', font: 'inherit', lineHeight: 1.6 }}>{text}</pre>}
+    <textarea ref={fallback} hidden readOnly value={text || ''} aria-label="可选择复制的结果 · Selectable result" style={{ width: '100%', minHeight: 100 }} />
+  </section>
 }
 export function CalabashJobStatus() {
   const { value: job } = usePolling(async () => {

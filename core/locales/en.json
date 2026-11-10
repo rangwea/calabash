@@ -530,5 +530,9 @@
   "请选择表格中实际存在的列后重试": "Please choose columns that exist in the spreadsheet and retry.",
   "当前数据处理不支持公式或错误单元格，请先转换为数值": "This data action does not support formula or error cells. Please convert them to values first.",
   "模板标记无法识别，请使用“{{字段名}}”格式": "The template markers are not recognized. Please use the {{field}} format.",
-  "请补全模板字段对应的内容后重试": "Please supply values for all template fields and retry."
+  "请补全模板字段对应的内容后重试": "Please supply values for all template fields and retry.",
+  "AI 返回的内容未符合要求，请调整后重试": "AI returned content that did not meet the requirements. Please adjust and retry.",
+  "本次确认已过期，请重新发起操作": "This confirmation expired. Please start the operation again.",
+  "本次 AI 操作已取消，未发送内容": "This AI operation was cancelled without sending content.",
+  "本次 AI 操作未完成，请检查连接后手动重试": "This AI operation did not complete. Check the connection and retry manually."
 }

@@ -116,3 +116,26 @@ class ActionSubmission(Parameters):
     status: str
     progress: float
     counts: dict[str, int]
+
+
+class AIParameters(Parameters):
+    task: Literal['summarize', 'classify', 'extract', 'translate', 'generate']
+    text: str = Field(min_length=1, max_length=20000, description='Exact text to send, shown in the host confirmation panel. Never add chat history or logs.')
+    language: str = Field(default='', max_length=80, description='Required target language for translate.')
+    labels: list[str] = Field(default_factory=list, max_length=30, description='For classify: 2–30 distinct labels, each up to 80 characters.')
+    fields: dict[str, Literal['string', 'number', 'boolean']] = Field(default_factory=dict, max_length=20, description='For extract: required field names and scalar types; no expressions or code.')
+    output_name: str = Field(default='ai-result', max_length=80, description='Plain filename stem; .txt or .json is added by the SDK.')
+
+    @field_validator('labels')
+    @classmethod
+    def bounded_labels(cls, value):
+        if len(set(value)) != len(value) or any(not label.strip() or len(label) > 80 for label in value):
+            raise ValueError('Use distinct bounded labels')
+        return value
+
+    @field_validator('fields')
+    @classmethod
+    def bounded_fields(cls, value):
+        if any(not re.fullmatch(r'[\w.-]{1,60}', name) for name in value):
+            raise ValueError('Use plain field names')
+        return value

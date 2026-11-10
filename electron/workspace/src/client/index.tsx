@@ -18,6 +18,7 @@ import type { UseContextMenu } from '@deepseek-ai/dsh-client-ui-context-menu/cli
 import css from './tools.module.css'
 import { createOperations } from './operations.ts'
 import { inspectArchive, exportArchive } from './library-transfer.ts'
+import { AIConsent } from './ai-consent.tsx'
 import { registerUIStyles } from './ui-styles.tsx'
 import type { UIPreset, ToolEntry, Preview, ToolTarget } from '../types.ts'
 declare module '@deepseek-ai/dsh-client-ui-context-menu/client' { interface ContextMenuTargetMap { calabashTool: ToolEntry } }
@@ -42,6 +43,15 @@ function install(ctx: Context): void {
   const wire = ctx.remote.calabashWorkspace
   const unwrap = (result: RemoteResult<string>): string => { if (!result.ok) throw new Error('Tool operation failed'); return result.value }
   const operation = createOperations(wire, value => unwrap(value as RemoteResult<string>))
+  const aiApi = {
+    pending: async () => JSON.parse(unwrap(await wire.aiPending())),
+    models: async () => JSON.parse(unwrap(await wire.aiModels())),
+    review: async (worker:string,request:string,model:string) => JSON.parse(unwrap(await wire.aiReview(worker,request,model))),
+    approve: async (id:string) => { unwrap(await wire.aiApprove(id)) },
+    reject: async (worker:string,request:string) => { unwrap(await wire.aiReject(worker,request)) },
+    cancel: async (id:string) => { unwrap(await wire.aiCancel(id)) },
+  }
+  function AIOverlay() { const t=useCopy(); return <AIConsent api={aiApi} t={t} /> }
   const api = {
     list: async () => unwrap(await wire.list()),
     open: async (project: string, name: string) => operation('tools.open', { project, name }),
@@ -282,6 +292,7 @@ function install(ctx: Context): void {
     const rect = useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => bounds)
     return <div style={{ position:'fixed', left:rect?.left ?? 0, top:rect?.top ?? 0, width:rect?.width ?? 0, height:rect?.height ?? 0, display:rect ? 'block' : 'none', pointerEvents:'auto', zIndex:1, background:'#fff' }}><Tools {...props} /></div>
   }
+  ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({name:'shell.overlay',id:'calabash.ai',order:100},AIOverlay)))
   ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: panel }, WorkspaceSeat)))
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name:'shell.overlay', id:'calabash.workspace', order:-100 }, WorkspaceLayer)))
   ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: panel, order: -20, label: () => copy('我的工具', 'My tools') }, ({ size }) => <svg width={size ?? 18} height={size ?? 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2.5" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12a25 25 0 0 0 18 0M10 12v3h4v-3" /></svg>)))

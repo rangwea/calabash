@@ -8,7 +8,7 @@ Use explicit types for table rows, controlled inputs and action results. Keys ar
 
 Call read_api_contract for Python Pydantic operation_id contracts. Use generated types and api methods; do not mirror backend types by hand. Prefer minimal local component state; persist business state through Python ToolSDK. A UI remount is not business execution authorization.
 
-CalabashFiles exposes onChange(files), CalabashResults shows no empty placeholder, CalabashJobStatus exposes safe stop, CalabashChart accepts ECharts option and height. Import them explicitly from @calabash/ui. A chart is disposed on unmount. Files and outputs use the SDK, never direct host filesystem access.
+CalabashFiles exposes onChange(files), CalabashResults shows current AI Action results inline with copy/download, keeps other files compact and shows no empty placeholder, CalabashJobStatus exposes safe stop, CalabashChart accepts ECharts option and height. Import them explicitly from @calabash/ui. A chart is disposed on unmount. Files and outputs use the SDK, never direct host filesystem access.
 
 The host installs ConfigProvider and Ant Design App context. For messages/modal confirmation use App.useApp() inside the tool. Keep styles scoped to a tool root class. Layouts use min-width:0, responsive grids and bounded scroll regions. Never override host/DSH styles. The iframe is an independent origin.
 

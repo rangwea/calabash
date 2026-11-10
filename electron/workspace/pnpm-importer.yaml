@@ -1,5 +1,8 @@
   packages/client/calabash-workspace:
     dependencies:
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
       '@deepseek-ai/dsh-client-ui-context-menu':
         specifier: workspace:*
         version: link:../ui-context-menu

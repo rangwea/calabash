@@ -12,6 +12,8 @@ import { join } from 'node:path'
 import { WorkspaceState } from './workspace-state.ts'
 import { HostTasks } from './tasks.ts'
 import { PythonBridge } from './bridge.ts'
+import { AIActionHost } from './ai-actions.ts'
+import type {} from '@deepseek-ai/dsh-llm'
 import type { AgentArguments } from './types.ts'
 export type { ToolEntry, ToolTarget, Preview, AgentArguments } from './types.ts'
 
@@ -19,6 +21,7 @@ declare module '@deepseek-ai/dsh-session-projection' { interface SessionProjecti
 declare module '@deepseek-ai/cordis' { interface Context { calabashWorkspace: CalabashWorkspace } }
 export default class CalabashWorkspace extends TypertRemoteService {
   static inject = ['tools', 'sessionProjections']
+  private ai: AIActionHost
   private styleReady: Promise<unknown>
   private bridge = new PythonBridge()
   private tasks = new HostTasks(process.env.DSH_HOME ? join(process.env.DSH_HOME, 'calabash') : undefined)
@@ -29,6 +32,8 @@ export default class CalabashWorkspace extends TypertRemoteService {
   async saveWorkspace(input: string): Promise<void> { if (input.length > 10000) throw new Error('Workspace too large'); this.workspace.write(JSON.parse(input)) }
   constructor(ctx: Context) {
     super(ctx, 'calabashWorkspace')
+    this.ai = new AIActionHost(this.bridge, () => ctx.get('llm'), Date.now, event => ctx.logger.info('AI Action metadata %j', event))
+    ctx.on('llm/adapters-updated', () => this.ai.invalidate())
     this.styleReady = ctx.sessionProjections.register<'calabashStyle', string | null>({
       key: 'calabashStyle', stateSchema: z.string().nullable(), init: () => null, stateVersion: 1,
       apply: (current, event) => event.type === 'user/message' && event.data.source?.kind === 'user'
@@ -36,7 +41,7 @@ export default class CalabashWorkspace extends TypertRemoteService {
         : current,
       wire: { viewSchema: z.string().nullable(), view: current => current, summary: false },
     })
-    ctx.effect(() => async () => { await this.tasks.drain(); await this.bridge.stop() })
+    ctx.effect(() => async () => { await this.ai.stop(); await this.tasks.drain(); await this.bridge.stop() })
     ctx.on('session/event', (session, event) => {
       if (event.type === 'turn/end') void this.bridge.call('agent.release', { session: session.id }).catch(() => undefined)
     })
@@ -69,6 +74,18 @@ export default class CalabashWorkspace extends TypertRemoteService {
       presentResult: resultPresentation,
     }))
   }
+  @Remote
+  async aiPending(): Promise<string> { return JSON.stringify(await this.ai.pending()) }
+  @Remote
+  async aiModels(): Promise<string> { return JSON.stringify(await this.ai.models()) }
+  @Remote
+  async aiReview(worker: string, request: string, model: string): Promise<string> { return JSON.stringify(await this.ai.review(worker,request,model)) }
+  @Remote
+  async aiApprove(review: string): Promise<string> { await this.ai.approve(review); return JSON.stringify({returned:true}) }
+  @Remote
+  async aiCancel(review: string): Promise<string> { this.ai.cancel(review); return JSON.stringify({stopping:true}) }
+  @Remote
+  async aiReject(worker: string, request: string): Promise<string> { await this.ai.reject(worker,request); return JSON.stringify({rejected:true}) }
   /** Execute one model operation using the owning Agent's session, never model-supplied session metadata. */
   async styleFor(session: Session): Promise<string | null> {
     await this.styleReady

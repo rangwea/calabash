@@ -72,6 +72,7 @@ def build_runtime():
     (destination / 'scripts').mkdir()
     shutil.copy2(ROOT / 'scripts/tool_frontend.mjs', destination / 'scripts/tool_frontend.mjs')
     shutil.copy2(ROOT / 'scripts/tool_runtime_ui.tsx', destination / 'scripts/tool_runtime_ui.tsx')
+    shutil.copy2(ROOT / 'scripts/tool_ai_result.ts', destination / 'scripts/tool_ai_result.ts')
     shutil.copy2(ROOT / 'scripts/tool_runtime_guard.js', destination / 'scripts/tool_runtime_guard.js')
     shutil.copy2(ROOT / 'scripts/tool_api_client.ts', destination / 'scripts/tool_api_client.ts')
     (destination / 'component').mkdir()
