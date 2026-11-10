@@ -74,7 +74,17 @@ def release_all():
 
 
 def binding(session):
-    return {'target': state(session), 'conflict': _conflicts.get(owner(session))}
+    target = state(session)
+    revision = None
+    if target:
+        try:
+            value = read_source(target['project'], target['name'])
+            # Read-only readiness metadata: never creates drafts, leases, builds or workers.
+            bundles.validate(value['files'], target['project'], target['name'])
+            revision = checks.passed_revision(target['project'], target['name'], owner(session), value)
+        except (OSError, ValueError, KeyError, SyntaxError):
+            pass  # A partially written or invalid draft must not trigger preview startup.
+    return {'target': target, 'conflict': _conflicts.get(owner(session)), 'preview_revision': revision}
 
 
 def read_source(project, name):
@@ -118,7 +128,7 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         root = Path(__file__).resolve().parents[2] / 'agent/skills/calabash'
         # Fixed built-in documents only; never interpret a model-supplied path.
         return {'skill': (root / 'SKILL.md').read_text()[:24000], 'target': state(session),
-                'protocol': 'Use calabash_tool operations only. Read-only reference inspection does not bind a conversation. Only a successful source write or the user opening Tool conversation binds an editing target. For a binding conflict use New tool conversation in Tool preview; the tool list has no blank-tool creation action. Read template for a new tool; read current file before changes. Save drafts, check_tool_build, then tell the user to open preview. Never claim business verification. Never run or publish automatically.'}
+                'protocol': 'Use calabash_tool operations only. Read-only reference inspection does not bind a conversation. Only a successful source write or the user opening Tool conversation binds an editing target. For a binding conflict use New tool conversation in Tool preview; the tool list has no blank-tool creation action. Read template for a new tool; read current file before changes. Save drafts, check_tool_build, then tell the user the visible preview pane will open the ready draft. Never claim business verification. Never invoke runtime or publish operations from the Agent.'}
     if operation == 'read_action_api':
         from service.actions.registry import describe
         return describe(arguments.get('action_id', ''))
@@ -150,7 +160,7 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         return {**ui_presets.reference(ui_presets.default()), 'selected_by': 'default'}
     project, name = (bundles.identity(arguments.get(key)) for key in ('project', 'name'))
     allowed = {'read_tool', 'read_tool_file', 'read_tool_template', 'write_tool_file', 'patch_tool_file',
-               'check_tool_build', 'read_build_diagnostics', 'read_api_contract'}
+               'check_tool_build', 'read_build_diagnostics', 'read_api_contract', 'read_preview_diagnostics'}
     if operation not in allowed:
         raise ValueError('Unsupported Calabash operation')
     credentials = _credentials.setdefault(session_owner, SourceCredentials())
@@ -219,11 +229,62 @@ async def agent_call(session, call_id, operation, arguments, *, requested_preset
         entry = checks.ensure(project, name, session_owner, value)
         await asyncio.shield(entry.task)
         return entry.public()
+    if operation == 'read_preview_diagnostics':
+        if state(session) != {'project': project, 'name': name}:
+            raise ValueError('Preview diagnostics require the current conversation tool')
+        return await preview_diagnostics(session)
     if operation == 'read_build_diagnostics':
         from service.tools.check_records import read
         return read(project, name, session_owner, value['revision'])
     from service.tools.api_contracts import extract
     return extract(value['files'])
+
+
+async def check_preview(session):
+    target = state(session)
+    if not target:
+        return binding(session)
+    try:
+        value = read_source(target['project'], target['name'])
+        bundles.validate(value['files'], target['project'], target['name'])
+    except (OSError, ValueError, KeyError, SyntaxError):
+        return binding(session)
+    entry = checks.ensure(target['project'], target['name'], owner(session), value)
+    await asyncio.shield(entry.task)
+    # binding re-reads the current revision, never promotes a stale build result.
+    return binding(session)
+
+
+async def preview_diagnostics(session):
+    import httpx
+
+    from service.tools.preview_diagnostics import clean
+    target = state(session)
+    if not target:
+        return {'state': 'unavailable', 'diagnostics': [], 'business_verified': False}
+    source = read_source(target['project'], target['name'])
+    result = {'revision': source['revision'], 'state': 'unavailable', 'diagnostics': [], 'business_verified': False}
+    worker = workers.items.get(workers.key(target['project'], target['name'], owner(session)))
+    if not worker or worker.process.poll() is not None:
+        return result
+    if worker.revision != source['revision']:
+        return {**result, 'state': 'stale', 'next_action': 'ask_user_to_refresh_preview'}
+    try:
+        async with httpx.AsyncClient(trust_env=False, timeout=3) as client:
+            response = await client.get(f'http://127.0.0.1:{worker.port}/api/sdk/verification', headers={'Authorization': 'Bearer ' + worker.token, 'X-Calabash-Host': worker.host_token})
+            response.raise_for_status()
+            value = response.json()
+        if any(value.get(key) != expected for key, expected in {**target, 'owner': owner(session), 'run_id': worker.root.name, 'revision': source['revision']}.items()):
+            return result
+        page, interfaces = value.get('page'), value.get('interfaces')
+        events = [clean(item) for item in value.get('diagnostics', [])[:30] if isinstance(item, dict)]
+        failed = page == 'failed' or interfaces == 'failed' or any(item['code'].startswith('API_') for item in events)
+        return {**result, 'run_id': worker.root.name, 'state': 'failed' if failed else 'passed' if page == 'ready' and interfaces == 'passed' else 'pending' if page == 'pending' else 'partial',
+                'page': page if page in {'pending', 'ready', 'failed'} else 'unavailable',
+                'interfaces': interfaces if interfaces in {'pending', 'passed', 'failed', 'not_checked', 'partial'} else 'unavailable',
+                'diagnostics': events, 'evidence': 'untrusted_runtime_metadata', 'business_verified': False}
+    except (httpx.HTTPError, ValueError, TypeError, KeyError):
+        return result
 
 
 async def preview(session, *, refresh=False):

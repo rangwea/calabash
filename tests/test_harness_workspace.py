@@ -39,6 +39,21 @@ class HarnessWorkspaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('frontend/calabash-theme.css', source['files'])
         self.assertEqual('preview', source['source'])
 
+    async def test_preview_discovery_is_read_only_and_requires_complete_source(self):
+        self.assertIsNone(workspace.binding('a')['preview_revision'])
+        await self.call('write_tool_file', path='tool.json', content=fixture()['tool.json'])
+        self.assertIsNone(workspace.binding('a')['preview_revision'])
+        await self.create()
+        with patch.object(workspace.checks, 'ensure') as build, patch.object(workspace.checks, 'passed_revision', return_value=work_drafts.snapshot('demo', 'counter')['revision']), patch.object(workspace.workers, 'open') as run:
+            value = workspace.binding('a')
+            self.assertEqual(work_drafts.snapshot('demo', 'counter')['revision'], value['preview_revision'])
+            build.assert_not_called()
+            run.assert_not_called()
+        source = bundles.directory('demo', 'counter', 'workspace') / 'frontend/App.tsx'
+        source.unlink()
+        self.assertIsNone(workspace.binding('a')['preview_revision'])
+        self.assertEqual([], bundles.list_tools())
+
     async def test_read_before_write_and_session_write_lease(self):
         await self.create()
         path = bundles.directory('demo', 'counter', 'workspace') / 'frontend/App.tsx'

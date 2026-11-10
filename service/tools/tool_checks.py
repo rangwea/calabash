@@ -49,6 +49,13 @@ class ToolChecks:
             if value.root and value.root.parent == app_dir() / 'builds' and not value.root.is_symlink():
                 shutil.rmtree(value.root, ignore_errors=True)
 
+    def passed_revision(self, project, name, chat_id, source):
+        key = (str(app_dir()), project, name, chat_id, source['revision'], compiler_version())
+        entry = self.entries.get(key)
+        if entry and entry.state == 'passed' and entry.root and (entry.root / 'dist/index.html').is_file():
+            return source['revision']
+        return None
+
     def ensure(self, project, name, chat_id, source, retry=False):
         if bundles.revision(source['files']) != source['revision']:
             raise ValueError('Source revision does not match compiler input')

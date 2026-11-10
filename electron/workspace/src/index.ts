@@ -21,6 +21,8 @@ declare module '@deepseek-ai/dsh-session-projection' { interface SessionProjecti
 declare module '@deepseek-ai/cordis' { interface Context { calabashWorkspace: CalabashWorkspace } }
 export default class CalabashWorkspace extends TypertRemoteService {
   static inject = ['tools', 'sessionProjections']
+  private previewListeners = new Map<string, Set<() => void>>()
+  private previewChecks = new Map<string, Promise<void>>()
   private ai: AIActionHost
   private styleReady: Promise<unknown>
   private bridge = new PythonBridge()
@@ -43,11 +45,11 @@ export default class CalabashWorkspace extends TypertRemoteService {
     })
     ctx.effect(() => async () => { await this.ai.stop(); await this.tasks.drain(); await this.bridge.stop() })
     ctx.on('session/event', (session, event) => {
-      if (event.type === 'turn/end') void this.bridge.call('agent.release', { session: session.id }).catch(() => undefined)
+      if (event.type === 'turn/end') void this.bridge.call('agent.release', { session: session.id }).then(() => this.notifyPreview(session.id)).catch(() => undefined)
     })
     ctx.tools.register(defineTool({
       name: 'calabash_tool',
-      description: 'Create and edit Calabash local office tools (React + Ant Design + Python). Read instructions once before authoring; reuse them while available in this conversation. Use read_tool_template for a new tool. Read current source before editing. Use check_tool_build before finishing. Source is saved as a draft; user manually previews and saves to tool list. Never execute, publish, install dependencies or access arbitrary files. One tool per conversation.',
+      description: 'Create and edit Calabash local office tools (React + Ant Design + Python). Read instructions once before authoring; reuse them while available in this conversation. Use read_tool_template for a new tool. Read current source before editing. Use check_tool_build before finishing; read_preview_diagnostics reports safe current-run page/API evidence without executing business operations. Source is saved as a draft; the visible preview pane opens ready drafts; users confirm saves and business operations. Never execute, publish, install dependencies or access arbitrary files. One tool per conversation.',
       parameters: {
         action_id: { type: 'string', description: 'Built-in office action identity for read_action_api; omit to list actions. Discovery only, never executes.' },
         operation: { type: 'string', required: true, enum: operations, description: 'Bounded Calabash operation.' },
@@ -95,7 +97,41 @@ export default class CalabashWorkspace extends TypertRemoteService {
     const input = { session, call_id: callId, operation, arguments: args, requested_preset: requestedPreset }
     const resource = args.project && args.name ? `tool:${args.project}/${args.name}` : `session:${session}`
     const id = this.tasks.submit('agent.call', input, resource, `agent:${session}:${callId}`, () => this.bridge.call('agent.call', input))
-    return JSON.stringify(await this.tasks.wait(id))
+    const result = await this.tasks.wait(id)
+    if (['check_tool_build', 'write_tool_file', 'patch_tool_file'].includes(operation)) this.notifyPreview(session)
+    return JSON.stringify(result)
+  }
+  private notifyPreview(session: string): void { for (const wake of this.previewListeners.get(session) ?? []) wake() }
+  private checkExistingPreview(session: string): void {
+    if (this.previewChecks.has(session)) return
+    const id = this.tasks.submit('workspace.check_preview', {session}, `session:${session}`, `preview-check:${session}:${crypto.randomUUID()}`, () => this.bridge.call('workspace.check_preview', {session}))
+    const done = this.tasks.wait(id).then(() => { this.notifyPreview(session) }, () => { this.notifyPreview(session) }).finally(() => { this.previewChecks.delete(session) })
+    this.previewChecks.set(session, done)
+  }
+  /** Push current-version build readiness; the stream never starts or refreshes a worker. */
+  @Remote({mode:'stream'})
+  async *watchPreview(session: string, signal: AbortSignal): AsyncIterable<string> {
+    if (!session || session.length > 200) throw new Error('Invalid session')
+    let pending = true, wake: (() => void) | undefined
+    const changed = () => { pending = true; wake?.() }
+    const listeners = this.previewListeners.get(session) ?? new Set<() => void>()
+    listeners.add(changed); this.previewListeners.set(session, listeners)
+    signal.addEventListener('abort', changed, {once:true})
+    try {
+      this.checkExistingPreview(session)
+      while (!signal.aborted) {
+        if (pending) {
+          pending = false
+          yield JSON.stringify(await this.bridge.call('workspace.binding', {session}))
+          continue
+        }
+        await new Promise<void>(resolve => { wake = resolve })
+        wake = undefined
+      }
+    } finally {
+      listeners.delete(changed); if (!listeners.size) this.previewListeners.delete(session)
+      signal.removeEventListener('abort', changed)
+    }
   }
   /** UI submits a bounded operation once and can requery it after a disconnect/observer timeout. */
   @Remote
@@ -120,7 +156,10 @@ export default class CalabashWorkspace extends TypertRemoteService {
   @Remote
   async library(operation: string, input: string): Promise<string> {
     if (input.length > 300000) throw new Error('Library request too large')
-    return JSON.stringify(await this.bridge.call('library.action', { operation, arguments: JSON.parse(input) }))
+    const args = JSON.parse(input) as Record<string, unknown>
+    const value = await this.bridge.call('library.action', { operation, arguments: args })
+    if (operation === 'conversation' && typeof args.session === 'string') { this.notifyPreview(args.session); this.checkExistingPreview(args.session) }
+    return JSON.stringify(value)
   }
   /** List published tools without source or filesystem paths. */
   @Remote
@@ -137,7 +176,9 @@ export default class CalabashWorkspace extends TypertRemoteService {
   /** Bound editing target and a safe UI recovery hint; no source or credentials. */
   @Remote
   async binding(session: string): Promise<string> { return JSON.stringify(await this.bridge.call('workspace.binding', { session })) }
-  /** Build and manually open the current conversation draft. */
+  @Remote
+  async verification(session: string): Promise<string> { return JSON.stringify(await this.bridge.call('workspace.verification', { session })) }
+  /** Build and open the current conversation draft. */
   @Remote
   async preview(session: string, refresh: boolean): Promise<string> { return JSON.stringify(await this.bridge.call('workspace.preview', { session, refresh })) }
   /** Close a preview without stopping the conversation. */

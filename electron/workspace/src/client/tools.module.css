@@ -96,3 +96,35 @@
   .libraryPane[data-mode='library'] .searchRow, .libraryPane[data-mode='library'] .list { padding-inline: 12px; }
   .libraryPane[data-mode='library'] .tool { gap: 4px; }
 }
+
+/* Preview header density follows its own pane width, including split views. */
+.previewPane { container-type: inline-size; container-name: calabash-preview; }
+.previewHeader { display:flex; align-items:center; gap:12px; min-width:0; padding:9px 12px; border-bottom:1px solid #edf0f4; flex-shrink:0; position:relative; z-index:2; }
+.previewIdentity { display:flex; align-items:center; gap:7px; min-width:0; flex:1; }
+.previewTitle { font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.previewStatus { color:#738291; display:inline-flex; flex-shrink:0; border-radius:50%; cursor:help; }
+.previewStatus[data-state='passed'] { color:#34825b; }
+.previewStatus[data-state='failed'] { color:#b45442; }
+.previewStatus[data-state='partial'], .previewStatus[data-state='stale'] { color:#987128; }
+.previewStatus:focus-visible { outline:2px solid #0f6cbd; outline-offset:3px; }
+.previewActions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.previewButton { border:1px solid #dce3e9; border-radius:6px; padding:5px 9px; background:#fff; color:#46596a; cursor:pointer; font:inherit; font-size:12px; line-height:18px; white-space:nowrap; }
+.previewButton:hover:not(:disabled) { background:#f5f8fb; border-color:#b8c8d7; }
+.previewButton:disabled { opacity:.5; cursor:default; }
+.previewButton:focus-visible, .previewMore summary:focus-visible { outline:2px solid #0f6cbd; outline-offset:2px; }
+.previewMore { display:none; position:relative; }
+.previewMore summary { list-style:none; display:grid; place-items:center; cursor:pointer; width:28px; height:28px; color:#6c7b89; border:1px solid #dce3e9; border-radius:6px; background:#fff; }
+.previewMore summary::-webkit-details-marker { display:none; }
+.previewMoreMenu { position:absolute; top:calc(100% + 5px); right:0; padding:5px; background:#fff; border:1px solid #dce3e9; border-radius:7px; box-shadow:0 5px 18px #16243520; }
+.previewMoreMenu .previewButton { border:0; }
+.previewWarning { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:8px 12px; background:#fff8ed; color:#965b35; font-size:12px; flex-shrink:0; }
+@container calabash-preview (max-width: 540px) {
+  .newToolConversation { display:none; }
+  .previewMore { display:block; }
+  .previewHeader { padding-inline:9px; gap:8px; }
+  .previewButton { padding-inline:7px; }
+}
+@container calabash-preview (max-width: 300px) {
+  .previewHeader { flex-wrap:wrap; }
+  .previewActions { margin-left:auto; }
+}

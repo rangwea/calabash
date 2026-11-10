@@ -273,7 +273,7 @@ class ToolWorkers:
                 origin = f'http://127.0.0.1:{frontend_port or port}'
                 config = {'root': str(root), 'source_root': str(root), 'project': project, 'name': name, 'port': port,
                           'token': token, 'origin': origin, 'revision': source['revision'], 'host_token': host_token,
-                          'partitioned_session': os.environ.get('CALABASH_HARNESS_EMBEDDED') == '1'}
+                          'partitioned_session': os.environ.get('CALABASH_HARNESS_EMBEDDED') == '1', 'diagnostic_owner': chat_id or 'published'}
                 configs = app_dir() / 'worker-config'
                 configs.mkdir(parents=True, exist_ok=True, mode=0o700)
                 path = configs / (root.name + '.json'); path.write_text(json.dumps(config)); path.chmod(0o600)
@@ -320,6 +320,22 @@ class ToolWorkers:
                 await worker.stop()
                 self.failures[key] = worker
                 raise
+            if chat_id:
+                # Probe only known host-generated static modules. Never invoke tool business APIs.
+                async with httpx.AsyncClient(trust_env=False, timeout=3) as client:
+                    headers = {'Authorization': 'Bearer ' + token}
+                    async def probe(path):
+                        try:
+                            response = await client.get(origin + path, headers=headers)
+                            return response.status_code == 200 and 'javascript' in response.headers.get('content-type', '')
+                        except httpx.HTTPError:
+                            return False
+                    results = await asyncio.gather(*(probe(path) for path in ('/entry.tsx', '/runtime-ui.tsx', '/runtime-ai-result.ts', '/probe.js', '/calabash-client.ts')))
+                    if not all(results):
+                        try:
+                            await client.post(f'http://127.0.0.1:{port}/api/sdk/verification', headers={**headers, 'X-Calabash-Host': host_token}, json={'code': 'MODULE_HTTP'})
+                        except httpx.HTTPError:
+                            pass
             lifecycle('ready', worker.process.pid)
             self.items[key] = worker
             self.failures.pop(key, None)

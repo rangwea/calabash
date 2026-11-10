@@ -38,7 +38,7 @@ def field_names(route):
     return names
 
 
-def failure(request, error, root):
+def failure(request, error, root, diagnostics=None):
     route = request.scope.get('route')
     request_id = getattr(request.state, 'api_request_id', None) or uuid4().hex
     status = 500
@@ -76,12 +76,18 @@ def failure(request, error, root):
               'operation': getattr(route, 'operation_id', None), 'code': code,
               'exception': type(error).__name__, 'fields': details, 'frames': frames[-12:]}
     logging.getLogger(__name__).error('Tool API diagnostic %s', json.dumps(record, ensure_ascii=False))
+    if diagnostics:
+        diagnostic = {'code': 'API_INPUT' if code == 'request_validation_failed' else 'API_RESPONSE' if code == 'response_validation_failed' else 'API_FAILURE',
+                      'operation': record['operation'], 'exception': record['exception'], 'status': status, 'fields': details}
+        if frames:
+            diagnostic.update({key: frames[-1][key] for key in ('file', 'line')})
+        diagnostics.event(diagnostic)
     return JSONResponse({'error': {'code': code, 'message': message, 'request_id': request_id}},
                         status_code=status, headers={'X-Calabash-Request-Id': request_id})
 
 
-def install(app, root):
+def install(app, root, diagnostics=None):
     async def handle(request, error):
-        return failure(request, error, root)
+        return failure(request, error, root, diagnostics)
     for kind in (RequestValidationError, ResponseValidationError, HTTPException):
         app.add_exception_handler(kind, handle)

@@ -19,7 +19,7 @@ if (!['build', 'serve'].includes(mode) || !sourceRoot) throw new Error('Invalid 
 const root = realpathSync(sourceRoot)
 const frontend = resolve(realpathSync(workingSource || sourceRoot), 'frontend')
 const libraries = ['react', 'react-dom', 'antd', '@ant-design/icons', 'echarts']
-const generated = ['/entry.tsx', '/probe.js', '/runtime-ui.tsx', '/calabash-api.ts', '/calabash-client.ts']
+const generated = ['/entry.tsx', '/probe.js', '/runtime-ui.tsx', '/runtime-ai-result.ts', '/calabash-api.ts', '/calabash-client.ts']
 const alias = Object.fromEntries(libraries.map(name => [name, resolve(libraryRoot, 'node_modules', name)]))
 Object.assign(alias, { '@calabash/api': resolve(root, 'calabash-api.ts'), '@calabash/ui': resolve(root, 'runtime-ui.tsx'), '@tool': frontend })
 const config = {

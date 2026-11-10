@@ -34,6 +34,9 @@ class ToolSDK:
         self.host_token = ''
         self.router = APIRouter()
         self.router.add_api_route('/runtime-issue', self.runtime_issue, methods=['POST'])
+        self.router.add_api_route('/verification', self.verification, methods=['GET'])
+        self.router.add_api_route('/verification', self.verification_evidence, methods=['POST'])
+        self.router.add_api_route('/page-evidence', self.page_evidence, methods=['POST'])
         self.router.add_api_route('/prepare-exit', self.prepare_exit, methods=['POST'])
         self.router.add_api_route('/status', self.status, methods=['GET'])
         self.router.add_api_route('/cancel', self.cancel, methods=['POST'])
@@ -78,6 +81,39 @@ class ToolSDK:
 
     async def start_action(self, action_id: str, request: ActionRequest):
         return await self.actions.submit(action_id, request)
+
+    async def verification(self, request: Request):
+        self.host_request(request)
+        value = getattr(self, 'diagnostics', None)
+        return value.report() if value else {'page': 'unavailable', 'diagnostics': []}
+
+    async def verification_evidence(self, request: Request):
+        self.host_request(request)
+        content = await request.body()
+        if len(content) > 2048:
+            raise HTTPException(400, 'Invalid verification record')
+        try:
+            value = json.loads(content)
+            if not isinstance(value, dict) or value.get('code') != 'MODULE_HTTP':
+                raise ValueError('Invalid verification record')
+            self.diagnostics.event(value)
+        except (ValueError, TypeError):
+            raise HTTPException(400, 'Invalid verification record') from None
+        return {'ok': True}
+
+    async def page_evidence(self, request: Request):
+        content = await request.body()
+        if len(content) > 2048:
+            raise HTTPException(400, 'Invalid page evidence')
+        try:
+            value = json.loads(content)
+            if not isinstance(value, dict) or value.get('code') not in {'PAGE_READY', 'PAGE_EMPTY', 'PAGE_SCRIPT', 'PAGE_RESOURCE'}:
+                raise ValueError('Invalid page evidence')
+            if getattr(self, 'diagnostics', None):
+                self.diagnostics.event(value)
+        except (ValueError, TypeError):
+            raise HTTPException(400, 'Invalid page evidence') from None
+        return {'ok': True}
 
     async def runtime_issue(self, request: Request):
         from core.logger import get_logger

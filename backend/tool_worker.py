@@ -21,6 +21,8 @@ def create_tool_app(config):
     source_root = Path(config.get('source_root', root))
     sdk = ToolSDK(config['project'], config['name'], run_id=root.name, source_revision=config.get('revision', ''))
     sdk.host_token = config.get('host_token', '')
+    from service.tools.preview_diagnostics import PreviewDiagnostics
+    sdk.diagnostics = PreviewDiagnostics(config['project'], config['name'], config.get('diagnostic_owner', 'published'), root.name, config.get('revision', ''))
     @asynccontextmanager
     async def lifespan(app):
         sdk.loop = asyncio.get_running_loop()
@@ -28,7 +30,7 @@ def create_tool_app(config):
         await sdk.shutdown()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     from service.tools.api_errors import failure, install
-    install(app, source_root)
+    install(app, source_root, sdk.diagnostics)
 
     @app.middleware('http')
     async def authorize(request: Request, call_next):
@@ -50,7 +52,7 @@ def create_tool_app(config):
         try:
             response = await call_next(request)
         except Exception as error:  # noqa: BLE001 - isolate arbitrary user-tool failures at the HTTP boundary.
-            response = failure(request, error, source_root)
+            response = failure(request, error, source_root, sdk.diagnostics)
         if bootstrap:
             if config.get('partitioned_session'):
                 # Electron's dsh-app top-level origin is cross-site to the tool.
@@ -92,6 +94,8 @@ def create_tool_app(config):
         sys.modules.pop(spec.name, None)
         raise
     module.setup(app, sdk)
+    files = {path.relative_to(source_root).as_posix(): path.read_text(encoding='utf-8') for path in (source_root / 'backend').rglob('*.py') if not path.is_symlink()}
+    sdk.diagnostics.check_interfaces(app, files)
     if (root / 'dist/assets').is_dir():
         app.mount('/assets', StaticFiles(directory=root / 'dist/assets'))
 

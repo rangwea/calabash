@@ -28,6 +28,22 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         (root / 'dist/index.html').write_text('compiled')
         return root
 
+    async def test_only_current_successful_artifact_is_ready_without_starting_checks(self):
+        self.assertIsNone(self.checks.passed_revision('demo', 'counter', 'chat', self.source))
+        self.assertEqual({}, self.checks.entries)
+        async def build(files):
+            return self.artifact('ready')
+        with patch('service.tools.tool_checks.build_bundle', build):
+            entry = self.checks.ensure('demo', 'counter', 'chat', self.source)
+            self.assertIsNone(self.checks.passed_revision('demo', 'counter', 'chat', self.source))
+            await entry.task
+            self.assertEqual(self.source['revision'], self.checks.passed_revision('demo', 'counter', 'chat', self.source))
+            changed = {**self.source, 'revision': '0' * 64}
+            self.assertIsNone(self.checks.passed_revision('demo', 'counter', 'chat', changed))
+            self.assertIsNone(self.checks.passed_revision('demo', 'counter', 'other', self.source))
+            (entry.root / 'dist/index.html').unlink()
+            self.assertIsNone(self.checks.passed_revision('demo', 'counter', 'chat', self.source))
+
     async def test_concurrent_preview_and_publish_reuse_same_artifact(self):
         calls = []
         async def build(files):

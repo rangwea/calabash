@@ -49,6 +49,10 @@ async def dispatch(method, params):
             return workspace.state(params['session'])
         if method == 'workspace.binding' and set(params) == {'session'}:
             return workspace.binding(params['session'])
+        if method == 'workspace.check_preview' and set(params) == {'session'}:
+            return await workspace.check_preview(params['session'])
+        if method == 'workspace.verification' and set(params) == {'session'}:
+            return await workspace.preview_diagnostics(params['session'])
         if method == 'workspace.preview' and set(params) == {'session', 'refresh'} and type(params['refresh']) is bool:
             return await workspace.preview(params['session'], refresh=params['refresh'])
         if method == 'workspace.publish' and set(params) == {'session', 'expected', 'replace_revision', 'confirmed'}:

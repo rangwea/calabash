@@ -41,16 +41,47 @@ try{
     'backend/main.py':'def setup(app, sdk):\n    pass\n',
     'frontend/App.tsx':"import {officeActions,CalabashJobStatus,CalabashResults} from '@calabash/ui'; export default function App(){return <main><button onClick={()=>void officeActions.start('ai.text',{task:'summarize',text:'Synthetic'})}>Summarize</button><CalabashJobStatus/><CalabashResults/></main>}",
   }
+  const buildAbort=new AbortController(), notices=[]
+  let resolveReady
+  const readyNotice=new Promise(resolve=>{resolveReady=resolve})
+  const observing=(async()=>{for await(const raw of workspace.watchPreview('synthetic-session',buildAbort.signal)){const value=JSON.parse(raw);notices.push(value);if(value.preview_revision)resolveReady(value)}})()
   let sequence=0
   for(const[path,content]of Object.entries(files))await workspace.agent('write_tool_file',{project:'demo',name:'ai_acceptance',path,content},'synthetic-session','write-'+sequence++)
+  assert.equal(notices.some(value=>value.preview_revision),false,'writes alone must not open a preview')
+  const checked=JSON.parse(await workspace.agent('check_tool_build',{project:'demo',name:'ai_acceptance'},'synthetic-session','check-ready'))
+  let readinessTimer
+  const event=await Promise.race([readyNotice,new Promise((_,reject)=>{readinessTimer=setTimeout(()=>reject(Error('Build event missing')),10000)})]).finally(()=>clearTimeout(readinessTimer))
+  assert.equal(event.preview_revision,checked.revision,'only the completed current revision is announced')
+  buildAbort.abort();await observing
   const preview=JSON.parse(await workspace.preview('synthetic-session',false))
   const url=new URL(preview.url),token=url.searchParams.get('session')
   const origin=url.origin
+  // A passing production build is insufficient: every host UI module must also
+  // pass the live Vite HTTP boundary. Previously runtime-ai-result.ts was 404.
+  const modules=['/entry.tsx','/runtime-ui.tsx','/runtime-ai-result.ts','/probe.js','/calabash-client.ts']
+  for(const path of modules){
+    const response=await fetch(origin+path,{headers:{Authorization:'Bearer '+token}})
+    assert.equal(response.status,200,`Preview module blocked: ${path}`)
+    assert.match(response.headers.get('content-type')||'',/javascript/)
+    const text=await response.text();assert.ok(text.length>0)
+    if(path==='/runtime-ui.tsx')assert.ok(text.includes('/runtime-ai-result.ts'))
+  }
+  for(const path of ['/tool.json','/backend/main.py','/office-action-client.ts']){
+    const response=await fetch(origin+path,{headers:{Authorization:'Bearer '+token}})
+    assert.equal(response.status,404,`Non-public file exposed: ${path}`)
+  }
   const request=async(path,body)=>{
     const response=await fetch(origin+'/api/sdk'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})})
     assert.ok(response.ok,`SDK request failed: ${path}`);return response.json()
   }
   const wait=async(f)=>{const deadline=Date.now()+10000;while(true){const value=await f();if(value)return value;if(Date.now()>deadline)throw Error('Synthetic AI timeout');await new Promise(r=>setTimeout(r,20))}}
+  const initial=JSON.parse(await workspace.verification('synthetic-session'))
+  assert.equal(initial.state,'pending');assert.equal(initial.business_verified,false)
+  const pageReady=await fetch(origin+'/api/sdk/page-evidence',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({code:'PAGE_READY',message:'PRIVATE-PAGE-CONTENT'})})
+  assert.ok(pageReady.ok)
+  const evidence=JSON.parse(await workspace.agent('read_preview_diagnostics',{project:'demo',name:'ai_acceptance'},'synthetic-session','read-evidence'))
+  assert.equal(evidence.state,'partial');assert.equal(evidence.page,'ready');assert.equal(evidence.business_verified,false)
+  assert.ok(!JSON.stringify(evidence).includes('PRIVATE-PAGE-CONTENT'))
   const models=JSON.parse(await workspace.aiModels());assert.equal(models.length,1)
   for(const[task,extra,result]of[
     ['summarize',{},'Synthetic summary'],['translate',{language:'English'},'Translated'],['generate',{},'Generated'],
@@ -101,6 +132,7 @@ try{
   await wait(async()=>!(await request('/status')).running)
   assert.equal(requests.length,count)
 
+  assert.equal(JSON.parse(await workspace.verification('synthetic-session')).state,'stale')
   console.log(`PASS ${installed?'installed':'source'}: five AI actions through actual host consent, DSH synthetic adapter, private executor, real worker and result downloads; no provider quota`)
 }finally{
   await ctx?.fiber.dispose()

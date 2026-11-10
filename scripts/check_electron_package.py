@@ -95,6 +95,12 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             parsed = urllib.parse.urlsplit(value["url"])
             token = urllib.parse.parse_qs(parsed.query)["session"][0]
             origin = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+            for module in ("/entry.tsx", "/runtime-ui.tsx", "/runtime-ai-result.ts", "/probe.js", "/calabash-client.ts"):
+                resource = urllib.request.Request(origin + module, headers={"Authorization": "Bearer " + token})
+                with urllib.request.urlopen(resource, timeout=10) as response:
+                    assert response.status == 200, module
+                    assert "javascript" in response.headers.get("Content-Type", ""), module
+                    assert response.read(), module
             request = urllib.request.Request(
                 origin + "/api/message",
                 data=json.dumps({"text": "Installed runtime"}).encode(),
