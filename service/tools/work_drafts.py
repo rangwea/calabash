@@ -110,7 +110,7 @@ def ensure(project, name, run_id):
     """Copy published source once. A resumed task never overwrites working files."""
     with _mutex:
         root = bundles.directory(project, name, 'workspace')
-        if not root.exists() and bundles.directory(project, name).exists():
+        if not root.exists() and (bundles.directory(project, name) / 'tool.json').is_file():
             claim(project, name, run_id)
             source = bundles.read(project, name)
             bundles.write(project, name, source['files'], chat_id='workspace')

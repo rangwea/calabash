@@ -4,6 +4,7 @@ import ast
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import stat
@@ -18,6 +19,7 @@ from service.tools.source_integrity import validate_source_file
 MAX_FILE = 1024 * 1024
 MAX_TOTAL = 8 * 1024 * 1024
 MAX_FILES = 100
+RUNTIME_ENTRIES = frozenset({'data.sqlite', 'data.sqlite-journal', 'data.sqlite-wal', 'data.sqlite-shm', 'inputs', 'outputs'})
 _lock = threading.RLock()
 
 
@@ -120,14 +122,24 @@ def read_directory(path):
     path = Path(path)
     if path.is_symlink():
         raise ValueError('Symlink tool paths are forbidden')
+    if not (path / 'tool.json').is_file():
+        raise ToolUnavailable()
     files = {}
-    for item in path.rglob('*'):
-        if item.is_symlink():
-            raise ValueError('Symlink tool files are forbidden')
-        if item.is_file():
-            relative = item.relative_to(path).as_posix()
-            if relative.startswith('dist/'):
+    for current, directories, names in os.walk(path, followlinks=False):
+        current = Path(current)
+        for name in list(directories):
+            item = current / name
+            if item.is_symlink():
+                raise ValueError('Symlink tool files are forbidden')
+            if current == path and (name in RUNTIME_ENTRIES or name == 'dist'):
+                directories.remove(name)
+        for name in names:
+            if current == path and name in RUNTIME_ENTRIES:
                 continue
+            item = current / name
+            if item.is_symlink():
+                raise ValueError('Symlink tool files are forbidden')
+            relative = item.relative_to(path).as_posix()
             safe_path(relative)
             if item.stat().st_size > MAX_FILE or len(files) >= MAX_FILES:
                 raise ValueError('Tool bundle too large')
@@ -153,12 +165,13 @@ def write(project, name, files, expected='', chat_id=None, built_dist=None):
     validate(files, project, name)
     path = directory(project, name, chat_id)
     with _lock:
-        current = revision(read_directory(path)) if path.exists() else ''
+        current = revision(read_directory(path)) if (path / 'tool.json').is_file() else ''
         if current != expected:
             raise ValueError('Source changed; read current revision before writing')
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name('.' + path.name + '-' + uuid4().hex)
         backup = path.with_name('.' + path.name + '-backup-' + uuid4().hex)
+        completed = False
         try:
             temporary.mkdir(mode=0o700)
             for relative, content in files.items():
@@ -168,17 +181,31 @@ def write(project, name, files, expected='', chat_id=None, built_dist=None):
             if built_dist is not None:
                 shutil.copytree(built_dist, temporary / 'dist')
             if path.exists():
-                path.rename(backup)
-            try:
+                # Replace source entries only; database files, live journals
+                # and input/output directories stay at their original paths.
+                backup.mkdir(mode=0o700)
+                moved, installed = [], []
+                try:
+                    for entry in list(path.iterdir()):
+                        if entry.name in {'tool.json', 'frontend', 'backend', 'dist'}:
+                            entry.rename(backup / entry.name)
+                            moved.append(entry.name)
+                    for entry in list(temporary.iterdir()):
+                        entry.rename(path / entry.name)
+                        installed.append(entry.name)
+                except BaseException:
+                    for entry_name in reversed(installed):
+                        (path / entry_name).rename(temporary / entry_name)
+                    for entry_name in reversed(moved):
+                        (backup / entry_name).rename(path / entry_name)
+                    raise
+            else:
                 temporary.rename(path)
-            except BaseException:
-                if backup.exists():
-                    backup.rename(path)
-                raise
+            completed = True
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
-            if backup.exists() and path.exists():
+            if backup.exists() and (completed or not any(backup.iterdir())):
                 shutil.rmtree(backup)
     return {'revision': revision(files), 'source': 'preview' if chat_id else 'published'}
 

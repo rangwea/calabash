@@ -2,8 +2,6 @@
 import json
 
 BACKEND = '''from __future__ import annotations
-import sqlite3
-from contextlib import contextmanager
 from pydantic import BaseModel, ConfigDict, Field
 from fastapi import HTTPException
 
@@ -30,36 +28,24 @@ class Deleted(BaseModel):
     deleted: bool
 
 def setup(app, sdk):
-    database = sdk.data_dir / 'crm.sqlite'
-    @contextmanager
-    def connect():
-        connection = sqlite3.connect(database)
-        connection.row_factory = sqlite3.Row
-        connection.execute('PRAGMA foreign_keys=ON')
-        try:
-            with connection:
-                yield connection
-        finally:
-            connection.close()
-
-    with connect() as connection:
+    with sdk.database(write=True) as connection:
         connection.execute('CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL, stage TEXT NOT NULL)')
         connection.execute('CREATE TABLE IF NOT EXISTS followups (id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), note TEXT NOT NULL)')
 
     @app.get('/api/customers', operation_id='list_customers', response_model=list[Customer])
     def list_customers(q: str = ''):
-        with connect() as connection:
+        with sdk.database() as connection:
             return [dict(row) for row in connection.execute('SELECT * FROM customers WHERE name LIKE ? ORDER BY id', ('%' + q + '%',))]
 
     @app.post('/api/customers', operation_id='create_customer', response_model=Customer)
     def create_customer(payload: CustomerInput):
-        with connect() as connection:
+        with sdk.database(write=True) as connection:
             cursor = connection.execute('INSERT INTO customers(name, stage) VALUES (?, ?)', (payload.name, payload.stage))
             return {'id': cursor.lastrowid, **payload.model_dump()}
 
     @app.put('/api/customers/{customer_id}', operation_id='edit_customer', response_model=Customer)
     def edit_customer(customer_id: int, payload: CustomerInput):
-        with connect() as connection:
+        with sdk.database(write=True) as connection:
             cursor = connection.execute('UPDATE customers SET name=?, stage=? WHERE id=?', (payload.name, payload.stage, customer_id))
             if not cursor.rowcount:
                 raise HTTPException(404, 'Customer missing')
@@ -67,7 +53,7 @@ def setup(app, sdk):
 
     @app.get('/api/customers/{customer_id}', operation_id='customer_detail', response_model=CustomerDetail)
     def customer_detail(customer_id: int):
-        with connect() as connection:
+        with sdk.database() as connection:
             row = connection.execute('SELECT * FROM customers WHERE id=?', (customer_id,)).fetchone()
             if row is None:
                 raise HTTPException(404, 'Customer missing')
@@ -76,7 +62,7 @@ def setup(app, sdk):
 
     @app.post('/api/customers/{customer_id}/followups', operation_id='add_followup', response_model=Followup)
     def add_followup(customer_id: int, payload: FollowupInput):
-        with connect() as connection:
+        with sdk.database(write=True) as connection:
             if not connection.execute('SELECT id FROM customers WHERE id=?', (customer_id,)).fetchone():
                 raise HTTPException(404, 'Customer missing')
             cursor = connection.execute('INSERT INTO followups(customer_id, note) VALUES (?, ?)', (customer_id, payload.note))
@@ -84,7 +70,7 @@ def setup(app, sdk):
 
     @app.delete('/api/customers/{customer_id}', operation_id='delete_customer', response_model=Deleted)
     def delete_customer(customer_id: int):
-        with connect() as connection:
+        with sdk.database(write=True) as connection:
             connection.execute('DELETE FROM followups WHERE customer_id=?', (customer_id,))
             connection.execute('DELETE FROM customers WHERE id=?', (customer_id,))
             return {'deleted': True}

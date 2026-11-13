@@ -116,9 +116,24 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             assert result["message"] == "Installed runtime", result
             from scripts.office_library_smoke import verify
             verify(origin, token)
+            value = call("workspace.preview", {"session": "smoke", "refresh": True})
+            parsed = urllib.parse.urlsplit(value["url"])
+            token = urllib.parse.parse_qs(parsed.query)["session"][0]
+            origin = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+            request = urllib.request.Request(origin + "/api/message", headers={"Authorization": "Bearer " + token})
+            assert json.load(urllib.request.urlopen(request, timeout=10)) == {"message": "Installed runtime"}
+            database = pathlib.Path(temporary) / ".calabash/tools/demo/installed_smoke/data.sqlite"
+            assert database.is_file(), "Tool database must be directly under the tool directory"
+            assert call("workspace.publish", {"session": "smoke", "expected": value["revision"], "replace_revision": "", "confirmed": True})["saved"]
+            official = call("tools.open", {"project": "demo", "name": "installed_smoke"})
+            parsed = urllib.parse.urlsplit(official["url"])
+            token = urllib.parse.parse_qs(parsed.query)["session"][0]
+            origin = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+            request = urllib.request.Request(origin + "/api/message", headers={"Authorization": "Bearer " + token})
+            assert json.load(urllib.request.urlopen(request, timeout=10)) == {"message": "Installed runtime"}
             assert call("app.prepare_exit", {}) is True
             print(
-                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, Python API and tool-owned Excel/Word library processing; no source cwd"
+                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, tool-root SQLite state across refresh and publication, Python API and tool-owned Excel/Word library processing; no source cwd"
             )
         finally:
             process.stdin.close()

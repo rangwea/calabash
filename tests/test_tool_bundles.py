@@ -57,6 +57,49 @@ class BundleTests(unittest.TestCase):
         data = bundles.export_zip('demo', 'counter')
         self.assertEqual(files, bundles.inspect_zip(data))
 
+    def test_tool_local_data_is_not_source_and_survives_first_save_and_overwrite(self):
+        from service.tools.tool_sdk import ToolSDK
+        sdk = ToolSDK('demo', 'counter')
+        self.assertEqual(bundles.directory('demo', 'counter'), sdk.data_dir)
+        sdk.set_setting('layout', {'dense': True})
+        self.assertEqual([], bundles.list_tools())
+        with self.assertRaises(bundles.ToolUnavailable):
+            bundles.read('demo', 'counter')
+        files = fixture()
+        first = bundles.write('demo', 'counter', files)
+        (sdk.data_dir / 'inputs').mkdir()
+        (sdk.data_dir / 'inputs/private.bin').write_bytes(b'\xff' * 1024)
+        self.assertEqual(files, bundles.read('demo', 'counter')['files'])
+        self.assertEqual(files, bundles.inspect_zip(bundles.export_zip('demo', 'counter')))
+        changed = {**files, 'frontend/App.tsx': 'export default function App(){return <main>Changed</main>}'}
+        with sdk.database(write=True) as db:
+            db.execute('CREATE TABLE entries (value TEXT)')
+            db.execute('INSERT INTO entries VALUES (?)', ('kept',))
+            bundles.write('demo', 'counter', changed, first['revision'])
+        self.assertTrue(sdk.get_setting('layout')['dense'])
+        with sdk.database() as db:
+            self.assertEqual('kept', db.execute('SELECT value FROM entries').fetchone()[0])
+        self.assertEqual(changed, bundles.read('demo', 'counter')['files'])
+        with self.assertRaises(ValueError):
+            bundles.safe_path('data.sqlite')
+
+    def test_failed_source_replacement_restores_source_without_moving_data(self):
+        from service.tools.tool_sdk import ToolSDK
+        sdk = ToolSDK('demo', 'counter')
+        sdk.set_setting('kept', True)
+        files = fixture()
+        first = bundles.write('demo', 'counter', files)
+        changed = {**files, 'frontend/App.tsx': 'export default function App(){return <main>Changed</main>}'}
+        rename = Path.rename
+        def fail_new_backend(path, target):
+            if path.name == 'backend' and path.parent.name.startswith('.counter-') and 'backup' not in path.parent.name:
+                raise OSError('synthetic publication failure')
+            return rename(path, target)
+        with patch.object(Path, 'rename', fail_new_backend), self.assertRaises(OSError):
+            bundles.write('demo', 'counter', changed, first['revision'])
+        self.assertEqual(files, bundles.read('demo', 'counter')['files'])
+        self.assertTrue(sdk.get_setting('kept'))
+
     def test_rejects_paths_scripts_symlinks_and_duplicate_zip_entries(self):
         for path in ['../tool.json', '/tool.json', 'frontend/../x.vue', 'frontend\\x.vue', 'package.json', 'frontend/node_modules/x.ts']:
             with self.subTest(path=path), self.assertRaises(ValueError):

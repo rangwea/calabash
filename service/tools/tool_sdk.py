@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 
 from core.local_paths import app_dir
 from service.actions.models import ActionRequest
+from service.tools.tool_database import ToolDatabase
 from service.tools.tool_jobs import ToolJobs
 
 
@@ -22,8 +23,8 @@ class ToolSDK:
         self.owner = f'tool:{project}/{name}'
         self.run_id = run_id or uuid4().hex
         self.source_revision = source_revision
-        self.data_dir = app_dir() / 'tool-data' / project / name
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.data_dir = app_dir() / 'tools' / project / name
+        self._database = ToolDatabase(self.data_dir)
         self.jobs = None
         self.task = None
         self.loop = None
@@ -209,25 +210,14 @@ class ToolSDK:
     async def io(self, function, *args, **kwargs):
         return await asyncio.to_thread(function, *args, **kwargs)
 
-    def read_json(self, key, default=None):
-        path = self._data_path(key)
-        return json.loads(path.read_text()) if path.exists() else default
+    def database(self, *, write=False):
+        return self._database.transaction(write=write)
 
-    def write_json(self, key, value):
-        path = self._data_path(key)
-        temporary = path.with_suffix('.' + uuid4().hex + '.tmp')
-        try:
-            temporary.write_text(json.dumps(value, ensure_ascii=False))
-            temporary.replace(path)
-        finally:
-            temporary.unlink(missing_ok=True)
+    def get_setting(self, key, default=None):
+        return self._database.get_setting(key, default)
 
-    def _data_path(self, key):
-        from service.tools.tool_bundles import identity
-        path = self.data_dir / (identity(key) + '.json')
-        if path.is_symlink():
-            raise ValueError('Symlink data forbidden')
-        return path
+    def set_setting(self, key, value):
+        self._database.set_setting(key, value)
 
     def output_path(self, name):
         name = Path(name).name

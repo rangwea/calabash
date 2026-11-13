@@ -17,11 +17,23 @@ class MessageResult(BaseModel):
 
 
 def setup(app, sdk):
+    with sdk.database(write=True) as db:
+        db.execute('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY CHECK(id = 1), text TEXT NOT NULL)')
+
     @app.post('/api/message', operation_id='create_message', response_model=MessageResult)
     def create_message(payload: MessageInput) -> MessageResult:
         try:
-            return MessageResult(message=payload.text.strip() or '你好')
+            message = payload.text.strip() or '你好'
+            with sdk.database(write=True) as db:
+                db.execute('INSERT INTO messages(id, text) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET text = excluded.text', (message,))
+            return MessageResult(message=message)
         except Exception as error:
             # Do not include request contents in logs or user-facing errors.
             logger.exception('create_message failed')
             raise HTTPException(status_code=500, detail='暂时无法完成，请重试或让 AI 帮你修复') from error
+
+    @app.get('/api/message', operation_id='read_message', response_model=MessageResult)
+    def read_message() -> MessageResult:
+        with sdk.database() as db:
+            row = db.execute('SELECT text FROM messages WHERE id = 1').fetchone()
+            return MessageResult(message=row['text'] if row else '')

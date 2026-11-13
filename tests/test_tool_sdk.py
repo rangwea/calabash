@@ -55,11 +55,13 @@ class SDKTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([1], values)
         self.assertEqual('cancelled', self.sdk.status()['status'])
 
-    async def test_persistent_json_and_path_validation(self):
-        self.sdk.write_json('settings', {'limit': 10})
-        self.assertEqual({'limit': 10}, ToolSDK('demo', 'files').read_json('settings'))
+    async def test_persistent_sqlite_settings_and_key_validation(self):
+        self.sdk.set_setting('table', {'limit': 10})
+        self.assertEqual({'limit': 10}, ToolSDK('demo', 'files').get_setting('table'))
+        self.assertEqual(20, self.sdk.get_setting('missing', 20))
+        self.assertIsNone(self.sdk.get_setting('missing'))
         with self.assertRaises(ValueError):
-            self.sdk.write_json('../outside', {})
+            self.sdk.set_setting('', {})
 
     async def test_sync_route_can_start_batch_on_runtime_loop(self):
         self.sdk.loop = asyncio.get_running_loop()

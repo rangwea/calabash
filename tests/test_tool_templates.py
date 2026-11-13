@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from service.tools.api_contracts import extract
 from service.tools.tool_bundles import validate
+from service.tools.tool_sdk import ToolSDK
 from service.tools.tool_templates import base_template
 from service.tools.tool_workers import FrontendBuildError, build_bundle
 
@@ -30,11 +31,17 @@ class TemplateTests(unittest.TestCase):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             app = FastAPI()
-            module.setup(app, None)
+            sdk = ToolSDK('demo', 'starter')
+            module.setup(app, sdk)
             with TestClient(app) as client:
+                self.assertEqual({'message': ''}, client.get('/api/message').json())
                 self.assertEqual({'message': 'Hello'}, client.post('/api/message', json={'text': ' Hello '}).json())
                 self.assertEqual(422, client.post('/api/message', json={'text': 123}).status_code)
                 self.assertEqual(422, client.post('/api/message', json={'text': 'ok', 'unknown': True}).status_code)
+            restored = FastAPI()
+            module.setup(restored, ToolSDK('demo', 'starter'))
+            with TestClient(restored) as client:
+                self.assertEqual({'message': 'Hello'}, client.get('/api/message').json())
 
 
     def test_type_evidence_does_not_return_source_literals(self):
