@@ -22,6 +22,9 @@ MAX_REQUEST = 2 * 1024 * 1024
 async def dispatch(method, params):
     if not isinstance(params, dict):
         raise TypeError('Invalid request')
+    if method == 'schedules.action' and set(params) == {'operation', 'arguments'}:
+        from service.tools.tool_schedules import schedules
+        return await schedules.dispatch(params['operation'], params['arguments'])
     if method == 'ai.pending' and not params:
         from service.tools.ai_host import pending
         return await pending()
@@ -30,7 +33,7 @@ async def dispatch(method, params):
         return await control(**params)
     if method == 'app.active_tasks' and not params:
         for worker in tuple(workers.items.values()):
-            if worker.process.poll() is None and (await workers.status(worker)).get('running'):
+            if worker.active_calls or worker.alive and (await workers.status(worker)).get('running'):
                 return True
         return False
     if workers.stopping and method in {'agent.call', 'tools.open', 'workspace.preview', 'workspace.publish'}:
@@ -74,6 +77,8 @@ async def dispatch(method, params):
     if method == 'app.prepare_exit':
         if params:
             raise ValueError('Unexpected arguments')
+        from service.tools.tool_schedules import schedules
+        schedules.stop()
         return await workers.prepare_exit()
     if method not in {'tools.open', 'tools.status', 'tools.close'}:
         raise ValueError('Unsupported operation')
@@ -93,8 +98,17 @@ async def dispatch(method, params):
 
 async def serve(reader=None, writer=None):
     reader = reader or sys.stdin.buffer
-    writer = writer or sys.stdout
+    original_stdout = sys.stdout
+    if writer is None:
+        writer = sys.stdout
+        sys.stdout = sys.stderr
     ensure_local_dirs()
+    import anyio.to_thread
+
+    from service.tools.tool_schedules import schedules
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 4
+    schedules.start()
+    schedule_loop = asyncio.create_task(schedules.run())
     monitor = asyncio.create_task(workers.monitor())
     pending = set()
     locks = {}
@@ -162,6 +176,7 @@ async def serve(reader=None, writer=None):
             pending.add(task)
             task.add_done_callback(pending.discard)
     finally:
+        schedules.stop()
         # A disconnected renderer/host does not cancel a source write or business file operation.
         await asyncio.gather(*pending, return_exceptions=True)
         while not await workers.prepare_exit():
@@ -170,9 +185,11 @@ async def serve(reader=None, writer=None):
         workspace.release_all()
         monitor.cancel()
         await asyncio.gather(monitor, return_exceptions=True)
+        await schedule_loop
         await workers.shutdown()
         from service.tools.tool_checks import checks
         await checks.close()
+        sys.stdout = original_stdout
 
 
 if __name__ == '__main__':

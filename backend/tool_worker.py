@@ -1,14 +1,14 @@
-"""Independent tool HTTP process. Tool modules register routes using setup()."""
+"""Isolated tool ASGI application factory hosted by the shared runtime."""
 
 import asyncio
 import hashlib
 import importlib.util
 import json
 import sys
+import types
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -66,7 +66,7 @@ def create_tool_app(config):
         return response
 
     @app.get('/health')
-    def health():
+    async def health():
         return {'status': 'ok'}
 
     app.include_router(sdk.router, prefix='/api/sdk')
@@ -82,18 +82,26 @@ def create_tool_app(config):
         return Response('const guardLanguage = ' + json.dumps(language()) + ';\n' + script.read_text(encoding='utf-8'), media_type='text/javascript', headers={'Cache-Control': 'no-store'})
 
     source = source_root / 'backend/main.py'
-    sys.path.insert(0, str(source.parent))
-    module_name = 'calabash_user_tool_' + hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:16]
+    namespace = 'calabash_user_tool_' + hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:16]
+    for package_name, package_path in ((namespace, source_root), (namespace + '.backend', source.parent)):
+        package = types.ModuleType(package_name)
+        package.__path__ = [str(package_path)]
+        sys.modules[package_name] = package
+    module_name = namespace + '.backend.main'
     spec = importlib.util.spec_from_file_location(module_name, source)
     module = importlib.util.module_from_spec(spec)
     # Pydantic resolves postponed annotations through the defining module.
     sys.modules[spec.name] = module
     try:
         spec.loader.exec_module(module)
+        module.setup(app, sdk)
     except BaseException:
-        sys.modules.pop(spec.name, None)
+        for loaded in tuple(sys.modules):
+            if loaded == namespace or loaded.startswith(namespace + '.'):
+                sys.modules.pop(loaded, None)
         raise
-    module.setup(app, sdk)
+    app.state.sdk = sdk
+    app.state.namespace = namespace
     files = {path.relative_to(source_root).as_posix(): path.read_text(encoding='utf-8') for path in (source_root / 'backend').rglob('*.py') if not path.is_symlink()}
     sdk.diagnostics.check_interfaces(app, files)
     if (root / 'dist/assets').is_dir():
@@ -110,12 +118,3 @@ def create_tool_app(config):
         return HTMLResponse(html)
 
     return app
-
-
-def main():
-    config = json.loads(Path(sys.argv[-1]).read_text())
-    uvicorn.run(create_tool_app(config), host='127.0.0.1', port=config['port'], access_log=False, log_config=None)
-
-
-if __name__ == '__main__':
-    main()

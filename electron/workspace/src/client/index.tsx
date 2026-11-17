@@ -19,12 +19,14 @@ import css from './tools.module.css'
 import { createOperations } from './operations.ts'
 import { inspectArchive, exportArchive } from './library-transfer.ts'
 import { AIConsent } from './ai-consent.tsx'
+import { Schedules, useSchedules, toolKey, scheduleTime, scheduleStatus } from './schedules.tsx'
 import { PreviewDiscovery } from './preview-discovery.ts'
 import { registerUIStyles } from './ui-styles.tsx'
 import type { UIPreset, ToolEntry, Preview, ToolTarget } from '../types.ts'
 declare module '@deepseek-ai/dsh-api-session-controller/client' { interface SessionReferenceSourceMap { calabashRepair: unknown } }
 declare module '@deepseek-ai/dsh-client-ui-context-menu/client' { interface ContextMenuTargetMap { calabashTool: ToolEntry } }
 const panel = 'calabash-tools' as MainPanelId
+const schedulesPanel = 'calabash-schedules' as MainPanelId
 const tab = '@calabash/preview'
 export const inject = ['slots', 'remote', 'layout', 'sidebarRight', 'sidebarRightTabs', 'locale', 'inputTriggers', 'sessions', 'uiWorkspace', 'workspaces', 'contextMenus']
 const button: CSSProperties = { border: '1px solid #dce3e9', borderRadius: 6, padding: '6px 12px', background: '#fff', color: '#46596a', cursor: 'pointer', fontSize: 13 }
@@ -71,10 +73,14 @@ function install(ctx: Context): void {
     useSyncExternalStore(listener => ctx.locale.subscribe(listener), () => ctx.locale.getSnapshot())
     return copy
   }
-  function Tools({ useContextMenu }: { useContextMenu: UseContextMenu }) {
+  const scheduleCall = async (operation:string,args:Record<string,unknown>) => JSON.parse(unwrap(await wire.schedules(operation,JSON.stringify(args))))
+  function Tools({ useContextMenu, showSchedules }: { useContextMenu: UseContextMenu; showSchedules:boolean }) {
     const menus = useContextMenu()
     const t = useCopy()
     const [tools, setTools] = useState<ToolEntry[]>([])
+    const plans = useSchedules(scheduleCall)
+    const [scheduleFocus, setScheduleFocus] = useState<{tool:string;create:boolean} | null>(null)
+    const manageSchedules = (tool:ToolTarget, create=false) => { setScheduleFocus({tool:toolKey(tool),create}); ctx.layout.selectPanel(schedulesPanel) }
     const [tabs, setTabs] = useState<WorkspaceTab[]>([])
     const [active, setActive] = useState('')
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -196,11 +202,12 @@ function install(ctx: Context): void {
       ],
     }), [busy])
     return <section ref={libraryContainer} style={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-      <header style={{ ...row, padding: '16px 24px', borderBottom: '1px solid #edf0f4' }}><strong style={{ flex: 1 }}>{t('我的工具', 'My tools')}</strong>{hostPending > 0 && <span role="status" style={{fontSize:12,color:'#738291'}}>{t('正在处理任务…', 'Processing tasks…')}</span>}<input ref={input} type="file" accept=".zip,application/zip" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} /><button style={button} disabled={busy} onClick={() => input.current?.click()}>{t('导入工具', 'Import tool')}</button><button style={button} onClick={() => { void load() }}>{t('刷新列表', 'Refresh')}</button></header>
+      {!showSchedules && <header style={{ ...row, padding: '16px 24px', borderBottom: '1px solid #edf0f4' }}><strong style={{ flex: 1 }}>{t('我的工具', 'My tools')}</strong>{hostPending > 0 && <span role="status" style={{fontSize:12,color:'#738291'}}>{t('正在处理任务…', 'Processing tasks…')}</span>}<input ref={input} type="file" accept=".zip,application/zip" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} /><button style={button} disabled={busy} onClick={() => input.current?.click()}>{t('导入工具', 'Import tool')}</button><button style={button} onClick={() => { void load() }}>{t('刷新列表', 'Refresh')}</button></header>}
+      {showSchedules && <Schedules tools={tools} call={scheduleCall} t={t} rows={plans.rows} failed={plans.failed} refresh={plans.refresh} focus={scheduleFocus}/>}
       {error && <p role="alert" style={{ margin: 12, color: '#a34635' }}>{error}</p>}
       {confirmation && <div style={{ position: 'fixed', inset: 0, background: '#16243540', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 24 }}><div role="alertdialog" aria-modal="true" aria-label={t('确认操作', 'Confirm action')} style={{ background: '#fff', borderRadius: 12, padding: 24, maxWidth: 420, boxShadow: '0 12px 48px #16243526' }}><p style={{ margin: '0 0 20px', lineHeight: 1.6 }}>{confirmation.message}</p><div style={{ ...row, justifyContent: 'flex-end' }}><button autoFocus style={button} onClick={() => answer(false)}>{t('取消', 'Cancel')}</button><button style={button} onClick={() => answer(true)}>{t('确认', 'Confirm')}</button></div></div></div>}
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0 }}>
+      <div style={{ display: showSchedules ? 'none' : 'flex', flex: 1, minHeight: 0, minWidth: 0 }}>
         <aside className={css.libraryPane} data-mode={tabs.length ? 'sidebar' : 'library'} aria-label={t('工具列表', 'Tool list')} style={{ width: collapsed ? 36 : tabs.length ? 262 : '100%', maxWidth: '100%', boxSizing: 'border-box', flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column', borderRight: tabs.length ? '1px solid #edf0f4' : undefined }}>
           <div className={css.searchRow} data-collapsed={collapsed}>
             <div className={css.searchField} hidden={collapsed}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg><input aria-label={t('搜索工具', 'Search tools')} placeholder={t('搜索工具', 'Search tools')} value={query} onChange={event => setQuery(event.target.value)} /></div>
@@ -222,7 +229,16 @@ function install(ctx: Context): void {
           </div>)}
           </div>
         </aside>
-        {!!tabs.length && <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}><nav style={{ ...row, padding: 8, borderBottom: '1px solid #edf0f4' }}>{tabs.map(value => <span key={key(value)} style={{ ...row, background: active === key(value) ? '#edf4f1' : 'transparent', borderRadius: 6 }}><button style={{ ...button, border: 0, background: 'transparent' }} onClick={() => setActive(key(value))}>{value.name}</button><button style={{ ...button, border: 0, background: 'transparent' }} title={t('关闭工具', 'Close tool')} disabled={busy} onClick={() => { void close(value) }}>×</button></span>)}</nav>
+        {!!tabs.length && <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}><nav style={{ ...row, padding: 8, borderBottom: '1px solid #edf0f4' }}>{tabs.map(value => <span key={key(value)} style={{ ...row, background: active === key(value) ? '#edf4f1' : 'transparent', borderRadius: 6 }}><button style={{ ...button, border: 0, background: 'transparent' }} onClick={() => setActive(key(value))}>{value.name}</button><button style={{ ...button, border: 0, background: 'transparent' }} title={t('关闭工具', 'Close tool')} disabled={busy} onClick={() => { void close(value) }}>×</button></span>)}
+          {tabs.find(value=>key(value)===active) && <details className={css.toolSchedules} key={active}>
+            <summary title={t('查看此工具的定时计划','View schedules for this tool')}>{t('定时任务','Schedules')} · {plans.failed?'—':plans.rows.filter(value=>toolKey(value)===active).length}</summary>
+            <div className={css.toolScheduleMenu}>
+              {plans.failed ? <p>{t('计划暂时不可用','Schedules unavailable')}</p> : plans.rows.filter(value=>toolKey(value)===active).map(value=><div key={value.id}><strong>{value.title}</strong><small>{value.enabled?t('下次 ','Next ')+scheduleTime(value.next_run,t):t('已暂停','Paused')} · {scheduleStatus(value.status,t)}</small></div>)}
+              {!plans.failed && !plans.rows.some(value=>toolKey(value)===active) && <p>{t('尚未配置定时计划','No schedules configured')}</p>}
+              <button style={button} onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');const tool=tabs.find(value=>key(value)===active);if(tool)manageSchedules(tool,!plans.rows.some(value=>toolKey(value)===active))}}>{plans.rows.some(value=>toolKey(value)===active)?t('管理计划','Manage plans'):t('创建计划','Create plan')}</button>
+            </div>
+          </details>}
+          </nav>
           {tabs.map(value => value.url ? <iframe key={key(value)} src={value.url} title={value.name} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" style={{ ...frame, display: active === key(value) ? 'block' : 'none' }} /> : <div key={key(value)} style={{ padding: 24, display: active === key(value) ? 'block' : 'none' }}><p>{t('标签已恢复，工具尚未运行。', 'Tab restored. The tool has not been started.')}</p><button style={button} disabled={busy} onClick={() => { void open(value) }}>{t('打开工具', 'Open tool')}</button></div>)}
         </div>}
       </div>
@@ -352,31 +368,33 @@ function install(ctx: Context): void {
       {preview ? <iframe src={preview.url} title={t('工具预览', 'Tool preview')} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" style={frame} /> : <div style={{ padding: 24, color: '#7d8a97', fontSize: 14 }}>{target ? t('正在检查工具，通过后会自动打开预览。', 'Checking the tool. The preview will open when it passes.') : t('在对话中描述想创建的工具，草稿会关联到这里。', 'Describe the tool you want in the conversation. Its draft will appear here.')}</div>}
     </section>
   }
-  type Bounds = { left: number; top: number; width: number; height: number }
+  type Bounds = { left: number; top: number; width: number; height: number; view:'tools'|'schedules' }
   let bounds: Bounds | null = null
   const listeners = new Set<() => void>()
   function setBounds(value: Bounds | null) {
     if (JSON.stringify(value) === JSON.stringify(bounds)) return
     bounds = value; for (const notify of listeners) notify()
   }
-  function WorkspaceSeat() {
+  function WorkspaceSeat({view='tools'}: {view?:'tools'|'schedules'}) {
     const element = useRef<HTMLDivElement>(null)
     useLayoutEffect(() => {
-      const update = () => { if (element.current) { const r = element.current.getBoundingClientRect(); setBounds({ left:r.left, top:r.top, width:r.width, height:r.height }) } }
+      const update = () => { if (element.current) { const r = element.current.getBoundingClientRect(); setBounds({ left:r.left, top:r.top, width:r.width, height:r.height, view }) } }
       const observer = new ResizeObserver(update); if (element.current) observer.observe(element.current)
       window.addEventListener('resize', update); update()
       return () => { observer.disconnect(); window.removeEventListener('resize', update); setBounds(null) }
-    }, [])
+    }, [view])
     return <div ref={element} style={{ width:'100%', height:'100%' }} />
   }
   function WorkspaceLayer(props: { useContextMenu: UseContextMenu }) {
     const rect = useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => bounds)
-    return <div style={{ position:'fixed', left:rect?.left ?? 0, top:rect?.top ?? 0, width:rect?.width ?? 0, height:rect?.height ?? 0, display:rect ? 'block' : 'none', pointerEvents:'auto', zIndex:1, background:'#fff' }}><Tools {...props} /></div>
+    return <div style={{ position:'fixed', left:rect?.left ?? 0, top:rect?.top ?? 0, width:rect?.width ?? 0, height:rect?.height ?? 0, display:rect ? 'block' : 'none', pointerEvents:'auto', zIndex:1, background:'#fff' }}><Tools {...props} showSchedules={rect?.view==='schedules'} /></div>
   }
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({name:'shell.overlay',id:'calabash.ai',order:100},AIOverlay)))
   ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: panel }, WorkspaceSeat)))
+  ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({ name:'main', key:schedulesPanel }, ()=><WorkspaceSeat view="schedules"/>)))
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name:'shell.overlay', id:'calabash.workspace', order:-100 }, WorkspaceLayer)))
   ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: panel, order: -20, label: () => copy('我的工具', 'My tools') }, ({ size }) => <svg width={size ?? 18} height={size ?? 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2.5" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12a25 25 0 0 0 18 0M10 12v3h4v-3" /></svg>)))
+  ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name:'sidebar.panellist', id:schedulesPanel, order:-19, label:()=>copy('定时任务','Scheduled tasks') }, ({size})=><svg width={size??18} height={size??18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>)))
   ctx.effect(() => ctx.sidebarRightTabs.register({ id: tab, kind: 'calabash-preview', title: () => copy('工具预览', 'Tool preview'), keepMounted: true, guide: [{ id: 'preview', order: -20, title: () => copy('工具预览', 'Tool preview'), description: () => copy('试用当前对话中的工具', 'Try the tool from this conversation'), icon: () => <span>▦</span> }] }))
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: tab, inject: (sessionId) => ({ sessionId }) }, Draft)))
 }

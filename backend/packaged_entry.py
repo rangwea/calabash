@@ -14,11 +14,6 @@ def main():
         result = check_runtime()
         print(json.dumps(result))
         raise SystemExit(0 if result["ok"] else 1)
-    if "--tool-worker" in sys.argv:
-        from backend.tool_worker import main as worker
-
-        worker()
-        return
     from backend.harness_bridge import serve
 
     asyncio.run(serve())

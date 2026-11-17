@@ -2,6 +2,7 @@
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.i18n import t
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -37,3 +38,14 @@ def setup(app, sdk):
         with sdk.database() as db:
             row = db.execute('SELECT text FROM messages WHERE id = 1').fetchone()
             return MessageResult(message=row['text'] if row else '')
+
+    def export_saved_message():
+        with sdk.database() as db:
+            row = db.execute('SELECT text FROM messages WHERE id = 1').fetchone()
+        if row is None:
+            return
+        output = sdk.output_path('saved-content.txt')
+        output.write_text(row['text'], encoding='utf-8')
+        return sdk.add_result(output)
+
+    sdk.register_task('export_saved_message', t('导出已保存内容'), export_saved_message)

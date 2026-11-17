@@ -1,4 +1,4 @@
-"""Lazy per-tool Python processes and host-owned React compiler invocations."""
+"""Shared Python tool instances and short-lived frontend compiler invocations."""
 
 import asyncio
 import json
@@ -6,10 +6,8 @@ import os
 import re
 import secrets
 import shutil
-import socket
 import subprocess
 import sys
-import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,12 +23,6 @@ from service.tools.owned_process import spawn, stop
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def free_port():
-    with socket.socket() as handle:
-        handle.bind(('127.0.0.1', 0))
-        return handle.getsockname()[1]
-
-
 def frontend_runtime():
     if getattr(sys, 'frozen', False):
         root = Path(os.environ.get('CALABASH_FRONTEND_RUNTIME', ROOT / 'frontend-runtime'))
@@ -42,11 +34,6 @@ def frontend_runtime():
         raise ValueError('Bundled frontend runtime unavailable')
     return str(node), root / 'scripts/tool_frontend.mjs'
 
-
-def command(*args):
-    if getattr(sys, 'frozen', False):
-        return [sys.executable, '--tool-worker', *args]
-    return [sys.executable, '-m', 'backend.tool_worker', *args]
 
 
 class FrontendBuildError(ValueError):
@@ -146,29 +133,34 @@ class Worker:
     name: str
     revision: str
     root: Path
-    process: subprocess.Popen
     port: int
     token: str
-    output: object
+    app: object
+    sdk: object
     host_token: str = ''
     log_run: object = None
-    frontend: subprocess.Popen | None = None
-    frontend_port: int | None = None
+    server: object = None
+    server_task: object = None
+    active_calls: int = 0
+    lifetime: object = None
+
+    @property
+    def alive(self):
+        return self.server_task is not None and not self.server_task.done()
 
     @property
     def url(self):
-        return f'http://127.0.0.1:{self.frontend_port or self.port}/api/sdk/session?session={self.token}'
+        return f'http://127.0.0.1:{self.port}/api/sdk/session?session={self.token}'
 
     async def stop(self):
-        # Caller checks active jobs first. Process termination is not safe job cancellation.
-        for process, group in ((self.frontend, True), (self.process, True)):
-            if process:
-                await asyncio.to_thread(stop, process, group=group)
+        from service.tools.shared_runtime import unload
+        await self.sdk.shutdown()
+        await self.lifetime.__aexit__(None, None, None)
         if self.log_run:
             self.log_run.close()
+        unload(self.app.state.namespace)
         if self.root.parent == app_dir() / 'runtime' and not self.root.is_symlink():
             await asyncio.to_thread(shutil.rmtree, self.root, ignore_errors=True)
-        (app_dir() / 'worker-config' / (self.root.name + '.json')).unlink(missing_ok=True)
 
 
 class ToolWorkers:
@@ -178,7 +170,10 @@ class ToolWorkers:
         self.lock = asyncio.Lock()
         self.start_locks = {}
         self.detached = set()
+        self.schedule_holds = {}
         self.stopping = False
+        from service.tools.shared_runtime import SharedRuntime
+        self.gateway = SharedRuntime()
 
     def current(self, project, name, chat_id=None):
         key = self.key(project, name, chat_id)
@@ -188,11 +183,11 @@ class ToolWorkers:
         return (project, name, chat_id)
 
     def is_open(self, project, name):
-        return any((item.project, item.name) == (project, name) and item.process.poll() is None for item in self.items.values())
+        return any((item.project, item.name) == (project, name) and item.alive for item in self.items.values())
 
     async def running(self, project, name):
         for item in tuple(self.items.values()):
-            if (item.project, item.name) == (project, name) and item.process.poll() is None and (await self.status(item)).get('running'):
+            if (item.project, item.name) == (project, name) and item.alive and (await self.status(item)).get('running'):
                 return True
         return False
 
@@ -203,7 +198,9 @@ class ToolWorkers:
             async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
                 try:
                     for item in tuple(self.items.values()):
-                        if (item.project, item.name) == (project, name) and item.process.poll() is None:
+                        if (item.project, item.name) == (project, name) and item.alive:
+                            if item.active_calls:
+                                raise ValueError('Wait for active tool requests before saving')
                             response = await client.post(f'http://127.0.0.1:{item.port}/api/sdk/publication-lock?frozen=true', headers={'Authorization': 'Bearer ' + item.token, 'X-Calabash-Host': item.host_token})
                             if response.status_code != 200:
                                 raise ValueError('Stop the running tool before replacing it')
@@ -226,10 +223,11 @@ class ToolWorkers:
             self.detached.discard(key)
             previous = self.items.get(key)
             if previous:
-                if previous.process.poll() is None and (not previous.frontend or previous.frontend.poll() is None):
+                if previous.alive:
                     return previous
-                if previous.process.poll() is None and (await self._prepare_exit(previous)).get('running'):
+                if previous.sdk.status()['running'] or previous.active_calls:
                     raise ValueError(t('工具界面已断开，请等待当前任务完成后重新打开'))
+                await self.gateway.remove(previous)
                 await previous.stop()
                 self.items.pop(key, None)
             if chat_id and not bundles.directory(project, name, chat_id).exists():
@@ -248,104 +246,57 @@ class ToolWorkers:
             log_run = None
             try:
                 root.mkdir(parents=True, mode=0o700)
-                frontend_root = bundles.directory(project, name, chat_id) if chat_id else root
-                # Backend modules are a read-only execution cache, never an
-                # authoring directory. Lazy imports must not mix edited code
-                # into an already running job before the user refreshes.
                 for relative, content in source['files'].items():
-                    if chat_id and not relative.startswith('backend/'):
-                        continue
                     path = root / relative
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(content)
                     if relative.startswith('backend/'):
                         path.chmod(0o400)
-                from service.tools.api_contracts import prepare
-                prepare(root, source['files'])
-                node, script = frontend_runtime()
-                if not chat_id:
+                if chat_id:
+                    from service.tools.tool_checks import checks
+                    async with checks.verified(project, name, chat_id, source) as built:
+                        shutil.copytree(built / 'dist', root / 'dist')
+                else:
                     published_dist = bundles.directory(project, name) / 'dist'
                     if not (published_dist / 'index.html').is_file():
                         raise ValueError('Publish a built tool before opening')
                     shutil.copytree(published_dist, root / 'dist')
-                port = free_port(); token = secrets.token_urlsafe(32); host_token = secrets.token_urlsafe(32)
-                frontend_port = free_port() if chat_id else None
-                origin = f'http://127.0.0.1:{frontend_port or port}'
+                from service.tools.shared_runtime import socket_for_origin
+                sock = socket_for_origin()
+                port = sock.getsockname()[1]
+                token, host_token = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
                 config = {'root': str(root), 'source_root': str(root), 'project': project, 'name': name, 'port': port,
-                          'token': token, 'origin': origin, 'revision': source['revision'], 'host_token': host_token,
+                          'token': token, 'origin': f'http://127.0.0.1:{port}', 'revision': source['revision'], 'host_token': host_token,
                           'partitioned_session': os.environ.get('CALABASH_HARNESS_EMBEDDED') == '1', 'diagnostic_owner': chat_id or 'published'}
-                configs = app_dir() / 'worker-config'
-                configs.mkdir(parents=True, exist_ok=True, mode=0o700)
-                path = configs / (root.name + '.json'); path.write_text(json.dumps(config)); path.chmod(0o600)
+                from backend.tool_worker import create_tool_app
                 from core import tool_run_logs
+                from service.tools.tool_execution import io
                 log_run = tool_run_logs.start(project, name, preview_key=chat_id)
-                environment = {**os.environ, 'CALABASH_JOB_ID': root.name}
-                environment.pop('CALABASH_PROCESS_CHANNEL', None)
-                process = await spawn(command(str(path)), group=True, role='tool', cwd=ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                worker = Worker(project, name, source['revision'], root, process, port, token, None, host_token=host_token, log_run=log_run, frontend_port=frontend_port)
-                from service.tools.owned_process import lifecycle
-                lifecycle('control', process.pid, control={'port': port, 'token': token, 'hostToken': host_token})
+                with log_run.context():
+                    app = await io(create_tool_app, config)
+                sdk = app.state.sdk
+                sdk.loop = asyncio.get_running_loop()
+                lifetime = app.router.lifespan_context(app)
+                await lifetime.__aenter__()
+                worker = Worker(project, name, source['revision'], root, port, token, app, sdk,
+                                host_token=host_token, log_run=log_run, lifetime=lifetime)
+                await self.gateway.listen(worker, sock)
             except BaseException:
-                if log_run:
+                if 'sock' in locals():
+                    sock.close()
+                if 'worker' in locals():
+                    await self.gateway.remove(worker)
+                    await worker.stop()
+                elif log_run:
                     log_run.close()
                 await asyncio.to_thread(shutil.rmtree, root, ignore_errors=True)
-                (app_dir() / 'worker-config' / (root.name + '.json')).unlink(missing_ok=True)
                 raise
-            def capture(stream):
-                try:
-                    while data := stream.read1(4096):
-                        log_run.writer.write(data.decode('utf-8', errors='replace'))
-                finally:
-                    stream.close()
-            try:
-                threading.Thread(target=capture, args=(process.stdout,), daemon=True).start()
-                if chat_id:
-                    worker.frontend = await spawn([node, str(script), 'serve', str(root), str(port), str(frontend_port), str(frontend_root)], group=True, role='preview', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                    threading.Thread(target=capture, args=(worker.frontend.stdout,), daemon=True).start()
-                async with httpx.AsyncClient(trust_env=False) as client:
-                    for _ in range(200):
-                        if process.poll() is not None or worker.frontend and worker.frontend.poll() is not None:
-                            raise ValueError('Tool process failed; inspect this run logs')
-                        try:
-                            response = await client.get(f'http://127.0.0.1:{port}/health', timeout=.5)
-                            frontend_ready = not chat_id or (await client.get(origin, timeout=.5)).status_code == 200
-                            if response.status_code == 200 and frontend_ready:
-                                break
-                        except httpx.HTTPError:
-                            pass
-                        await asyncio.sleep(.1)
-                    else:
-                        raise ValueError('Tool startup timed out')
-            except BaseException:
-                await worker.stop()
-                self.failures[key] = worker
-                raise
-            if chat_id:
-                # Probe only known host-generated static modules. Never invoke tool business APIs.
-                async with httpx.AsyncClient(trust_env=False, timeout=3) as client:
-                    headers = {'Authorization': 'Bearer ' + token}
-                    async def probe(path):
-                        try:
-                            response = await client.get(origin + path, headers=headers)
-                            return response.status_code == 200 and 'javascript' in response.headers.get('content-type', '')
-                        except httpx.HTTPError:
-                            return False
-                    results = await asyncio.gather(*(probe(path) for path in ('/entry.tsx', '/runtime-ui.tsx', '/runtime-ai-result.ts', '/probe.js', '/calabash-client.ts')))
-                    if not all(results):
-                        try:
-                            await client.post(f'http://127.0.0.1:{port}/api/sdk/verification', headers={**headers, 'X-Calabash-Host': host_token}, json={'code': 'MODULE_HTTP'})
-                        except httpx.HTTPError:
-                            pass
-            lifecycle('ready', worker.process.pid)
             self.items[key] = worker
             self.failures.pop(key, None)
             return worker
 
     async def status(self, worker):
-        async with httpx.AsyncClient(trust_env=False) as client:
-            response = await client.get(f'http://127.0.0.1:{worker.port}/api/sdk/status', headers={'Authorization': 'Bearer ' + worker.token})
-            response.raise_for_status()
-            return response.json()
+        return worker.sdk.status()
 
     async def close(self, project, name, chat_id=None):
         key = self.key(project, name, chat_id)
@@ -356,11 +307,17 @@ class ToolWorkers:
         key = self.key(project, name, chat_id)
         worker = self.items.get(key)
         if worker:
-            state = await self._prepare_exit(worker) if worker.process.poll() is None else {'running': False}
+            if self.schedule_holds.get(key):
+                self.detached.add(key)
+                return
+            if worker.active_calls:
+                raise ValueError('Wait for the active tool request before closing')
+            state = await self._prepare_exit(worker) if worker.alive else {'running': False}
             if state.get('running'):
                 async with httpx.AsyncClient(trust_env=False) as client:
                     await client.post(f'http://127.0.0.1:{worker.port}/api/sdk/cancel', headers={'Authorization': 'Bearer ' + worker.token})
                 raise ValueError('Safe stop requested; wait for current item to finish before closing')
+            await self.gateway.remove(worker)
             await worker.stop()
             self.items.pop(key, None)
             self.detached.discard(key)
@@ -369,7 +326,7 @@ class ToolWorkers:
         key = self.key(project, name, chat_id)
         worker = self.items.get(key)
         self.detached.add(key)
-        if worker and worker.process.poll() is None and (await self.status(worker)).get('running'):
+        if worker and worker.alive and (await self.status(worker)).get('running'):
             self.detached.add(key)
         else:
             await self.close(project, name, chat_id)
@@ -381,16 +338,12 @@ class ToolWorkers:
             async with lock:
                 pass
         for key, worker in tuple(self.items.items()):
+            await self.gateway.remove(worker)
             await worker.stop()
             self.items.pop(key, None)
 
     async def _prepare_exit(self, worker):
-        async with httpx.AsyncClient(trust_env=False, timeout=2) as client:
-            response = await client.post(
-                f'http://127.0.0.1:{worker.port}/api/sdk/prepare-exit',
-                headers={'Authorization': 'Bearer ' + worker.token, 'X-Calabash-Host': worker.host_token})
-            response.raise_for_status()
-            return response.json()
+        return worker.sdk.request_stop()
 
     async def prepare_exit(self):
         self.stopping = True
@@ -399,20 +352,23 @@ class ToolWorkers:
                 pass
         ready = True
         for worker in tuple(self.items.values()):
-            if worker.process.poll() is None and (await self._prepare_exit(worker)).get('running'):
+            state = await self._prepare_exit(worker)
+            if worker.active_calls or state.get('running'):
                 ready = False
         return ready
 
     async def monitor(self):
         while True:
             for key, item in tuple(self.items.items()):
-                broken = item.process.poll() is not None or (item.frontend and item.frontend.poll() is not None)
+                broken = not item.alive
                 if broken:
                     self.detached.add(key)
             for key in tuple(self.detached):
                 item = self.items.get(key)
                 try:
-                    if item and (item.process.poll() is not None or not (await self.status(item)).get('running')) and key in self.detached:
+                    if self.schedule_holds.get(key):
+                        continue
+                    if item and (not item.alive or not (await self.status(item)).get('running')) and key in self.detached:
                         await self.close(*key)
                 except (httpx.HTTPError, ValueError):
                     continue  # Unknown state must not terminate a possible writer.

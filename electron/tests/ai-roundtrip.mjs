@@ -57,18 +57,16 @@ try{
   const url=new URL(preview.url),token=url.searchParams.get('session')
   const origin=url.origin
   // A passing production build is insufficient: every host UI module must also
-  // pass the live Vite HTTP boundary. Previously runtime-ai-result.ts was 404.
-  const modules=['/entry.tsx','/runtime-ui.tsx','/runtime-ai-result.ts','/probe.js','/calabash-client.ts']
-  for(const path of modules){
+  // pass the verified static preview HTTP boundary. Previously runtime-ai-result.ts was 404.
+  const htmlResponse=await fetch(origin+'/',{headers:{Authorization:'Bearer '+token}})
+  const html=await htmlResponse.text()
+  const modules=[...html.matchAll(/src="(\/assets\/[^"?]+\.js)"/g)].map(value=>value[1])
+  assert.ok(modules.length,'Preview must serve the verified static build')
+  for(const path of ['/api/sdk/runtime-guard.js',...modules]){
     const response=await fetch(origin+path,{headers:{Authorization:'Bearer '+token}})
-    assert.equal(response.status,200,`Preview module blocked: ${path}`)
-    assert.match(response.headers.get('content-type')||'',/javascript/)
-    const text=await response.text();assert.ok(text.length>0)
-    if(path==='/runtime-ui.tsx')assert.ok(text.includes('/runtime-ai-result.ts'))
-  }
-  for(const path of ['/tool.json','/backend/main.py','/office-action-client.ts']){
-    const response=await fetch(origin+path,{headers:{Authorization:'Bearer '+token}})
-    assert.equal(response.status,404,`Non-public file exposed: ${path}`)
+    assert.equal(response.status,200,path)
+    assert.ok(response.headers.get('content-type')?.includes('javascript'),path)
+    assert.ok((await response.text()).length>0,path)
   }
   const request=async(path,body)=>{
     const response=await fetch(origin+'/api/sdk'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})})
@@ -82,6 +80,9 @@ try{
   const evidence=JSON.parse(await workspace.agent('read_preview_diagnostics',{project:'demo',name:'ai_acceptance'},'synthetic-session','read-evidence'))
   assert.equal(evidence.state,'partial');assert.equal(evidence.page,'ready');assert.equal(evidence.business_verified,false)
   assert.ok(!JSON.stringify(evidence).includes('PRIVATE-PAGE-CONTENT'))
+  for(const path of ['/tool.json','/backend/main.py','/office-action-client.ts','/data.sqlite']) {
+    assert.equal((await fetch(origin+path,{headers:{Authorization:'Bearer '+token}})).status,404,path)
+  }
   const models=JSON.parse(await workspace.aiModels());assert.equal(models.length,1)
   for(const[task,extra,result]of[
     ['summarize',{},'Synthetic summary'],['translate',{language:'English'},'Translated'],['generate',{},'Generated'],

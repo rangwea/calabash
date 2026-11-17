@@ -34,6 +34,7 @@ export default class CalabashWorkspace extends TypertRemoteService {
   async saveWorkspace(input: string): Promise<void> { if (input.length > 10000) throw new Error('Workspace too large'); this.workspace.write(JSON.parse(input)) }
   constructor(ctx: Context) {
     super(ctx, 'calabashWorkspace')
+    void this.bridge.call('schedules.action', { operation: 'list', arguments: {} }).catch(() => ctx.logger.warn('Tool schedules unavailable'))
     this.ai = new AIActionHost(this.bridge, () => ctx.get('llm'), Date.now, event => ctx.logger.info('AI Action metadata %j', event))
     ctx.on('llm/adapters-updated', () => this.ai.invalidate())
     this.styleReady = ctx.sessionProjections.register<'calabashStyle', string | null>({
@@ -134,6 +135,11 @@ export default class CalabashWorkspace extends TypertRemoteService {
     }
   }
   /** UI submits a bounded operation once and can requery it after a disconnect/observer timeout. */
+  @Remote
+  async schedules(operation: string, input: string): Promise<string> {
+    if (input.length > 4096 || !['list','tasks','create','pause','resume','remove','run'].includes(operation)) throw new Error('Invalid schedule operation')
+    return JSON.stringify(await this.bridge.call('schedules.action', { operation, arguments: JSON.parse(input) }))
+  }
   @Remote
   async startOperation(operation: string, input: string, requestId: string): Promise<string> {
     if (!/^[a-zA-Z0-9-]{1,80}$/.test(requestId) || input.length > 300000) throw new Error('Invalid task request')

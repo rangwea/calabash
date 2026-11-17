@@ -3,7 +3,7 @@ import asyncio
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
@@ -22,9 +22,7 @@ class ToolHealthTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(lambda: workers.items.pop(self.key, None))
         self.addCleanup(lambda: workers.failures.pop(self.key, None))
         self.addCleanup(lambda: workers.start_locks.pop(self.key, None))
-        self.worker = SimpleNamespace(process=Mock(), frontend=Mock(), frontend_port=1235, port=1234, token='synthetic-only')
-        self.worker.process.poll.return_value = None
-        self.worker.frontend.poll.return_value = None
+        self.worker = SimpleNamespace(alive=True, port=1234, token='synthetic-only')
 
     async def test_absent_failed_and_starting_are_distinct_without_opening(self):
         with patch.object(workers, 'open', AsyncMock()) as opened:
@@ -39,12 +37,12 @@ class ToolHealthTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_dead_worker_does_not_issue_network_requests(self):
         workers.items[self.key] = self.worker
-        self.worker.process.poll.return_value = 1
+        self.worker.alive = False
         with patch('service.tools.tool_health.httpx.AsyncClient') as client:
             self.assertEqual(False, (await snapshot('demo', 'synthetic'))['running'])
             client.assert_not_called()
 
-    async def test_frontend_loss_keeps_background_running_and_connection_loss_is_unknown(self):
+    async def test_running_state_is_preserved_and_connection_loss_is_unknown(self):
         workers.items[self.key] = self.worker
         original = httpx.AsyncClient
         response = {'running': True}
@@ -54,9 +52,8 @@ class ToolHealthTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json=response)
         with patch('service.tools.tool_health.httpx.AsyncClient', side_effect=lambda **options: original(transport=httpx.MockTransport(handle))):
             self.assertEqual('ready', (await snapshot('demo', 'synthetic'))['state'])
-            self.worker.frontend.poll.return_value = 1
             result = await snapshot('demo', 'synthetic')
-            self.assertEqual('unavailable', result['state'])
+            self.assertEqual('ready', result['state'])
             self.assertTrue(result['running'])
             self.assertNotIn('synthetic-only', str(result))
         def disconnected(request):

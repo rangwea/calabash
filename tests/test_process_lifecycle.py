@@ -9,7 +9,7 @@ import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 from service.tools import owned_process
 from service.tools.tool_workers import ToolWorkers
@@ -65,31 +65,26 @@ class ProcessTests(unittest.IsolatedAsyncioTestCase):
         closing = asyncio.create_task(manager.close(*key))
         await asyncio.sleep(0)
         self.assertFalse(closing.done())
-        worker = SimpleNamespace(process=Mock(), stop=AsyncMock())
-        worker.process.poll.return_value = 0
+        worker = SimpleNamespace(alive=False, active_calls=0, stop=AsyncMock(), server=None, port=1234)
         manager.items[key] = worker
         lock.release()
         await closing
         worker.stop.assert_awaited_once()
         self.assertNotIn(key, manager.items)
 
-    async def test_monitor_recovers_dead_backend_with_live_frontend(self):
+    async def test_monitor_reclaims_closed_listener(self):
         manager = ToolWorkers()
         key = manager.key('demo', 'counter', 'chat')
-        worker = SimpleNamespace(process=Mock(), frontend=Mock(), stop=AsyncMock())
-        worker.process.poll.return_value = 1
-        worker.frontend.poll.return_value = None
+        worker = SimpleNamespace(alive=False, active_calls=0, stop=AsyncMock(), server=None, port=1234)
         manager.items[key] = worker
         with patch('service.tools.tool_workers.asyncio.sleep', side_effect=asyncio.CancelledError), self.assertRaises(asyncio.CancelledError):
             await manager.monitor()
         worker.stop.assert_awaited_once()
         self.assertNotIn(key, manager.items)
 
-    async def test_dead_frontend_does_not_interrupt_current_writer(self):
+    async def test_closed_listener_does_not_interrupt_active_request(self):
         manager = ToolWorkers()
-        worker = SimpleNamespace(process=Mock(), frontend=Mock(), stop=AsyncMock())
-        worker.process.poll.return_value = None
-        worker.frontend.poll.return_value = 1
+        worker = SimpleNamespace(alive=False, active_calls=1, stop=AsyncMock(), server=None, port=1234)
         manager.items[manager.key('demo', 'counter', 'chat')] = worker
         manager.status = AsyncMock(return_value={'running': True})
         with patch('service.tools.tool_workers.asyncio.sleep', side_effect=asyncio.CancelledError), self.assertRaises(asyncio.CancelledError):

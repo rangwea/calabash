@@ -265,7 +265,7 @@ async def preview_diagnostics(session):
     source = read_source(target['project'], target['name'])
     result = {'revision': source['revision'], 'state': 'unavailable', 'diagnostics': [], 'business_verified': False}
     worker = workers.items.get(workers.key(target['project'], target['name'], owner(session)))
-    if not worker or worker.process.poll() is not None:
+    if not worker or not worker.alive:
         return result
     if worker.revision != source['revision']:
         return {**result, 'state': 'stale', 'next_action': 'ask_user_to_refresh_preview'}

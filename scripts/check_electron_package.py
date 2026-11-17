@@ -6,6 +6,7 @@ Run from the repository: uv run python -m scripts.check_electron_package [App pa
 import json
 import os
 import pathlib
+import re
 import select
 import subprocess
 import sys
@@ -66,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             assert call("tools.list", {}) == []
             from scripts.office_library_smoke import BACKEND
             files = base_template("demo", "installed_smoke")
-            files["backend/main.py"] += "\n    install_office_smoke(app, sdk)\n" + BACKEND
+            files["backend/main.py"] += "\n    install_office_smoke(app, sdk)\n    @app.get('/api/runtime-pid')\n    async def runtime_pid():\n        import os\n        return {'pid': os.getpid()}\n" + BACKEND
             for path, content in files.items():
                 call(
                     "agent.call",
@@ -98,7 +99,12 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             parsed = urllib.parse.urlsplit(value["url"])
             token = urllib.parse.parse_qs(parsed.query)["session"][0]
             origin = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
-            for module in ("/entry.tsx", "/runtime-ui.tsx", "/runtime-ai-result.ts", "/probe.js", "/calabash-client.ts"):
+            page = urllib.request.Request(origin + "/", headers={"Authorization": "Bearer " + token})
+            with urllib.request.urlopen(page, timeout=10) as response:
+                html = response.read().decode()
+            modules = re.findall(r'src="(/assets/[^"?]+\.js)"', html)
+            assert modules, "Preview must use the verified production build"
+            for module in ["/api/sdk/runtime-guard.js", *modules]:
                 resource = urllib.request.Request(origin + module, headers={"Authorization": "Bearer " + token})
                 with urllib.request.urlopen(resource, timeout=10) as response:
                     assert response.status == 200, module
@@ -131,9 +137,24 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             origin = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
             request = urllib.request.Request(origin + "/api/message", headers={"Authorization": "Bearer " + token})
             assert json.load(urllib.request.urlopen(request, timeout=10)) == {"message": "Installed runtime"}
+            pid_request = urllib.request.Request(origin + "/api/runtime-pid", headers={"Authorization": "Bearer " + token})
+            assert json.load(urllib.request.urlopen(pid_request, timeout=10))["pid"] == process.pid
+            tasks = call("schedules.action", {"operation": "tasks", "arguments": {"project": "demo", "name": "installed_smoke"}})
+            assert tasks and tasks[0]["name"] == "export_saved_message", tasks
+            rows = call("schedules.action", {"operation": "create", "arguments": {"project": "demo", "name": "installed_smoke", "task": tasks[0]["name"], "minutes": 60, "confirmed": True}})
+            call("schedules.action", {"operation": "run", "arguments": {"id": rows[0]["id"], "confirmed": True}})
+            import time
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                plans = call("schedules.action", {"operation": "list", "arguments": {}})
+                if plans[0]["status"] != "running":
+                    break
+                time.sleep(.05)
+            assert plans[0]["status"] == "succeeded", plans
+            call("schedules.action", {"operation": "remove", "arguments": {"id": rows[0]["id"], "confirmed": True}})
             assert call("app.prepare_exit", {}) is True
             print(
-                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, tool-root SQLite state across refresh and publication, Python API and tool-owned Excel/Word library processing; no source cwd"
+                "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, tool-root SQLite state across refresh and publication, shared Python PID, authorized scheduled task, Python API and tool-owned Excel/Word library processing; no source cwd"
             )
         finally:
             process.stdin.close()

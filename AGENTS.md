@@ -2,7 +2,7 @@
 
 ## 产品边界
 
-本仓库是 Calabash 本地桌面应用。v1.3 主入口使用 DSH Electron + React + TypeScript；宿主任务调度、工作区状态和进程托管由 TypeScript 管理。工具使用 React + Ant Design + TypeScript 前端、Python 3.13+ / FastAPI / ToolSDK 业务后端。旧宿主仅保留在 v1.2 分支；v1.3 不保留旧入口或协议兼容。
+本仓库是 Calabash 本地桌面应用。v1.3 主入口使用 DSH Electron + React + TypeScript；宿主操作调度、工作区状态和共享进程托管由 TypeScript 管理；工具业务由单个 Python/FastAPI 服务的 async 队列与有限文件线程执行。工具使用 React + Ant Design + TypeScript 前端、Python 3.13+ / FastAPI / ToolSDK 业务后端。旧宿主仅保留在 v1.2 分支；v1.3 不保留旧入口或协议兼容。
 工具直接保存在 `~/.calabash/tools`，由 AI Agent 创建和编辑。
 不提供登录、管理后台、远程数据源、平台变量管理、MySQL/MongoDB、远程发布或 Docker 部署。
 本机回环 HTTP 是桌面壳的内部通信实现，不是面向远程用户的服务。
@@ -31,7 +31,7 @@ npm run test:harness
 | --- | --- |
 | `electron/` | DSH overlay、品牌、TypeScript 宿主和 React 工作区 |
 | `backend/harness_bridge.py` | 宿主私有 stdio 工具执行器 |
-| `backend/tool_worker.py` | 独立 Python 工具 HTTP 进程 |
+| `backend/tool_worker.py` | 共享服务内的工具 ASGI 应用工厂 |
 | `service/tools/` | 草稿、源码安全、操作回执、构建、进程和 ToolSDK |
 | `service/files/` | 文件快照、结果交付及独立结果元数据库 |
 | `service/capabilities/` | 本地签名 ZIP 能力插件 |
@@ -58,7 +58,7 @@ npm run test:harness
 
 ## 数据与分层
 
-React 工作区调用类型化 DSH Remote；TypeScript 宿主调度任务，通过私有 stdio 调用 Python 工具服务。工具业务 API 由各自的 FastAPI 进程提供。页面不直接访问数据库或文件系统；不恢复旧聊天 HTTP API、Python 模型配置或 LangGraph。
+React 工作区调用类型化 DSH Remote；TypeScript 宿主调度任务，通过私有 stdio 调用 Python 工具服务。工具业务 API 由同一个 Python/FastAPI 服务承载，每工具保留独立上下文、来源和数据库。页面不直接访问数据库或文件系统；不恢复旧聊天 HTTP API、Python 模型配置或 LangGraph。
 
 专用 SQLite 存储由各自服务初始化和维护；使用公开 API，不直接操作其内部表。新数据库创建当前完整结构，不迁移或删除用户旧数据。
 
@@ -67,7 +67,7 @@ React 工作区调用类型化 DSH Remote；TypeScript 宿主调度任务，通�
 - 使用 React 函数组件、Hooks、TypeScript 与 Ant Design，样式通过语义类组织，不恢复服务端 UI 组件。
 - 工具 UI 从版本化预设包选择，优先本次 @ 指定，其次工具已有快照，最后全局默认。主题元数据与 CSS 随工具源码导出，修改默认不影响已有工具。App 延续 Fluent 2 浅色办公设计；宿主使用 DSH 设计变量；工具使用各自主题快照。工具使用独立来源的 iframe 与 scoped 样式，不覆盖宿主。
 - 聊天与生成生命周期归 DSH；工具任务由 TypeScript 宿主持有，切换页面不取消已受理任务。工具业务 API 由 backend/tool_worker.py 承载。
-- 工具页由独立进程惰性启动；正式版本使用构建产物，预览使用内置 Node/Vite。预览后台执行与保存相同的严格类型检查及生产构建，状态和诊断绑定源码 revision；保存复用该版本检查通过的产物，源码变化后必须重新检查。Agent 使用 check_tool_build 获取编译诊断，构建通过不等于业务验收通过。原生文件权限只授予宿主的精确回环 origin，不授予工具来源。
+- 工具页在共享服务中惰性加载；正式版本和预览均使用已检查的构建产物，不为工具启动 Python 或常驻 Vite 进程。Node/Vite 仅用于短时构建。预览后台执行与保存相同的严格类型检查及生产构建，状态和诊断绑定源码 revision；保存复用该版本检查通过的产物，源码变化后必须重新检查。Agent 使用 check_tool_build 获取编译诊断，构建通过不等于业务验收通过。原生文件权限只授予宿主的精确回环 origin，不授予工具来源。
 - 错误通过 FastAPI HTTPException 与 `core.logger.get_logger()` 记录，浏览器使用 Ant Design 反馈；不返回内部堆栈和凭据。
 - 面向不会编码的办公用户：界面不展示 HTTP 状态码、源码版本、堆栈、文件行号或编译错误明细，仅说明影响和下一步操作。构建诊断按工具/对话/版本保存在本机独立诊断目录，不混入源码或导出 ZIP；Agent 用 read_build_diagnostics 查询当前版本。
 - 用户看到友好错误，完整异常写日志；不要把文件正文、密钥或完整日志自动发送给 Agent。
@@ -77,7 +77,7 @@ React 工作区调用类型化 DSH Remote；TypeScript 宿主调度任务，通�
 
 工具目录包含 `tool.json`、`frontend/App.tsx` 与 `backend/main.py`；后端定义 `setup(app, sdk)` 注册接口，导入时无业务副作用，不自行启动服务。仅支持当前目录格式，不提供旧单文件工具识别、转换或兼容执行。
 聊天、模型适配、会话和扩展由 DSH 管理；Calabash 通过 calabash_tool 提供受限工具编写能力。
-每个工具只保留一份真实工作草稿，位于 `~/.calabash/drafts/<project>/<tool>/`，正式工具在 tools 下独立保存。Agent 通过受限 write_tool_file/read_tool_file/patch_tool_file 操作相同目录，不存在虚拟文件、stage/deliver 或 Agent 管理的 revision 参数。源码不存入检查点文件状态；中断续接直接使用原目录。宿主持久化读取指纹、按工具持有写租约，并绑定构建产物源码指纹。预览直接引用工作目录，运行目录只放宿主启动文件、缓存和不可编辑的后端执行快照，避免运行中的任务混入新代码；后端修改后仍手动刷新。默认不启用 Shell、子 Agent 或外部 tracing；额外 DSH 扩展由用户显式启用。
+每个工具只保留一份真实工作草稿，位于 `~/.calabash/drafts/<project>/<tool>/`，正式工具在 tools 下独立保存。Agent 通过受限 write_tool_file/read_tool_file/patch_tool_file 操作相同目录，不存在虚拟文件、stage/deliver 或 Agent 管理的 revision 参数。源码不存入检查点文件状态；中断续接直接使用原目录。宿主持久化读取指纹、按工具持有写租约，并绑定构建产物源码指纹。运行目录保存与源码指纹绑定的前端产物和不可编辑后端快照，避免运行中的任务混入新代码；后端修改后仍手动刷新。默认不启用 Shell、子 Agent 或外部 tracing；额外 DSH 扩展由用户显式启用。
 操作回执和读取指纹由 service/tools/operation_store.py 管理，位于 ~/.calabash/agent/operations.sqlite；只存摘要和安全操作结果，不存源码或模型密钥。DSH 会话归 DSH profile 管理。
 API 密钥不得写入图状态、检查点配置或日志；模型对象中仅作为私有连接信息传递。
 新建 JSON 业务接口优先声明 Python Pydantic 请求/响应模型和 operation_id，前端通过 @calabash/api 使用静态生成的类型与调用方法。生成只解析源码，不导入执行工具，使用 read_api_contract 查询当前版本。契约不支持的动态类型显式报错，具体规则在内置 Skill 的 api-contract.md。接口诊断绑定当前运行，记录操作、请求标识与安全的字段/调用位置，不记录请求正文或查询值。
@@ -108,7 +108,7 @@ dsh Agent 通过 `calabash_tool` 和私有 stdio 调用 `service/tools/harness_w
 
 ## v1.3 TypeScript 宿主
 
-任务由 electron/workspace/src/tasks.ts 调度；同工具串行、不同工具有限并发，任务 ID 用于重查迟到结果。任务日志只存元数据，不存源码、请求/结果正文或密钥。Python stdio 仅执行有界工具服务，查询不排在耗时构建之后。进程生命周期通过独立 fd 3 通道通知 TypeScript 托管器，不通过工具 stdout，不向模型或 iframe 开放。正常退出先停止接收任务并排空；异常退出时先向工具请求安全停止，不强制打断未知的文件写入。
+任务由 electron/workspace/src/tasks.ts 调度；同工具串行、不同工具有限并发，任务 ID 用于重查迟到结果。任务日志只存元数据，不存源码、请求/结果正文或密钥。Python stdio 提供有界宿主操作并持有唯一共享 FastAPI 服务；查询不排在耗时构建之后。进程生命周期通过独立 fd 3 通道通知 TypeScript 托管器，不通过工具 stdout，不向模型或 iframe 开放。正常退出先停止接收任务并排空；异常退出时先向工具请求安全停止，不强制打断未知的文件写入。
 
 工具标签由宿主保存身份信息，不保存 origin/token。重启只恢复标签，不自动运行。工作区渲染层独立挂载，切换聊天页面不卸载工具 iframe。新工具格式为 calabash-react-tool，frontend/App.tsx 必须 default export；不提供 Vue 执行别名。模板、严格编译器、@calabash/ui 和 Ant Design 声明查询同步维护。
 
@@ -119,3 +119,9 @@ macOS arm64 使用 npm run electron:package 生成自包含 App 和 DMG。Python
 DSH 安装级依赖树由 scripts/package_electron.mjs 材料化，所有链接限定在应用包内；Calabash 是安装级内置依赖，不在用户 profile 建源码链接。安装版 DSH_HOME 为 ~/.calabash/harness，开发版仍用独立 harness-development，不自动迁移凭据。Calabash 不使用上游 DSH 自动更新或强制更新源。当前本地安装包未接入开发者分发签名/公证；不绕过系统安全提示。
 
 对话绑定只在首次成功写入草稿或用户明确进入工具对话时产生；只读参考、读取模板不绑定、不复制正式源码、不抢写租约。允许只读参考其他工具，跨工具写入返回结构化 tool_binding_conflict 和新建对话指引，不自动解绑已有对话。私有执行器按会话串行处理 Agent 调用，避免并发首次写入分别绑定多个工具。不要引导用户使用不存在的“新建空白工具”操作。
+
+## 共享工具运行与定时任务
+
+所有工具由私有执行器内同一个 Python/FastAPI 服务承载；每工具独立回环来源仅是同进程监听入口，不创建业务子进程。每个工具和加载版本使用唯一包命名空间，后端本地模块使用相对导入，不修改 sys.path；模块与线程不是权限沙箱。禁止导入时业务、私有定时循环、全局后台线程、修改宿主信号或全局运行配置。
+工具业务队列最多受理 32 批、同时执行 2 批，同一工具串行；sdk.io 使用全局最多 4 个文件线程，取消等待实际写入结束。HTTP 同步处理也有界；状态、取消和安全退出不排在文件线程之后。工具内存状态、SQLite、文件授权和日志分别归属工具运行实例，切换页面不销毁 iframe。刷新只替换当前工具实例，已受理任务使用冻结版本；共享服务退出先停止调度、拒绝新任务、完成当前文件再排空。
+正式工具可在 setup 中通过 sdk.register_task(name,title,handler) 声明无参数固定业务任务。宿主工具定时任务界面统一创建、暂停、恢复、删除和立即执行；模型不能创建计划或调用任务入口。创建时授权固定任务与源码版本，App 关闭不执行，不补跑错过的时点，不重叠、不自动重试失败执行；工具更新暂停，重启时中断的执行不重放。计划保存在 ~/.calabash/tool-schedules.sqlite，唯一宿主租约防止多实例重复执行。关闭工具标签不取消已受理的计划；模型请求仍逐次确认，不自动发送聊天、附件或日志。文件输入必须来自明确持久授权，不能把进程内的临时输入 ID 当成重启后可用的授权。

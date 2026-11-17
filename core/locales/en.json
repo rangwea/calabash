@@ -534,5 +534,6 @@
   "AI 返回的内容未符合要求，请调整后重试": "AI returned content that did not meet the requirements. Please adjust and retry.",
   "本次确认已过期，请重新发起操作": "This confirmation expired. Please start the operation again.",
   "本次 AI 操作已取消，未发送内容": "This AI operation was cancelled without sending content.",
-  "本次 AI 操作未完成，请检查连接后手动重试": "This AI operation did not complete. Check the connection and retry manually."
+  "本次 AI 操作未完成，请检查连接后手动重试": "This AI operation did not complete. Check the connection and retry manually.",
+  "导出已保存内容": "Export saved content"
 }

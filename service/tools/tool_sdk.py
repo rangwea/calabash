@@ -25,6 +25,7 @@ class ToolSDK:
         self.source_revision = source_revision
         self.data_dir = app_dir() / 'tools' / project / name
         self._database = ToolDatabase(self.data_dir)
+        self.scheduled_tasks = {}
         self.jobs = None
         self.task = None
         self.loop = None
@@ -34,14 +35,22 @@ class ToolSDK:
         self._stopping = False
         self.host_token = ''
         self.router = APIRouter()
+        async def status_route():
+            return self.status()
+        async def cancel_route():
+            return self.cancel()
+        async def exit_route(request: Request):
+            return self.prepare_exit(request)
+        async def publication_route(frozen: bool, request: Request):
+            return self.publication_lock(frozen, request)
         self.router.add_api_route('/runtime-issue', self.runtime_issue, methods=['POST'])
         self.router.add_api_route('/verification', self.verification, methods=['GET'])
         self.router.add_api_route('/verification', self.verification_evidence, methods=['POST'])
         self.router.add_api_route('/page-evidence', self.page_evidence, methods=['POST'])
-        self.router.add_api_route('/prepare-exit', self.prepare_exit, methods=['POST'])
-        self.router.add_api_route('/status', self.status, methods=['GET'])
-        self.router.add_api_route('/cancel', self.cancel, methods=['POST'])
-        self.router.add_api_route('/publication-lock', self.publication_lock, methods=['POST'])
+        self.router.add_api_route('/prepare-exit', exit_route, methods=['POST'])
+        self.router.add_api_route('/status', status_route, methods=['GET'])
+        self.router.add_api_route('/cancel', cancel_route, methods=['POST'])
+        self.router.add_api_route('/publication-lock', publication_route, methods=['POST'])
         self.router.add_api_route('/results', self.results, methods=['GET'])
         self.router.add_api_route('/results/{file_id}', self.result, methods=['GET'])
         self.router.add_api_route('/inputs', self.inputs, methods=['GET'])
@@ -168,6 +177,9 @@ class ToolSDK:
             self.loop = self.loop or current
             if not self.loop:
                 raise HTTPException(503, 'Tool runtime is not ready')
+            from service.tools.tool_execution import execution
+            scheduler = execution(self.loop)
+            scheduler.reserve()
             self.jobs = ToolJobs(values, owner=self.owner)
             self._cancel_pending = False
             async def execute():
@@ -177,8 +189,16 @@ class ToolSDK:
                         for job in self.jobs.jobs:
                             job.status = 'cancelled'
                         return
-                    await self.jobs.run(handler)
+                    from core.local_paths import app_dir
+                    async with scheduler.slot((str(app_dir()), self.owner)):
+                        if self._cancel_pending:
+                            self.jobs.status = 'cancelled'
+                            for job in self.jobs.jobs:
+                                job.status = 'cancelled'
+                            return
+                        await self.jobs.run(handler)
                 finally:
+                    scheduler.release()
                     self.actions.release_ai_inputs()
             self.task = self.loop.create_task(execute()) if self.loop is current else asyncio.run_coroutine_threadsafe(execute(), self.loop)
         return self.status()
@@ -197,6 +217,9 @@ class ToolSDK:
 
     def prepare_exit(self, request: Request):
         self.host_request(request)
+        return self.request_stop()
+
+    def request_stop(self):
         with self._start_lock:
             self._stopping = True
             return self.cancel()
@@ -208,7 +231,23 @@ class ToolSDK:
             await asyncio.shield(task)
 
     async def io(self, function, *args, **kwargs):
-        return await asyncio.to_thread(function, *args, **kwargs)
+        from service.tools.tool_execution import io
+        return await io(function, *args, **kwargs)
+
+    def register_task(self, name, title, handler):
+        from service.tools.tool_bundles import identity
+        if not isinstance(title, str) or not 1 <= len(title) <= 100 or not callable(handler) or name in self.scheduled_tasks:
+            raise ValueError('Invalid scheduled task')
+        self.scheduled_tasks[identity(name)] = (title, handler)
+
+    def start_registered_task(self, name):
+        _title, handler = self.scheduled_tasks[name]
+        async def run(_):
+            import inspect
+            if inspect.iscoroutinefunction(handler):
+                return await handler()
+            return await self.io(handler)
+        return self.start_batch([None], run)
 
     def database(self, *, write=False):
         return self._database.transaction(write=write)

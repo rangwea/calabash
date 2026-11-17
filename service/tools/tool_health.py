@@ -18,8 +18,8 @@ async def snapshot(project, name, chat_id=None):
     worker = workers.items.get(key)
     if worker is None:
         return {'state': 'unavailable' if key in workers.failures else 'closed', 'running': False}
-    origin = f'http://127.0.0.1:{worker.frontend_port or worker.port}'
-    if worker.process.poll() is not None:
+    origin = f'http://127.0.0.1:{worker.port}'
+    if not worker.alive:
         return {'state': 'unavailable', 'running': False, 'origin': origin}
     try:
         async with httpx.AsyncClient(trust_env=False, timeout=2) as client:
@@ -31,5 +31,5 @@ async def snapshot(project, name, chat_id=None):
             raise ValueError('Invalid runtime status')
     except (httpx.HTTPError, ValueError):
         return {'state': 'unavailable', 'running': None, 'origin': origin}
-    frontend_ready = not worker.frontend or worker.frontend.poll() is None
+    frontend_ready = worker.alive
     return {'state': 'ready' if frontend_ready else 'unavailable', 'running': state['running'], 'origin': origin}

@@ -15,7 +15,7 @@ async def _request(worker, path, body=None):
 
 
 def _current(worker, key):
-    if workers.stopping or worker.process.poll() is not None:
+    if workers.stopping or not worker.alive:
         return False
     try:
         return bundles.read(worker.project, worker.name, key[2])['revision'] == worker.revision
@@ -26,7 +26,7 @@ def _current(worker, key):
 async def pending():
     result = []
     for key, worker in tuple(workers.items.items()):
-        if worker.process.poll() is not None:
+        if not worker.alive:
             continue
         try:
             entries = await _request(worker, 'requests')

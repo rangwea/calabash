@@ -107,7 +107,7 @@ class PreviewDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_source_and_session_binding_reject_stale_runtime_before_query(self):
         target = {'project': 'demo', 'name': 'diagnostic'}
-        worker = type('Worker', (), {'revision': 'old', 'process': type('Process', (), {'poll': lambda _: None})()})()
+        worker = type('Worker', (), {'revision': 'old', 'alive': True})()
         with patch.object(workspace, 'state', return_value=target), patch.object(workspace, 'read_source', return_value={'revision': 'new'}), patch.object(workspace.workers, 'items', {workspace.workers.key('demo', 'diagnostic', workspace.owner('session')): worker}):
             result = await workspace.preview_diagnostics('session')
             self.assertEqual('stale', result['state'])
