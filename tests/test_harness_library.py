@@ -17,7 +17,7 @@ from tests.test_tool_bundles import fixture
 class LibraryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {'HOME': self.temp.name})
+        self.env = patch.dict(os.environ, {'HOME': self.temp.name, 'USERPROFILE': self.temp.name})
         self.env.start()
         library._tickets.clear()
         self.files = fixture()

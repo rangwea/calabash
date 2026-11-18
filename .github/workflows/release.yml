@@ -1,9 +1,9 @@
-name: Check Electron app
+name: Test and package Calabash
 
 on:
   push:
-    branches: [main, v1.3.0]
-    tags: ['v1.3.*']
+    branches: [main, 'v1.*']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -11,42 +11,126 @@ permissions:
   contents: read
 
 concurrency:
-  group: electron-check-${{ github.ref }}
-  cancel-in-progress: false
+  group: calabash-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONUTF8: '1'
 
 jobs:
   build:
-    name: Electron ${{ matrix.os }}
+    name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-15-intel, windows-2022]
+        include:
+          - os: macos-15
+            target: mac-arm64
+            arch: arm64
+          - os: macos-15-intel
+            target: mac-x64
+            arch: x64
+          - os: windows-2022
+            target: win-x64
+            arch: x64
     steps:
+      - name: Preserve repository links on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '26'
+          architecture: ${{ matrix.arch }}
           cache: npm
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           python-version: '3.13'
-      - name: Install locked Calabash dependencies
+      - name: Verify native target and release version
+        env:
+          EXPECTED_TARGET: ${{ matrix.target }}
+        run: node scripts/check_release_target.mjs
+      - name: Install locked dependencies
         run: |
           npm ci
-          uv sync --frozen
+          uv sync --frozen --group packaging
       - name: Prepare pinned DSH
         run: npm run electron:prepare
       - name: Build Electron sources
         run: npm run electron:build
-      - name: Check Python tool services
+      - name: Test Python services
         run: uv run --frozen python -m unittest discover -s tests
-      - name: Check host and synthetic Agent
+      - name: Test host and synthetic Agent
         run: npm run test:harness
-      # This validates sources, not installers. Packaging must first include
-      # Calabash's Python and frontend runtimes with installed-path acceptance.
-      # Do not attach incomplete upstream DSH installers to a Release.
+      - name: Test portable package layout
+        run: node --test tests/package_tree.test.mjs
+      - name: Freeze Python runtime
+        run: uv run --frozen --group packaging python scripts/build_electron_backend.py
+      - name: Bundle frontend compiler runtime
+        run: uv run --frozen python scripts/build_frontend_runtime.py
+      - name: Build native installer
+        run: node scripts/package_electron.mjs
+      - name: Verify frozen runtime and synthetic tool
+        run: uv run --frozen python -m scripts.check_electron_package
+      - name: Verify installed AI consent with synthetic model
+        run: node scripts/check_packaged_ai.mjs
+      - name: Upload verified installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: calabash-${{ matrix.target }}
+          path: |
+            dist/electron/Calabash-*-macos-*.dmg
+            dist/electron/Calabash-*-windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-${{ matrix.target }}
+          path: |
+            build/pyinstaller-electron/warn-*.txt
+            dist/electron/builder-debug.yml
+            dist/electron/builder-effective-config.yaml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    name: Draft release
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: calabash-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify all three installers and write checksums
+        run: python3 scripts/check_release_assets.py release-assets
+      - name: Create or update draft only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" --json isDraft > release-state.json 2> release-error.txt; then
+            python3 -c 'import json; assert json.load(open("release-state.json"))["isDraft"], "Refusing to modify a published release"'
+          else
+            gh release create "$tag" --draft --verify-tag --title "Calabash $tag" --generate-notes
+          fi
+          gh release upload "$tag" release-assets/* --clobber

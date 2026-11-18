@@ -8,8 +8,8 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const upstream = resolve(process.env.CALABASH_HARNESS_SOURCE ?? join(root, 'build/harness', JSON.parse(await readFile(join(root, 'electron/harness.lock.json'), 'utf8')).commit));
 const home = await mkdtemp(join(tmpdir(), 'calabash-dsh-agent-'));
-const previous = { HOME: process.env.HOME, CALABASH_REPOSITORY: process.env.CALABASH_REPOSITORY, CALABASH_PYTHON: process.env.CALABASH_PYTHON };
-Object.assign(process.env, { HOME: home, CALABASH_REPOSITORY: root, CALABASH_PYTHON: join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python') });
+const previous = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CALABASH_REPOSITORY: process.env.CALABASH_REPOSITORY, CALABASH_PYTHON: process.env.CALABASH_PYTHON };
+Object.assign(process.env, { HOME: home, USERPROFILE: home, CALABASH_REPOSITORY: root, CALABASH_PYTHON: join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python') });
 const load = relative => import(pathToFileURL(join(upstream, relative)).href);
 let ctx;
 try {

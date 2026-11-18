@@ -25,6 +25,7 @@ class TemplateTests(unittest.TestCase):
             base_template('../escape', 'starter')
         with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {}):
             os.environ['HOME'] = temporary
+            os.environ['USERPROFILE'] = temporary
             path = Path(temporary) / 'main.py'
             path.write_text(files['backend/main.py'])
             spec = importlib.util.spec_from_file_location('synthetic_starter', path)
@@ -54,7 +55,7 @@ class TemplateBuildTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        environment = patch.dict(os.environ, {'HOME': temporary.name})
+        environment = patch.dict(os.environ, {'HOME': temporary.name, 'USERPROFILE': temporary.name})
         environment.start()
         self.addCleanup(environment.stop)
 

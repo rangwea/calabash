@@ -17,7 +17,7 @@ from tests.test_tool_bundles import fixture
 @unittest.skipUnless(shutil.which('node') and Path('node_modules/react').is_dir(), 'Frontend compiler required')
 class HarnessToolRoundtripTests(unittest.IsolatedAsyncioTestCase):
     async def test_build_open_execute_and_safe_close(self):
-        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}):
+        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home, 'USERPROFILE': home}):
             files = fixture()
             built = await build_bundle(files)
             bundles.write('demo', 'counter', files, built_dist=built / 'dist')
@@ -35,7 +35,7 @@ class HarnessToolRoundtripTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_agent_draft_manual_preview_and_confirmed_publication(self):
         from service.tools import harness_workspace as workspace
-        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}):
+        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home, 'USERPROFILE': home}):
             session = 'synthetic-office-session'
             try:
                 for index, (path, content) in enumerate(fixture().items()):

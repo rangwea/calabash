@@ -16,7 +16,7 @@ if (process.argv.includes('--driver')) {
   process.stdin.once('end',()=>{void bridge.stop()})
 } else {
   const home = mkdtempSync(join(tmpdir(),'calabash-bridge-exit-'))
-  const env = {...process.env,HOME:home,CALABASH_REPOSITORY:root,CALABASH_PYTHON:join(root,'.venv',process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')}
+  const env = {...process.env,HOME:home,USERPROFILE:home,CALABASH_REPOSITORY:root,CALABASH_PYTHON:join(root,'.venv',process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')}
   let child
   try {
     execFileSync(env.CALABASH_PYTHON,['-c',"import asyncio; from tests.test_tool_bundles import fixture; from service.tools.tool_workers import build_bundle; from service.tools import tool_bundles as b; f=fixture(); built=asyncio.run(build_bundle(f)); b.write('demo','counter',f,built_dist=built/'dist')"],{cwd:root,env,stdio:'pipe'})

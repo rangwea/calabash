@@ -4,6 +4,7 @@ import {createRequire} from 'node:module'
 import {cpSync,existsSync,readFileSync,writeFileSync,mkdirSync,rmSync,realpathSync,symlinkSync,readdirSync,lstatSync,unlinkSync} from 'node:fs'
 import {join,resolve,dirname,relative,basename,sep} from 'node:path'
 import {spawnSync} from 'node:child_process'
+import {PackageTree} from './package_tree.mjs'
 import {verifyCheckout,overlayFingerprint} from './harness.mjs'
 const root=resolve(import.meta.dirname,'..')
 const metadata=JSON.parse(readFileSync(join(root,'package.json')))
@@ -19,14 +20,20 @@ if(prepare.status!==0) throw new Error('DSH project preparation failed')
 const stage=join(root,'build/electron-package')
 const app=join(stage,'app'), dsh=join(app,'dsh')
 const output=join(root,'dist/electron')
-if(process.platform!=='darwin'||process.arch!=='arm64') throw new Error('This local installer target currently requires macOS arm64')
+const mac=process.platform==='darwin'
+if(!(mac && ['arm64','x64'].includes(process.arch)) && !(process.platform==='win32' && process.arch==='x64')) throw new Error('Build natively on macOS arm64/x64 or Windows x64')
+const target=`${mac?'mac':'win'}-${process.arch}`
+const executable=mac?'calabash-backend':'calabash-backend.exe'
+const nodeExecutable=mac?'node':'node.exe'
+const runtimeSource=join(upstream,'apps/desktop/.desktop-build/targets',target,'runtime')
 const backend=join(root,'build/electron-backend/calabash-backend')
 const compiler=join(root,'build/frontend-runtime')
-for(const file of [join(backend,'calabash-backend'),join(compiler,'node'),join(upstream,'.calabash-build.json')]) {
+for(const file of [join(backend,executable),join(compiler,nodeExecutable),join(upstream,'.calabash-build.json')]) {
  if(!existsSync(file)) throw new Error('Missing packaging input: '+file)
 }
 rmSync(stage,{recursive:true,force:true});mkdirSync(dsh,{recursive:true})
 const copied=new Map(),shared=new Map()
+const portable=new PackageTree(dsh,resolvePackage), shellTree=new PackageTree(app,resolvePackage)
 function json(path){return JSON.parse(readFileSync(path,'utf8'))}
 function resolvePackage(name,from){
  for(let dir=from;;dir=dirname(dir)){
@@ -39,11 +46,13 @@ function resolvePackage(name,from){
  throw new Error('Installed dependency missing: '+name+' from '+from)
 }
 function linkPackage(source,target){
+ if(!mac) { const tree=target.startsWith(dsh+sep)?portable:shellTree; tree.install(realpathSync(source),dirname(dirname(json(join(source,'package.json')).name.startsWith('@')?dirname(target):target))); return }
  const installed=materialize(source);mkdirSync(dirname(target),{recursive:true})
  if(!existsSync(target)) symlinkSync(relative(dirname(target),installed),target,'dir')
 }
 function materialize(input){
  const source=realpathSync(input)
+ if(!mac) { const destination=portable.install(source); for(const [key,value] of portable.copied)copied.set(key,value); for(const entry of portable.shared())shared.set(entry.name,entry); return destination }
  if(copied.has(source)) return copied.get(source)
  const manifest=json(join(source,'package.json'))
  const key=createHash('sha256').update(relative(upstream,source)).digest('hex').slice(0,20)
@@ -91,7 +100,7 @@ cpSync(join(upstream,'apps/desktop/lib'),join(app,'lib'),{recursive:true})
 cpSync(join(upstream,'apps/desktop/renderer'),join(app,'renderer'),{recursive:true})
 writeFileSync(join(app,'package.json'),JSON.stringify({name:'calabash',productName:'Calabash',version:metadata.version,main:'lib/main.js',type:'module',private:true,license:metadata.license,author:'wikia',dependencies:shell.dependencies}))
 const runtime=join(stage,'runtime')
-cpSync(join(upstream,'apps/desktop/.desktop-build/targets/mac-arm64/runtime'),runtime,{recursive:true,dereference:true})
+cpSync(runtimeSource,runtime,{recursive:true,dereference:true})
 cpSync(join(upstream,'apps/desktop/scripts/node-bin'),join(runtime,'bin'),{recursive:true})
 const calabash=join(stage,'calabash')
 cpSync(backend,join(calabash,'backend'),{recursive:true,dereference:true})
@@ -100,7 +109,7 @@ for(const name of ['LICENSE','NOTICE']) cpSync(join(root,name),join(calabash,nam
 cpSync(join(root,'electron/DSH-LICENSE.txt'),join(calabash,'DSH-LICENSE.txt'))
 // Refuse links back into the checkout or external user data before packaging.
 const relocations=[...copied.entries(),[backend,join(calabash,'backend')],[compiler,join(calabash,'frontend-runtime')],
- [join(upstream,'apps/desktop/.desktop-build/targets/mac-arm64/runtime'),runtime]].sort((a,b)=>b[0].length-a[0].length)
+ [runtimeSource,runtime]].sort((a,b)=>b[0].length-a[0].length)
 function audit(directory,base=stage){for(const entry of readdirSync(directory)){
  const path=join(directory,entry),info=lstatSync(path)
  if(info.isSymbolicLink()) {
@@ -124,16 +133,24 @@ const electron=dirname(dirname(require.resolve('electron/package.json')))
 const config={appId:'com.wikia.calabash',productName:'Calabash',asar:false,npmRebuild:false,
  directories:{app,output},electronDist:join(electron,'electron/dist'),electronVersion:json(require.resolve('electron/package.json')).version,
  files:['**/*','!dsh/**'],extraResources:[{from:runtime,to:'runtime'},{from:calabash,to:'calabash'},{from:join(root,'electron/icons/icon.png'),to:'icon.png'}],
- mac:{icon:join(root,'electron/icons/icon.icns'),identity:null,category:'public.app-category.productivity'},publish:null}
+ mac:{icon:join(root,'electron/icons/icon.icns'),identity:null,category:'public.app-category.productivity'},
+ win:{icon:join(root,'electron/icons/icon.ico'),target:['nsis'],artifactName:`Calabash-${metadata.version}-windows-x64-setup.exe`},
+ nsis:{oneClick:false,perMachine:false,allowToChangeInstallationDirectory:true},publish:null}
 const configPath=join(stage,'builder.mjs')
-writeFileSync(configPath,`import {cpSync,constants} from 'node:fs';import {join} from 'node:path';\nexport default {...${JSON.stringify(config)},afterPack(context){cpSync(${JSON.stringify(dsh)},join(context.appOutDir,'Calabash.app/Contents/Resources/app/dsh'),{recursive:true,verbatimSymlinks:true,mode:constants.COPYFILE_FICLONE});}}`)
-const result=spawnSync(process.execPath,[builder,'--config',configPath,'--mac','--arm64','--dir','--publish','never'],{cwd:root,stdio:'inherit',env:{...process.env,CSC_IDENTITY_AUTO_DISCOVERY:'false'}})
+writeFileSync(configPath,`import {cpSync,constants} from 'node:fs';import {join} from 'node:path';\nexport default {...${JSON.stringify(config)},afterPack(context){cpSync(${JSON.stringify(dsh)},join(context.appOutDir,${JSON.stringify(mac?'Calabash.app/Contents/Resources/app/dsh':'resources/app/dsh')}),{recursive:true,verbatimSymlinks:true,mode:constants.COPYFILE_FICLONE});}}`)
+const result=spawnSync(process.execPath,[builder,'--config',configPath,mac?'--mac':'--win',`--${process.arch}`,...(mac?['--dir']:[]),'--publish','never'],{cwd:root,stdio:'inherit',env:{...process.env,CSC_IDENTITY_AUTO_DISCOVERY:'false'}})
 if(result.status!==0) throw new Error('Electron packaging failed')
-const packaged=join(output,'mac-arm64/Calabash.app')
+const unpacked=join(output,mac?(process.arch==='arm64'?'mac-arm64':'mac'):'win-unpacked')
+const packaged=mac?join(unpacked,'Calabash.app'):unpacked
 audit(packaged,packaged)
-const applications=join(output,'mac-arm64/Applications')
-if(!existsSync(applications)) symlinkSync('/Applications',applications)
-const dmg=join(output,`Calabash-${metadata.version}-macos-arm64.dmg`)
-const image=spawnSync('hdiutil',['create','-volname','Calabash','-srcfolder',join(output,'mac-arm64'),'-ov','-format','UDZO',dmg],{stdio:'inherit'})
-if(image.status!==0) throw new Error('DMG creation failed')
-console.log('Packaged '+dmg+' ('+copied.size+' packages)')
+if(mac) {
+ const applications=join(unpacked,'Applications')
+ if(!existsSync(applications)) symlinkSync('/Applications',applications)
+ const dmg=join(output,`Calabash-${metadata.version}-macos-${process.arch}.dmg`)
+ const image=spawnSync('hdiutil',['create','-volname','Calabash','-srcfolder',unpacked,'-ov','-format','UDZO',dmg],{stdio:'inherit'})
+ if(image.status!==0) throw new Error('DMG creation failed')
+ console.log('Packaged '+dmg+' ('+copied.size+' packages)')
+} else {
+ console.log('Packaged Windows x64 installer ('+copied.size+' packages)')
+}
+writeFileSync(join(output,'package-layout.json'),JSON.stringify({target,app:packaged,resources:mac?join(packaged,'Contents/Resources'):join(packaged,'resources')}))

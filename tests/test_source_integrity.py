@@ -12,7 +12,7 @@ from tests.test_tool_bundles import fixture
 class SourceIntegrityTests(unittest.IsolatedAsyncioTestCase):
 
     def test_bad_delivery_keeps_saved_bundle_unchanged(self):
-        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {'HOME': temporary}):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {'HOME': temporary, 'USERPROFILE': temporary}):
             files = fixture()
             first = bundles.write('demo', 'counter', files, chat_id='synthetic')
             for bad in [MARKERS[1] + ' Read current source.]', '   ', '<!-- export default function App(){return <main>not a block</main>} -->', 'Just a summary']:
@@ -25,7 +25,7 @@ class SourceIntegrityTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(changed, bundles.read('demo', 'counter', 'synthetic')['files'])
 
     def test_preexisting_corruption_stays_readable_for_targeted_repair(self):
-        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {'HOME': temporary}):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {'HOME': temporary, 'USERPROFILE': temporary}):
             files = fixture()
             bundles.write('demo', 'counter', files, chat_id='synthetic')
             path = bundles.directory('demo', 'counter', 'synthetic') / 'frontend/App.tsx'

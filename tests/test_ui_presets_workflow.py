@@ -12,7 +12,7 @@ from tests.test_tool_bundles import fixture
 class PresetsWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
-        env = patch.dict(os.environ, {'HOME': self.temp.name}); env.start(); self.addCleanup(env.stop)
+        env = patch.dict(os.environ, {'HOME': self.temp.name, 'USERPROFILE': self.temp.name}); env.start(); self.addCleanup(env.stop)
 
     def test_explicit_existing_default_priority_and_export_snapshot(self):
         ui_presets.set_default('soft')

@@ -12,7 +12,7 @@ from backend.tool_worker import create_tool_app
 
 class HarnessEmbedSessionTests(unittest.IsolatedAsyncioTestCase):
     async def test_partitioned_cookie_and_foreign_origin_rejection(self):
-        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home}):
+        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {'HOME': home, 'USERPROFILE': home}):
             root = Path(home)
             (root / 'backend').mkdir()
             (root / 'dist').mkdir()

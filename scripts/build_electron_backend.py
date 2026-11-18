@@ -20,6 +20,8 @@ def main():
         "--noconfirm",
         "--clean",
         "--onedir",
+        "--python-option",
+        "X utf8=1",
         "--name",
         "calabash-backend",
         "--distpath",

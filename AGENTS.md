@@ -17,7 +17,7 @@ npm ci
 npm run electron:prepare
 npm run electron:build
 npm run electron:dev
-npm run electron:package  # 当前本机打包目标为 macOS arm64
+npm run electron:package  # 按当前机器原生打包：macOS arm64/x64、Windows x64
 uvx --offline ruff check
 .venv/bin/python3 -m unittest discover -s tests
 npm run test:harness
@@ -114,7 +114,7 @@ dsh Agent 通过 `calabash_tool` 和私有 stdio 调用 `service/tools/harness_w
 
 ## 安装包运行库
 
-macOS arm64 使用 npm run electron:package 生成自包含 App 和 DMG。Python 为 onedir 冻结执行器，入口 backend/packaged_entry.py；源码与安装版仅共享服务实现。安装版通过资源目录设置 CALABASH_REPOSITORY、CALABASH_PYTHON、CALABASH_PACKAGED_BACKEND 和 CALABASH_FRONTEND_RUNTIME，不查找开发 .venv。编译运行库在 Python 包外单独分发。构建依赖 PyInstaller 只放 packaging 组。scripts/check_electron_package.py 使用临时 HOME/PATH/cwd 验证真实冻结执行器、严格构建、预览和 Python action。
+npm run electron:package 按原生平台生成自包含安装包：macOS arm64/x64 为 App 和 DMG，Windows x64 为 NSIS 安装程序。Windows DSH 依赖使用实体目录树，不依赖安装后的符号链接或构建机 junction。Python 为 onedir 冻结执行器，入口 backend/packaged_entry.py；源码与安装版仅共享服务实现。安装版通过资源目录设置 CALABASH_REPOSITORY、CALABASH_PYTHON、CALABASH_PACKAGED_BACKEND 和 CALABASH_FRONTEND_RUNTIME，不查找开发 .venv。编译运行库在 Python 包外单独分发。构建依赖 PyInstaller 只放 packaging 组。scripts/check_electron_package.py 使用临时 HOME/PATH/cwd 验证真实冻结执行器、严格构建、预览和 Python action。
 
 DSH 安装级依赖树由 scripts/package_electron.mjs 材料化，所有链接限定在应用包内；Calabash 是安装级内置依赖，不在用户 profile 建源码链接。安装版 DSH_HOME 为 ~/.calabash/harness，开发版仍用独立 harness-development，不自动迁移凭据。Calabash 不使用上游 DSH 自动更新或强制更新源。当前本地安装包未接入开发者分发签名/公证；不绕过系统安全提示。
 
@@ -125,3 +125,5 @@ DSH 安装级依赖树由 scripts/package_electron.mjs 材料化，所有链接�
 所有工具由私有执行器内同一个 Python/FastAPI 服务承载；每工具独立回环来源仅是同进程监听入口，不创建业务子进程。每个工具和加载版本使用唯一包命名空间，后端本地模块使用相对导入，不修改 sys.path；模块与线程不是权限沙箱。禁止导入时业务、私有定时循环、全局后台线程、修改宿主信号或全局运行配置。
 工具业务队列最多受理 32 批、同时执行 2 批，同一工具串行；sdk.io 使用全局最多 4 个文件线程，取消等待实际写入结束。HTTP 同步处理也有界；状态、取消和安全退出不排在文件线程之后。工具内存状态、SQLite、文件授权和日志分别归属工具运行实例，切换页面不销毁 iframe。刷新只替换当前工具实例，已受理任务使用冻结版本；共享服务退出先停止调度、拒绝新任务、完成当前文件再排空。
 正式工具可在 setup 中通过 sdk.register_task(name,title,handler) 声明无参数固定业务任务。宿主工具定时任务界面统一创建、暂停、恢复、删除和立即执行；模型不能创建计划或调用任务入口。创建时授权固定任务与源码版本，App 关闭不执行，不补跑错过的时点，不重叠、不自动重试失败执行；工具更新暂停，重启时中断的执行不重放。计划保存在 ~/.calabash/tool-schedules.sqlite，唯一宿主租约防止多实例重复执行。关闭工具标签不取消已受理的计划；模型请求仍逐次确认，不自动发送聊天、附件或日志。文件输入必须来自明确持久授权，不能把进程内的临时输入 ID 当成重启后可用的授权。
+
+GitHub Actions 在三种原生 runner 上执行测试、打包和隔离安装版验收。v 版本标签必须与 package.json 一致，三平台全部通过后才创建或更新草稿 Release；不自动发布，不修改已发布的 Release，不接入签名/公证或自动更新。

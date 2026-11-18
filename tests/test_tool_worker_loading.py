@@ -12,7 +12,7 @@ from backend.tool_worker import create_tool_app
 
 class WorkerLoadingTests(unittest.IsolatedAsyncioTestCase):
     async def test_postponed_annotations_resolve_and_old_built_pages_get_guard(self):
-        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'HOME': temp}):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'HOME': temp, 'USERPROFILE': temp}):
             root = Path(temp)
             (root / 'backend').mkdir()
             (root / 'dist').mkdir()

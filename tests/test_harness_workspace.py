@@ -13,7 +13,7 @@ from tests.test_tool_bundles import fixture
 class HarnessWorkspaceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.home = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {'HOME': self.home.name})
+        self.env = patch.dict(os.environ, {'HOME': self.home.name, 'USERPROFILE': self.home.name})
         self.env.start()
         self.counter = 0
 

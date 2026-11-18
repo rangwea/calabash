@@ -18,7 +18,7 @@ class RuntimeFixture(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        env = patch.dict(os.environ, {'HOME': self.temp.name})
+        env = patch.dict(os.environ, {'HOME': self.temp.name, 'USERPROFILE': self.temp.name})
         env.start()
         self.addCleanup(env.stop)
         from core.logger import get_logger

@@ -16,7 +16,7 @@ class ToolDatabaseTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        environment = patch.dict(os.environ, {'HOME': temporary.name})
+        environment = patch.dict(os.environ, {'HOME': temporary.name, 'USERPROFILE': temporary.name})
         environment.start()
         self.addCleanup(environment.stop)
         self.sdk = ToolSDK('demo', 'customers')

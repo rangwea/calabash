@@ -22,7 +22,7 @@ class BundleTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.env = patch.dict(os.environ, {'HOME': self.temp.name})
+        self.env = patch.dict(os.environ, {'HOME': self.temp.name, 'USERPROFILE': self.temp.name})
         self.env.start(); self.addCleanup(self.env.stop)
 
     def test_index_only_includes_current_bundle_format(self):

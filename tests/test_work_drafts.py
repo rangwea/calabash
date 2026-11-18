@@ -14,7 +14,7 @@ class WorkDraftTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        environment = patch.dict(os.environ, {'HOME': self.temporary.name})
+        environment = patch.dict(os.environ, {'HOME': self.temporary.name, 'USERPROFILE': self.temporary.name})
         environment.start(); self.addCleanup(environment.stop)
         self.addCleanup(lambda: work_drafts.release('first'))
         self.addCleanup(lambda: work_drafts.release('second'))

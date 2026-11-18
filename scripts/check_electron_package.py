@@ -1,4 +1,4 @@
-"""Offline acceptance for a packaged macOS app using only synthetic tool data.
+"""Offline acceptance for a packaged native app using only synthetic tool data.
 
 Run from the repository: uv run python -m scripts.check_electron_package [App path].
 """
@@ -6,31 +6,34 @@ Run from the repository: uv run python -m scripts.check_electron_package [App pa
 import json
 import os
 import pathlib
+import queue
 import re
-import select
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.parse
 import urllib.request
 
 from service.tools.tool_templates import base_template
 
-app = (
-    pathlib.Path(sys.argv[1])
-    if len(sys.argv) > 1
-    else pathlib.Path(__file__).resolve().parents[1]
-    / "dist/electron/mac-arm64/Calabash.app"
-).resolve() / "Contents/Resources"
+root = pathlib.Path(__file__).resolve().parents[1]
+if len(sys.argv) > 1:
+    package = pathlib.Path(sys.argv[1]).resolve()
+    app = package / ("resources" if os.name == "nt" else "Contents/Resources")
+else:
+    app = pathlib.Path(json.loads((root / "dist/electron/package-layout.json").read_text())["resources"])
 with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporary:
     env = {
         **os.environ,
         "HOME": temporary,
-        "PATH": "/usr/bin:/bin",
+        "USERPROFILE": temporary,
+        "PYTHONUTF8": "1",
+        "PATH": str(pathlib.Path(os.environ["SystemRoot"]) / "System32") if os.name == "nt" else "/usr/bin:/bin",
         "CALABASH_FRONTEND_RUNTIME": str(app / "calabash/frontend-runtime"),
         "CALABASH_HARNESS_EMBEDDED": "1",
     }
-    binary = app / "calabash/backend/calabash-backend"
+    binary = app / "calabash/backend" / ("calabash-backend.exe" if os.name == "nt" else "calabash-backend")
     with open(pathlib.Path(temporary) / "executor.log", "w+") as error:
         process = subprocess.Popen(
             [str(binary)],
@@ -40,8 +43,15 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             stdout=subprocess.PIPE,
             stderr=error,
             text=True,
+            encoding="utf-8",
         )
         sequence = 0
+        responses = queue.Queue()
+        def collect():
+            for line in process.stdout:
+                responses.put(line)
+            responses.put(None)
+        threading.Thread(target=collect, daemon=True).start()
 
         def call(method, params):
             global sequence
@@ -51,9 +61,10 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
                 + "\n"
             )
             process.stdin.flush()
-            if not select.select([process.stdout], [], [], 120)[0]:
-                raise TimeoutError(method)
-            line = process.stdout.readline()
+            try:
+                line = responses.get(timeout=120)
+            except queue.Empty:
+                raise TimeoutError(method) from None
             if not line:
                 error.seek(0)
                 raise RuntimeError(error.read()[-4000:])

@@ -30,7 +30,7 @@ def setup(app, sdk):
 class PreviewDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.environment = patch.dict(os.environ, {'HOME': self.temp.name})
+        self.environment = patch.dict(os.environ, {'HOME': self.temp.name, 'USERPROFILE': self.temp.name})
         self.environment.start()
         self.root = Path(self.temp.name) / ('a' * 32)
         (self.root / 'backend').mkdir(parents=True)
