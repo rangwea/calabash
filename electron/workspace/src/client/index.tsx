@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import remote from '@calabash/harness-workspace/remote'
@@ -75,6 +75,7 @@ function install(ctx: Context): void {
   }
   const scheduleCall = async (operation:string,args:Record<string,unknown>) => JSON.parse(unwrap(await wire.schedules(operation,JSON.stringify(args))))
   function Tools({ useContextMenu, showSchedules }: { useContextMenu: UseContextMenu; showSchedules:boolean }) {
+    const selectedPanel = useSyncExternalStore(listener=>ctx.layout.panelInfo.subscribe(listener),()=>ctx.layout.panelInfo.getSnapshot().activePanelId)
     const menus = useContextMenu()
     const t = useCopy()
     const [tools, setTools] = useState<ToolEntry[]>([])
@@ -105,6 +106,9 @@ function install(ctx: Context): void {
       catch { if (!automatic && listAlive.current) setError(t('工具列表暂时不可用，请重试。', 'Unable to load tools. Please retry.')) }
       finally { listLoading.current = false }
     }
+    useEffect(() => {
+      if(selectedPanel===panel)void load()
+    }, [selectedPanel])
     useEffect(() => {
       listAlive.current = true
       const update = () => { if (!document.hidden && libraryContainer.current?.getClientRects().length) void load(true) }
@@ -244,25 +248,29 @@ function install(ctx: Context): void {
       </div>
     </section>
   }
-  function Draft({ sessionId }: { sessionId: string }) {
+  function Draft({ sessionId, useTabInfo }: { sessionId: string; useTabInfo:UseSidebarRightTabInfo }) {
+    const tabVisible = useTabInfo().tab.visible
+    const visibleRef = useRef(tabVisible); visibleRef.current=tabVisible
+    const revealPreview=useRef<()=>void>(()=>{})
     const t = useCopy()
     const container = useRef<HTMLElement>(null)
     const currentSession = useRef(sessionId); currentSession.current = sessionId
     const [target, setTarget] = useState<ToolTarget | null>(null)
     const [conflict, setConflict] = useState<ToolTarget | null>(null)
     const [preview, setPreview] = useState<Preview | null>(null)
-    const [busy, setBusy] = useState(false)
+    const [operation, setOperation] = useState<'opening'|'saving'|'conversation'|null>(null)
+    const busy = operation !== null
     const [notice, setNotice] = useState('')
     const [verification, setVerification] = useState('pending')
     const [repairing, setRepairing] = useState(false)
     const previewRuntime = useRef({ session: sessionId, busy: false, opened: false })
     useEffect(() => {
-      setTarget(null); setConflict(null); setPreview(null); setNotice(''); setBusy(false); setVerification('pending')
+      setTarget(null); setConflict(null); setPreview(null); setNotice(''); setOperation(null); setVerification('pending')
       const runtime = { session: sessionId, busy: false, opened: false }; previewRuntime.current = runtime
       const discovery = new PreviewDiscovery()
       let disposed = false, latest: string | null = null, conflictNow = false
       let stream: ReturnType<typeof ctx.remote.$stream<string>> | undefined
-      const visible = () => !document.hidden && !!container.current?.getClientRects().length
+      const visible = () => visibleRef.current && !document.hidden && !!container.current?.getClientRects().length
       const attempt = () => {
         if (!disposed && visible() && discovery.ready(conflictNow ? null : latest, runtime.opened, runtime.busy)) void openPreview(false, runtime)
       }
@@ -284,6 +292,7 @@ function install(ctx: Context): void {
           } catch { if (!disposed) setNotice(t('预览通知暂时不可用，可以手动打开预览。','Preview notifications are unavailable. You can open the preview manually.')) }
         })()
       }
+      revealPreview.current=start
       const observer=new ResizeObserver(start)
       if(container.current)observer.observe(container.current)
       window.addEventListener('focus',start);document.addEventListener('visibilitychange',start)
@@ -298,26 +307,32 @@ function install(ctx: Context): void {
       const timer=setInterval(()=>void inspect(),2500)
       return()=>{disposed=true;observer.disconnect();clearInterval(timer);window.removeEventListener('focus',start);document.removeEventListener('visibilitychange',start);void stream?.dispose().catch(()=>{})}
     }, [sessionId])
+    useEffect(()=>{
+      if(!tabVisible)return
+      revealPreview.current()
+      const frame=requestAnimationFrame(()=>revealPreview.current())
+      return()=>cancelAnimationFrame(frame)
+    }, [tabVisible, sessionId])
     const newConversation = async () => {
       if (busy) return
-      setBusy(true); setNotice('')
+      setOperation('conversation'); setNotice('')
       try {
         const destination = ctx.workspaces.list.getSnapshot().items[0] ?? await ctx.workspaces.initializeDefault()
         if (!destination) throw new Error('A workspace is required')
         const session = await ctx.sessions.create({ workspaceId: destination.workspaceId })
         ctx.uiWorkspace.openSession(session)
       } catch { setNotice(t('暂时无法新建对话，请重试。', 'Unable to start a new conversation. Please retry.')) }
-      finally { setBusy(false) }
+      finally { setOperation(null) }
     }
     const openPreview = async (refresh: boolean, runtime = previewRuntime.current) => {
       if (runtime.busy || runtime !== previewRuntime.current) return
-      runtime.busy = true; setBusy(true); setNotice(''); setVerification('pending')
+      runtime.busy = true; setOperation('opening'); setNotice(''); setVerification('pending')
       try {
         const value = validPreview(JSON.parse(await api.preview(runtime.session, refresh)) as Preview)
         if (runtime === previewRuntime.current && currentSession.current === runtime.session) { runtime.opened = true; setPreview(value) }
       } catch {
         if (runtime === previewRuntime.current && currentSession.current === runtime.session) setNotice(t('预览暂时未能打开，请让 AI 检查工具后再重试。', 'Unable to open the preview. Ask AI to check the tool, then retry.'))
-      } finally { runtime.busy = false; if (runtime === previewRuntime.current && currentSession.current === runtime.session) setBusy(false) }
+      } finally { runtime.busy = false; if (runtime === previewRuntime.current && currentSession.current === runtime.session) setOperation(null) }
     }
     const open = () => openPreview(preview !== null)
     const repair = async () => {
@@ -334,7 +349,7 @@ function install(ctx: Context): void {
     }
     const save = async () => {
       if (!preview || busy) return
-      setBusy(true); setNotice('')
+      setOperation('saving'); setNotice('')
       try {
         const all = JSON.parse(await api.list()) as ToolEntry[]
         if (currentSession.current !== sessionId) return
@@ -344,27 +359,36 @@ function install(ctx: Context): void {
         await api.publish(sessionId, preview.revision, existing?.revision ?? '', true)
         setNotice(t('已保存到工具列表。保存不代表业务验证通过，请手动试用。', 'Saved to your tool list. Please test the tool manually.'))
       } catch { setNotice(t('暂时无法保存，请刷新预览，并确认同名工具没有正在运行。', 'Unable to save. Refresh the preview and make sure the existing tool is closed.')) }
-      finally { setBusy(false) }
+      finally { setOperation(null) }
     }
     const statusText = conflict ? t('此对话正在编辑其他工具。创建新工具请新建对话。', 'This conversation edits another tool. Start a new conversation to create a different tool.') : verification === 'passed' ? t('页面已显示，接口登记检查通过，请试用确认功能。', 'Page loaded and API registration checked. Please try the tool to verify its features.') : verification === 'failed' ? t('页面或接口发现问题，可以让 AI 帮你检查。', 'A page or API issue was found. You can ask AI to check it.') : verification === 'stale' ? t('工具有新修改，请刷新预览后再检查。', 'The tool has changed. Refresh the preview to check it.') : verification === 'partial' ? t('页面已显示，部分接口尚未检查，请手动试用。', 'Page loaded. Some APIs remain unchecked; please try the tool.') : t('正在检查页面加载和接口登记…', 'Checking page loading and API registration…')
-    const exceptional = !!conflict || !!preview && ['failed', 'stale', 'partial'].includes(verification)
-    const status = conflict ? 'failed' : verification
+    const noticeFailed = !!notice && !notice.startsWith(t('已保存到工具列表', 'Saved to your tool list'))
+    const hasFailure = !!conflict || verification === 'failed' || noticeFailed
+    const status = hasFailure ? 'failed' : busy || repairing ? 'pending' : notice ? 'passed' : preview ? verification : 'pending'
+    const message = conflict ? statusText : noticeFailed ? notice : verification === 'failed' ? statusText : repairing ? t('正在发送修复请求…', 'Sending repair request…') : operation === 'saving' ? t('正在保存工具…', 'Saving tool…') : operation === 'conversation' ? t('正在新建对话…', 'Starting conversation…') : operation === 'opening' ? t('正在加载预览…', 'Loading preview…') : notice || (preview ? statusText : target ? t('正在检查工具…', 'Checking tool…') : t('尚未创建工具', 'No tool yet'))
+    const canRepair = !conflict && !!target && (verification === 'failed' || verification === 'partial' || noticeFailed)
+    useEffect(() => {
+      if (!notice || noticeFailed) return
+      const timer = setTimeout(() => setNotice(''), 6000)
+      return () => clearTimeout(timer)
+    }, [notice, noticeFailed])
     const newLabel = t('新建工具对话', 'New tool conversation')
     const newHint = t('保留当前工具，新建空白对话', 'Keep this tool and start a blank conversation')
     return <section ref={container} className={css.previewPane} style={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
       <header className={css.previewHeader}>
         <div className={css.previewIdentity}><strong className={css.previewTitle} title={target?.name || t('工具预览', 'Tool preview')}>{target?.name || t('工具预览', 'Tool preview')}</strong>
-          {target && <span className={css.previewStatus} data-state={status} role="img" tabIndex={0} aria-label={statusText} title={statusText}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d={status==='passed'?'m8 12 3 3 5-6':status==='failed'?'M12 7v6m0 4h.01':status==='partial'||status==='stale'?'M12 11v6m0-10h.01':'M12 7v5l3 2'}/></svg></span>}
         </div>
         <div className={css.previewActions}>
           {target && <><button type="button" className={`${css.previewButton} ${css.newToolConversation}`} disabled={busy} title={newHint} onClick={()=>{void newConversation()}}>{newLabel}</button>
           <details className={css.previewMore}><summary title={t('更多操作', 'More actions')} aria-label={t('更多操作', 'More actions')}><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></summary><div className={css.previewMoreMenu}><button type="button" className={css.previewButton} disabled={busy} title={newHint} onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');void newConversation()}}>{newLabel}</button></div></details></>}
-          <button type="button" className={css.previewButton} disabled={!target || busy} onClick={()=>{void open()}}>{busy?t('正在处理…','Working…'):preview?t('刷新预览','Refresh preview'):t('打开预览','Open preview')}</button>
+          <button type="button" className={css.previewButton} disabled={!target || busy} onClick={()=>{void open()}}>{t('刷新预览','Refresh preview')}</button>
           <button type="button" className={css.previewButton} disabled={!preview || busy} onClick={()=>{void save()}}>{t('保存到工具列表','Save to tools')}</button>
         </div>
       </header>
-      {exceptional && <div role="status" className={css.previewWarning}><span style={{flex:1}}>{statusText}</span>{!conflict && ['failed','partial'].includes(verification) && <button type="button" className={css.previewButton} disabled={repairing||busy} onClick={()=>void repair()}>{repairing?t('正在发送…','Sending…'):t('让 AI 帮我修复','Ask AI to repair')}</button>}</div>}
-      {notice && <p role="status" style={{ margin: 12, color: '#697b89', fontSize: 13 }}>{notice}</p>}
+      <div className={css.previewStatusBar} data-state={status}>
+          <span className={css.previewStatus} data-state={status} role="status" aria-live="polite" aria-atomic="true" tabIndex={0} title={message}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d={status==='passed'?'m8 12 3 3 5-6':status==='failed'?'M12 7v6m0 4h.01':status==='partial'||status==='stale'?'M12 11v6m0-10h.01':'M12 7v5l3 2'}/></svg><span className={css.previewStatusText}>{message}</span></span>
+          {canRepair && <button type="button" className={css.previewButton} disabled={repairing||busy} onClick={()=>void repair()}>{repairing?t('正在发送…','Sending…'):t('让 AI 帮我修复','Ask AI to repair')}</button>}
+      </div>
       {preview ? <iframe src={preview.url} title={t('工具预览', 'Tool preview')} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" style={frame} /> : <div style={{ padding: 24, color: '#7d8a97', fontSize: 14 }}>{target ? t('正在检查工具，通过后会自动打开预览。', 'Checking the tool. The preview will open when it passes.') : t('在对话中描述想创建的工具，草稿会关联到这里。', 'Describe the tool you want in the conversation. Its draft will appear here.')}</div>}
     </section>
   }
