@@ -63,8 +63,8 @@ def _lock(path: Path):
             raise PackError("invalid_state")
         if os.name == "nt":
             import msvcrt
-            handle.write(b"0")
-            handle.flush()
+            # Windows byte-range locks may extend beyond EOF. Never write before
+            # acquiring: another owner may already hold the first byte.
             handle.seek(0)
             try:
                 msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
