@@ -12,12 +12,15 @@ async function shutdown() {
 }
 process.stdin.resume(); process.stdin.on('end', shutdown)
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown)
-const libraryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const libraryRoot = realpathSync.native(resolve(dirname(fileURLToPath(import.meta.url)), '..'))
 const within = (base, file) => { const path = relative(base, file); return path === '' || path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path) }
 const [mode, sourceRoot] = process.argv.slice(2)
 if (mode !== 'build' || !sourceRoot) throw new Error('Invalid compiler invocation')
-const root = realpathSync(sourceRoot)
-const frontend = resolve(realpathSync(sourceRoot), 'frontend')
+// Use one native spelling and drive for Vite's absolute and relative HTML module IDs.
+// Windows TEMP can use an 8.3 alias while Node resolves imports to the long path.
+const root = realpathSync.native(sourceRoot)
+process.chdir(root)
+const frontend = resolve(root, 'frontend')
 const libraries = ['react', 'react-dom', 'antd', '@ant-design/icons', 'echarts']
 const alias = Object.fromEntries(libraries.map(name => [name, resolve(libraryRoot, 'node_modules', name)]))
 Object.assign(alias, { '@calabash/api': resolve(root, 'calabash-api.ts'), '@calabash/ui': resolve(root, 'runtime-ui.tsx'), '@tool': frontend })

@@ -51,7 +51,7 @@ def record(project, name, chat_id, result, build_root=None):
             with destination.open('wb') as handle:
                 os.chmod(destination, 0o600)
                 handle.write(content)
-    candidates = sorted((p for p in path.glob('*.json') if p.is_file() and not p.is_symlink()), key=lambda p: p.stat().st_mtime, reverse=True)
+    candidates = sorted((p for p in path.glob('*.json') if p.is_file() and not p.is_symlink()), key=lambda p: (p == target, p.stat().st_mtime_ns, p.name), reverse=True)
     for index, item in enumerate(candidates):
         if item == target or index < 5 and time.time() - item.stat().st_mtime < 7 * 86400:
             continue

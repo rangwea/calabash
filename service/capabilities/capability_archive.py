@@ -1,6 +1,7 @@
 """Extract exactly the signed files; never restore archive permissions or links."""
 
 import hashlib
+import os
 import stat
 from pathlib import Path
 from threading import Event
@@ -80,7 +81,8 @@ def verify_files(directory: Path, package: Package) -> None:
         info = path.lstat()
         if not item or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != item.size or digest(path) != item.sha256:
             raise PackError("installation_damaged")
-        if item.executable and not info.st_mode & stat.S_IXUSR:
+        # Windows does not expose POSIX execute bits; hashes and engine selfchecks still apply.
+        if os.name != "nt" and item.executable and not info.st_mode & stat.S_IXUSR:
             raise PackError("installation_damaged")
         actual.add(name)
     if actual != set(expected):

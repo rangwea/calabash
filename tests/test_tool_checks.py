@@ -160,6 +160,25 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             read('demo', 'counter', 'linked', f'{7:064x}')
 
+    def test_diagnostic_retention_with_identical_timestamps(self):
+        import types
+
+        from service.tools.check_records import directory, record
+        original = Path.stat
+        def same_time(path, *args, **kwargs):
+            value = original(path, *args, **kwargs)
+            if path.suffix == '.json':
+                return types.SimpleNamespace(st_mode=value.st_mode, st_size=value.st_size,
+                                             st_mtime=1_800_000_000, st_mtime_ns=1_800_000_000_000_000_000)
+            return value
+        # Descending names put the newest revision last unless it is explicitly protected first.
+        with patch.object(Path, 'stat', same_time):
+            for index in reversed(range(8)):
+                record('demo', 'counter', 'chat', {'revision': f'{index:064x}', 'state': 'failed', 'diagnostics': []})
+        path = directory('demo', 'counter', 'chat')
+        self.assertEqual(5, len(list(path.glob('*.json'))))
+        self.assertTrue((path / f'{0:064x}.json').is_file())
+
     def test_diagnostics_do_not_return_arbitrary_paths_or_source_text(self):
         root = self.artifact('diagnostics')
         (root / 'build.log').write_text('frontend/../../secret.ts(1,1): error TS2322: token\nfrontend/App.tsx(4,2): error TS2353: password\n')

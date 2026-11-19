@@ -70,6 +70,19 @@ class CapabilityPackTests(unittest.TestCase):
         self.manager.public_keys = (Ed25519PrivateKey.generate().public_key().public_bytes_raw(),)
         self.assert_code('signature_invalid', lambda: self.manager.import_zip(self.bundle()))
 
+    def test_windows_verification_does_not_require_posix_execute_bits(self):
+        from types import SimpleNamespace
+
+        from service.capabilities.capability_archive import verify_files
+        self.manager.import_zip(self.bundle())
+        with self.manager.acquire('media.ffmpeg') as (package, directory):
+            binary = directory / package.entries['ffmpeg']
+            binary.chmod(0o600)
+            with patch('service.capabilities.capability_archive.os', SimpleNamespace(name='nt')):
+                verify_files(directory, package)
+                binary.write_bytes(b'corrupt engine')
+                self.assert_code('installation_damaged', lambda: verify_files(directory, package))
+
     def test_failed_upgrade_preserves_previous(self):
         self.manager.import_zip(self.bundle('2.0.0'))
         self.assert_code('version_rollback', lambda: self.manager.import_zip(self.bundle('1.0.0')))
