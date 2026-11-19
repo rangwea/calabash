@@ -39,6 +39,9 @@ export class PackageTree {
       const source=this.locations.get(path)
       const name=JSON.parse(readFileSync(join(source,'package.json'),'utf8')).name
       return path===join(this.root,'node_modules',name) && existsSync(path)
-    }).map(([destination,source])=>({source,destination,...JSON.parse(readFileSync(join(source,'package.json'),'utf8'))}))
+    }).map(([destination,source])=>{
+      const {name,version}=JSON.parse(readFileSync(join(source,'package.json'),'utf8'))
+      return {source,destination,name,version}
+    })
   }
 }

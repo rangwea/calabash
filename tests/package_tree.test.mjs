@@ -11,10 +11,13 @@ test('portable package tree resolves cycles and conflicting versions without dir
  try {
   const sources=join(root,'sources'), output=join(root,'app'), nodes={}
   for(const [id,name,version,dependencies] of [['a','a','1',{b:'1',shared:'1'}],['b','b','1',{a:'1',shared:'2'}],['s1','shared','1',{}],['s2','shared','2',{}]]){
-   const path=join(sources,id);mkdirSync(path,{recursive:true});writeFileSync(join(path,'package.json'),JSON.stringify({name,version,main:'index.cjs',dependencies}));writeFileSync(join(path,'index.cjs'),`module.exports=${JSON.stringify(version)}`);nodes[id]=path
+   const path=join(sources,id);mkdirSync(path,{recursive:true});writeFileSync(join(path,'package.json'),JSON.stringify({name,version,main:'index.cjs',source:'src/index.ts',dependencies}));writeFileSync(join(path,'index.cjs'),`module.exports=${JSON.stringify(version)}`);nodes[id]=path
   }
   const tree=new PackageTree(output,(name,source)=>name==='shared'?(source===nodes.a?nodes.s1:nodes.s2):nodes[name])
   const a=tree.install(nodes.a),b=tree.install(nodes.b)
+  const sharedA=tree.shared().find(entry=>entry.name==='a')
+  assert.equal(sharedA.source,nodes.a,'manifest source must not replace the physical dependency directory')
+  assert.equal(sharedA.destination,a)
   assert.equal(createRequire(join(a,'index.cjs'))('shared'),'1')
   assert.equal(createRequire(join(b,'index.cjs'))('shared'),'2')
   assert.equal(createRequire(join(b,'index.cjs'))('a'),'1')
