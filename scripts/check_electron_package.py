@@ -167,6 +167,12 @@ with tempfile.TemporaryDirectory(prefix="calabash-installed-smoke-") as temporar
             print(
                 "PASS installed frozen runtime: no system Node/Python; real draft, React build, preview, tool-root SQLite state across refresh and publication, shared Python PID, authorized scheduled task, Python API and tool-owned Excel/Word library processing; no source cwd"
             )
+        except BaseException:
+            # Only the isolated synthetic executor is captured here, never a user profile.
+            error.flush()
+            error.seek(0)
+            print("Isolated executor diagnostics:\n" + error.read()[-12000:], file=sys.stderr)
+            raise
         finally:
             process.stdin.close()
             try:
