@@ -14,7 +14,9 @@ test('portable package tree resolves cycles and conflicting versions without dir
    const path=join(sources,id);mkdirSync(path,{recursive:true});writeFileSync(join(path,'package.json'),JSON.stringify({name,version,main:'index.cjs',source:'src/index.ts',dependencies}));writeFileSync(join(path,'index.cjs'),`module.exports=${JSON.stringify(version)}`);nodes[id]=path
   }
   const tree=new PackageTree(output,(name,source)=>name==='shared'?(source===nodes.a?nodes.s1:nodes.s2):nodes[name])
-  const a=tree.install(nodes.a),b=tree.install(nodes.b)
+  tree.reserve([nodes.a,nodes.b,nodes.s1])
+  const b=tree.install(nodes.b),a=tree.install(nodes.a)
+  assert.equal(tree.install(nodes.s1),join(output,'node_modules/shared'))
   const sharedA=tree.shared().find(entry=>entry.name==='a')
   assert.equal(sharedA.source,nodes.a,'manifest source must not replace the physical dependency directory')
   assert.equal(sharedA.destination,a)

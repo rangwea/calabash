@@ -76,6 +76,12 @@ function materialize(input){
  if(!shared.has(manifest.name)) shared.set(manifest.name,{source,destination,version:manifest.version})
  return destination
 }
+const shell=json(join(upstream,'apps/desktop/package.json'))
+const directShell=Object.keys(shell.dependencies).map(name=>resolvePackage(name,join(upstream,'apps/desktop')))
+if(!mac) {
+ portable.reserve([...['apps/cli','apps/desktop-host','packages/client/calabash-workspace'].map(path=>realpathSync(join(upstream,path))),...directShell])
+ shellTree.reserve(directShell)
+}
 for(const path of ['apps/cli','apps/desktop-host','packages/client/calabash-workspace']) materialize(join(upstream,path))
 // Register Calabash as an installation-owned dependency so DSH's public
 // runtime resolver does not treat it as a third-party profile package.
@@ -84,7 +90,6 @@ const cliManifest=json(join(cli,'package.json'))
 cliManifest.dependencies={...cliManifest.dependencies,'@calabash/harness-workspace':metadata.version}
 writeFileSync(join(cli,'package.json'),JSON.stringify(cliManifest))
 linkPackage(join(upstream,'packages/client/calabash-workspace'),join(cli,'node_modules/@calabash/harness-workspace'))
-const shell=json(join(upstream,'apps/desktop/package.json'))
 for(const name of Object.keys(shell.dependencies)) materialize(resolvePackage(name,join(upstream,'apps/desktop')))
 for(const [name,entry] of shared){linkPackage(entry.source,join(dsh,'node_modules',name))}
 for(const name of Object.keys(shell.dependencies)) linkPackage(resolvePackage(name,join(upstream,'apps/desktop')),join(app,'node_modules',name))

@@ -3,7 +3,15 @@ import {cpSync,existsSync,mkdirSync,readFileSync} from 'node:fs'
 import {dirname,join,relative,sep} from 'node:path'
 
 export class PackageTree {
-  constructor(root, resolvePackage) { this.root=root; this.resolve=resolvePackage; this.locations=new Map(); this.copied=new Map() }
+  constructor(root, resolvePackage) { this.root=root; this.resolve=resolvePackage; this.locations=new Map(); this.copied=new Map(); this.reserved=new Map() }
+  reserve(sources) {
+    for(const source of sources) {
+      const {name}=JSON.parse(readFileSync(join(source,'package.json'),'utf8'))
+      const location=join(this.root,'node_modules',name)
+      if(this.reserved.has(location) && this.reserved.get(location)!==source) throw new Error('Conflicting direct package dependency: '+name)
+      this.reserved.set(location,source)
+    }
+  }
   install(source, parent=this.root, depth=0) {
     if(depth>40) throw new Error('Package dependency nesting exceeds portable layout limit')
     const manifest=JSON.parse(readFileSync(join(source,'package.json'),'utf8'))
@@ -20,8 +28,9 @@ export class PackageTree {
       if(!dir.startsWith(this.root+sep)) throw new Error('Package parent escaped install root')
     }
     const top=join(this.root,'node_modules',name)
-    const destination=this.locations.has(top)?join(parent,'node_modules',name):top
-    if(this.locations.has(destination)) throw new Error('Conflicting package install location')
+    const topAvailable=!this.locations.has(top) && (!this.reserved.has(top) || this.reserved.get(top)===source)
+    const destination=topAvailable?top:join(parent,'node_modules',name)
+    if(this.locations.has(destination)) throw new Error('Conflicting package install location: '+destination+' for '+source)
     this.locations.set(destination,source)
     if(!this.copied.has(source)) this.copied.set(source,destination)
     mkdirSync(dirname(destination),{recursive:true})
