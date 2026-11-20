@@ -58,7 +58,7 @@
 
 - 状态：候选议题，尚未排期。
 - 签名与公证：当前本地 macOS arm64 安装包未接入开发者分发签名与 Apple 公证，不绕过系统安全提示。
-- 平台：macOS Intel、Windows x64 安装包与自动化 GitHub Releases 流程未实现；现有 CI 仅做源码检查，不附加不完整安装包。
+- 平台：CI 已在 macOS Apple Silicon、macOS Intel 与 Windows x64 三种原生 runner 上构建并验收安装包。打 `v*` 标签后只创建或更新草稿 Release，不自动发布，也不修改已发布的 Release。
 - 验收：真实冻结执行器、严格构建、预览与 Python action 已有脚本覆盖，需扩展到更多平台后再公开分发。
 
 ### 结果文件继续处理
