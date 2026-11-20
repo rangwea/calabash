@@ -5,7 +5,7 @@
 <h1 align="center">Calabash</h1>
 
 <p align="center">
-  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.3.0-367767?style=flat-square" alt="应用版本"></a>
+  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.3.1-367767?style=flat-square" alt="应用版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="许可证：Elastic License 2.0"></a>
   <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="桌面构建"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 及以上"></a>
@@ -50,7 +50,7 @@ Calabash 目前处于预览阶段，官网尚未提供公开下载地址；完�
 
 桌面安装包包含 Python 后端和内置运行库，最终用户不需要安装 Python 或 uv。首次使用需在设置中配置模型 API 和密钥，再选择模型开始对话；不需要 Calabash 账号。
 
-目前仅生成 macOS Apple Silicon 本地安装包；Intel、Windows 安装包、自动发布流程，以及开发者分发签名与 Apple 公证尚未完成。
+CI 在 macOS Apple Silicon、macOS Intel 与 Windows x64 三种原生环境构建并验收安装包，打版本标签后只创建草稿 Release，不会自动发布。开发者分发签名与 Apple 公证尚未完成，安装包暂不能公开下载。
 
 ### 文件和数据
 

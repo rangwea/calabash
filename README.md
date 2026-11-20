@@ -5,7 +5,7 @@
 <h1 align="center">Calabash</h1>
 
 <p align="center">
-  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.3.0-367767?style=flat-square" alt="App version"></a>
+  <a href="https://github.com/rangwea/calabash/releases"><img src="https://img.shields.io/badge/version-v1.3.1-367767?style=flat-square" alt="App version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="License: Elastic License 2.0"></a>
   <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="Desktop builds"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 or newer"></a>
@@ -50,7 +50,7 @@ Calabash is in preview and has no public download yet. The website will add a do
 
 Desktop packages include the Python backend and built-in runtime libraries. End users do not need Python or uv. Configure your model API and key in Settings, select a model, and start a conversation. No Calabash account is required.
 
-Only a local macOS Apple Silicon package is produced today. macOS Intel and Windows installers, automated releases, developer distribution signing and Apple notarization are not in place yet.
+CI builds and verifies installers natively on macOS Apple Silicon, macOS Intel and Windows x64. A version tag only creates a draft release; nothing is published automatically. Developer distribution signing and Apple notarization are still missing, so no public download is offered yet.
 
 ### Files and data
 

@@ -1,7 +1,7 @@
 """Source redaction remains usable without any model configuration service."""
 import unittest
 
-from service.tools.source_credentials import SourceCredentials
+from service.tools.source_credentials import SourceCredentials, strip_credentials
 
 
 class SourceCredentialTests(unittest.TestCase):
@@ -14,3 +14,12 @@ class SourceCredentialTests(unittest.TestCase):
         self.assertEqual(source, credentials.restore(redacted))
         with self.assertRaisesRegex(ValueError, 'expired'):
             SourceCredentials().restore(redacted)
+
+    def test_export_scrub_keeps_no_reversible_mapping(self):
+        source = 'api_key = "synthetic-private-value"\npassword = "synthetic-password"'
+        scrubbed = strip_credentials(source)
+        self.assertNotIn('synthetic-private-value', scrubbed)
+        self.assertNotIn('synthetic-password', scrubbed)
+        self.assertIn('REDACTED_CREDENTIAL_', scrubbed)
+        # Scrub is idempotent: a second pass must not invent new placeholders.
+        self.assertEqual(scrubbed, strip_credentials(scrubbed))

@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import importlib.util
 import json
+import secrets
 import sys
 import types
 from contextlib import asynccontextmanager
@@ -41,11 +42,11 @@ def create_tool_app(config):
             return JSONResponse({'detail': 'Foreign origin'}, status_code=403)
         cookie = 'calabash-tool-' + str(config['port'])
         token = request.cookies.get(cookie) or request.headers.get('authorization', '').removeprefix('Bearer ')
-        bootstrap = request.url.path == '/api/sdk/session' and request.query_params.get('session') == config['token']
-        navigation = request.url.path == '/' and request.method == 'GET' and token == config['token']
+        bootstrap = request.url.path == '/api/sdk/session' and secrets.compare_digest(request.query_params.get('session') or '', config['token'])
+        navigation = request.url.path == '/' and request.method == 'GET' and secrets.compare_digest(token, config['token'])
         if request.headers.get('sec-fetch-site') in {'cross-site', 'same-site'} and not (bootstrap or navigation):
             return JSONResponse({'detail': 'Foreign request'}, status_code=403)
-        if request.url.path != '/health' and not bootstrap and token != config['token']:
+        if request.url.path != '/health' and not bootstrap and not secrets.compare_digest(token, config['token']):
             return JSONResponse({'detail': 'Session unavailable'}, status_code=403)
         from uuid import uuid4
         request.state.api_request_id = uuid4().hex

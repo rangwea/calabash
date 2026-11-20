@@ -1,4 +1,5 @@
 """Per-page tool runs, bounded log retention and resource ownership."""
+import asyncio
 import hashlib
 import json
 import logging
@@ -7,6 +8,7 @@ import re
 import shutil
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -22,6 +24,9 @@ MAX_RUN_BYTES = 5 * 1024 * 1024
 MAX_TOTAL_BYTES = 256 * 1024 * 1024
 _current = ContextVar('calabash_log_run', default=None)
 _active = {}
+# One background worker: retention cleanup is idempotent and must never queue up.
+_CLEANUP_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix='calabash-log-cleanup')
+_last_cleanup = None
 
 
 def root():
@@ -167,7 +172,9 @@ class Run:
         self.handlers.clear()
         logger.remove(self.sink)
         _active.pop(self.id, None)
-        cleanup()
+        # Retention cleanup walks and removes whole run trees. Running it inline
+        # would stall every tool request on the event loop, so it goes to a thread.
+        schedule_cleanup()
 
 
 def start(project, name, *, preview_key=None, client=None):
@@ -188,7 +195,7 @@ def start(project, name, *, preview_key=None, client=None):
     if client is not None:
         client.calabash_log_run = run_id
         client.on_delete(run.close)
-    cleanup()
+    schedule_cleanup()
     return run
 
 
@@ -209,6 +216,29 @@ def cleanup(*, now=None):
         _cleanup(now=now)
     except OSError:
         logger.warning('Tool run log cleanup deferred; filesystem is temporarily unavailable')
+
+
+def schedule_cleanup(*, now=None):
+    """Retention cleanup without blocking the caller's event loop."""
+    global _last_cleanup
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        cleanup(now=now)
+        return
+    _last_cleanup = _CLEANUP_EXECUTOR.submit(cleanup, now=now)
+
+
+async def flush(*, now=None):
+    """Await the most recently scheduled cleanup; tests and shutdown only."""
+    if now is not None:
+        schedule_cleanup(now=now)
+        future = _last_cleanup
+        if future is not None:
+            await asyncio.wrap_future(future)
+        return
+    while _last_cleanup is not None and not _last_cleanup.done():
+        await asyncio.wrap_future(_last_cleanup)
 
 
 def _cleanup(*, now=None):

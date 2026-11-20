@@ -149,4 +149,7 @@ class RunJobLogsTests(RunLogsFixture, unittest.IsolatedAsyncioTestCase):
         finish.set()
         await task
         self.assertNotIn(run.id, logs._active)
+        # Retention cleanup now runs on a background worker so it never stalls the
+        # event loop; wait for that work instead of asserting on a synchronous call.
+        await logs.flush()
         self.assertFalse(run.path.parent.exists())

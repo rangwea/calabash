@@ -46,14 +46,21 @@ export class ProcessSupervisor {
       const expected = await this.identities.get(entry.pid)
       // A PID alone is not an ownership proof after a crash; never signal a reused process.
       if (!expected || await this.identity(entry.pid) !== expected) { this.owned.delete(entry.pid); this.identities.delete(entry.pid); continue }
-      // After executor failure, a reachable tool must acknowledge safe stop before termination.
+      // After executor failure, a reachable tool must acknowledge safe stop before
+      // termination. Draining accepted work stays unbounded, so this waits on the
+      // acknowledgement rather than on an arbitrary deadline; only an unreachable
+      // executor bounds the loop (below), where no acknowledgement can ever arrive.
       if (entry.role === 'tool' && entry.ready && entry.control) {
+        let unreachable = 0
         while (this.alive(entry.pid)) {
           try {
             const response = await fetch(`http://127.0.0.1:${entry.control.port}/api/sdk/prepare-exit`, { method:'POST', headers:{ Authorization:'Bearer '+entry.control.token, 'X-Calabash-Host':entry.control.hostToken }, signal:AbortSignal.timeout(2500) })
             const state = await response.json() as { running?: boolean }
             if (response.ok && state.running === false) break
-          } catch { /* Unknown state is not permission to interrupt a possible writer. */ }
+            unreachable = 0
+          } catch { /* Unknown state is not permission to interrupt a possible writer. */
+            if (++unreachable >= 6) break
+          }
           await new Promise(resolve => setTimeout(resolve,500))
         }
       }

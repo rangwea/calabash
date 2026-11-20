@@ -57,6 +57,16 @@ class BundleTests(unittest.TestCase):
         data = bundles.export_zip('demo', 'counter')
         self.assertEqual(files, bundles.inspect_zip(data))
 
+    def test_export_never_ships_restored_credentials(self):
+        """A shared ZIP must not carry model keys that authoring restored in memory."""
+        files = {**fixture(), 'backend/main.py': 'API_KEY = "synthetic-export-secret"\n\ndef setup(app, sdk):\n    pass\n'}
+        bundles.write('demo', 'counter', files)
+        exported = bundles.inspect_zip(bundles.export_zip('demo', 'counter'))
+        self.assertNotIn('synthetic-export-secret', exported['backend/main.py'])
+        self.assertIn('REDACTED_CREDENTIAL_', exported['backend/main.py'])
+        # The stored tool itself keeps working source; export scrubs only the copy.
+        self.assertIn('synthetic-export-secret', bundles.read('demo', 'counter')['files']['backend/main.py'])
+
     def test_tool_local_data_is_not_source_and_survives_first_save_and_overwrite(self):
         from service.tools.tool_sdk import ToolSDK
         sdk = ToolSDK('demo', 'counter')

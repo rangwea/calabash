@@ -28,6 +28,10 @@ class Execution:
 
     def release(self):
         with self.guard:
+            # A reservation is released exactly once; counting below zero would
+            # silently raise the shared admission budget instead of reporting a bug.
+            if self.pending <= 0:
+                raise RuntimeError('Admission reservation released without a matching reserve')
             self.pending -= 1
 
     @asynccontextmanager

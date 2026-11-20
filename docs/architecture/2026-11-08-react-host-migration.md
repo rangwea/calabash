@@ -30,7 +30,7 @@ Use synthetic source and temporary HOME/profile directories. Never call a real m
 - Python requests are correlated/concurrent with resource locks. Source leases, fingerprints and receipts remain authoritative tool-domain services.
 - Shell-owned workspace frames survive conversation navigation. Host state restores tool identities after actual host restart without running them. Browser acceptance confirmed form input retention and a React form calling the Python starter contract.
 - Host tracks trusted lifecycle packets over private fd 3. Executor signals are isolated, so host SIGINT closes its pipes instead of killing the executor before cleanup. A real crash simulation verified worker listener reclamation. Supervisor signals require matching process identity (POSIX start/command identity or a fixed Windows CIM query); unknown/reused identities are never force-stopped.
-- Full Python suite: 249 tests, successful with 6 environment-dependent skips. DSH/React synthetic Agent loop, ZIP import/export, queue/late-result recovery, safe-current-file orphan cleanup and the host SIGINT test passed.
+- Full Python suite: 167 tests, successful with 6 environment-dependent skips. DSH/React synthetic Agent loop, ZIP import/export, queue/late-result recovery, safe-current-file orphan cleanup and the host SIGINT test passed.
 
 ## Remaining delivery acceptance
 

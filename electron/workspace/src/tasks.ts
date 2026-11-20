@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync, lstatSync } from 'node:fs'
 import { join } from 'node:path'
 export interface HostTask { id: string; operation: string; state: 'queued' | 'running' | 'succeeded' | 'failed' | 'interrupted'; phase: string; created: number; updated: number }
-interface Entry { view: HostTask; digest: string; key: string; resource: string; execute?: () => Promise<unknown>; promise: Promise<unknown>; resolve: (value: unknown) => void; reject: (error: Error) => void; result?: unknown }
+interface Entry { view: HostTask; digest: string; key: string; scope: string; resource: string; execute?: () => Promise<unknown>; promise: Promise<unknown>; resolve: (value: unknown) => void; reject: (error: Error) => void; result?: unknown }
 export class HostTasks {
   private entries = new Map<string, Entry>()
   private keys = new Map<string, string>()
@@ -11,6 +11,8 @@ export class HostTasks {
   private running = 0
   private ending = false
   private file: string | undefined
+  private timer: ReturnType<typeof setTimeout> | undefined
+  private dirty = false
   constructor(home?: string, private limit = 2) {
     if (!home) return
     mkdirSync(home, { recursive: true, mode: 0o700 }); this.file = join(home, 'tasks.json')
@@ -19,16 +21,26 @@ export class HostTasks {
       const saved = JSON.parse(readFileSync(this.file, 'utf8')) as HostTask[]
       for (const view of saved.slice(-128)) {
         if (view.state === 'queued' || view.state === 'running') { view.state = 'interrupted'; view.phase = 'interrupted' }
-        this.entries.set(view.id, { view, key: '', resource: '', digest: '', promise: Promise.resolve(undefined), resolve() {}, reject() {} })
+        this.entries.set(view.id, { view, key: '', scope: '', resource: '', digest: '', promise: Promise.resolve(undefined), resolve() {}, reject() {} })
       }
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
   }
-  private save() {
+  /** State changes are frequent and synchronous; coalesce them off the hot path. */
+  private save(immediate = false) {
     if (!this.file) return
+    if (immediate) { if (this.timer) { clearTimeout(this.timer); this.timer = undefined } this.write(); return }
+    this.dirty = true
+    if (this.timer) return
+    this.timer = setTimeout(() => { this.timer = undefined; this.write() }, 250)
+    this.timer.unref?.()
+  }
+  private write() {
+    if (!this.file || !this.dirty) return
+    this.dirty = false
     const temporary = this.file + '.' + randomUUID()
     writeFileSync(temporary, JSON.stringify([...this.entries.values()].map(entry => entry.view).slice(-128)), { mode: 0o600, flag: 'wx' }); renameSync(temporary, this.file)
   }
-  submit(operation: string, input: object, resource: string, key: string, execute: () => Promise<unknown>): string {
+  submit(operation: string, input: object, resource: string, key: string, execute: () => Promise<unknown>, scope = ''): string {
     const digest = createHash('sha256').update(JSON.stringify([operation, input])).digest('hex')
     const previous = this.entries.get(this.keys.get(key) ?? '')
     if (previous) { if (previous.digest !== digest) throw new Error('Operation identity reused with changed input'); return previous.view.id }
@@ -38,8 +50,8 @@ export class HostTasks {
     let resolve!: Entry['resolve'], reject!: Entry['reject']
     const promise = new Promise<unknown>((yes, no) => { resolve = yes; reject = no }); void promise.catch(() => {})
     const id = randomUUID(), now = Date.now()
-    this.entries.set(id, { view: { id, operation, state: 'queued', phase: 'queued', created: now, updated: now }, digest, resource, key, execute, promise, resolve, reject }); this.keys.set(key, id)
-    this.save(); this.pump(); return id
+    this.entries.set(id, { view: { id, operation, state: 'queued', phase: 'queued', created: now, updated: now }, digest, scope, resource, key, execute, promise, resolve, reject }); this.keys.set(key, id)
+    this.save(true); this.pump(); return id
   }
   private pump() {
     for (const entry of this.entries.values()) {
@@ -51,9 +63,14 @@ export class HostTasks {
       })
     }
   }
-  inspect(id: string) { const entry = this.entries.get(id); if (!entry) throw new Error('Task unavailable'); return { ...entry.view, resultAvailable: entry.result !== undefined, ...(entry.view.state === 'succeeded' && entry.result !== undefined ? { result: entry.result } : {}) } }
+  /** A task answer belongs to the caller that started it; never quote another scope. */
+  inspect(id: string, scope = '') {
+    const entry = this.entries.get(id)
+    if (!entry || (entry.scope && entry.scope !== scope)) throw new Error('Task unavailable')
+    return { ...entry.view, resultAvailable: entry.result !== undefined, ...(entry.view.state === 'succeeded' && entry.result !== undefined ? { result: entry.result } : {}) }
+  }
   wait(id: string) { const entry = this.entries.get(id); if (!entry) throw new Error('Task unavailable'); return entry.promise }
   list() { return [...this.entries.values()].map(entry => ({ ...entry.view })) }
   get busy() { return [...this.entries.values()].some(entry => entry.execute) }
-  async drain() { this.ending = true; await Promise.allSettled([...this.entries.values()].filter(entry => entry.execute).map(entry => entry.promise)) }
+  async drain() { this.ending = true; await Promise.allSettled([...this.entries.values()].filter(entry => entry.execute).map(entry => entry.promise)); this.save(true) }
 }

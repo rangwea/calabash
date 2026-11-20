@@ -14,9 +14,9 @@ const load=relative=>import(pathToFileURL(join(upstream,relative)).href)
 const installedRequire=resources&&createRequire(join(packages,'package.json'))
 const dependency=async(name,path)=>resources?import(pathToFileURL(installedRequire.resolve(name)).href):load(path)
 const home=await mkdtemp(join(tmpdir(),'calabash-ai-roundtrip-'))
-const keys=['HOME','USERPROFILE','CALABASH_REPOSITORY','CALABASH_PYTHON','CALABASH_PACKAGED_BACKEND','CALABASH_FRONTEND_RUNTIME']
+const keys=['HOME','USERPROFILE','DSH_HOME','CALABASH_REPOSITORY','CALABASH_PYTHON','CALABASH_PACKAGED_BACKEND','CALABASH_FRONTEND_RUNTIME']
 const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]))
-Object.assign(process.env,{HOME:home,USERPROFILE:home,CALABASH_REPOSITORY:resources?home:root,CALABASH_PYTHON:resources?join(resources,'calabash/backend',process.platform==='win32'?'calabash-backend.exe':'calabash-backend'):join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python')})
+Object.assign(process.env,{HOME:home,USERPROFILE:home,DSH_HOME:home,CALABASH_REPOSITORY:resources?home:root,CALABASH_PYTHON:resources?join(resources,'calabash/backend',process.platform==='win32'?'calabash-backend.exe':'calabash-backend'):join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python')})
 if(resources)Object.assign(process.env,{CALABASH_PACKAGED_BACKEND:'1',CALABASH_FRONTEND_RUNTIME:join(resources,'calabash/frontend-runtime')})
 let ctx
 try{

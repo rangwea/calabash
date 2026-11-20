@@ -10,7 +10,7 @@
 
 ## 代码现状与决定
 
-- `service/actions/registry.py` 当前注册两个确定性文件处理 Action；输入输出由 Pydantic 声明，TypeScript 客户端从同一模型生成。
+- `service/actions/registry.py` 当前只注册一个 AI Action（`ai.text`），由模型生成文本、结果保存为新文件；输入输出由 Pydantic 声明，TypeScript 客户端从同一模型生成。
 - `service/actions/runtime.py`、`service/tools/tool_jobs.py` 已提供后台任务、单工具串行和安全取消。`ToolOutputs` 仅发布完整结果，保留结果历史。
 - `electron/workspace/src/bridge.ts` 的 stdio 为宿主私有请求/响应接口；fd 3 只承载可信进程生命周期元数据，不承载 AI 内容。
 - 固定版本 DSH 的 `packages/llm/llm/src/index.ts` 提供 `ctx.llm.stream`，处理模型适配和终止状态。不能通过自行构造 HTTP 请求绕过 DSH。

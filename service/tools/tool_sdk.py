@@ -180,7 +180,13 @@ class ToolSDK:
             from service.tools.tool_execution import execution
             scheduler = execution(self.loop)
             scheduler.reserve()
-            self.jobs = ToolJobs(values, owner=self.owner)
+            # A reservation must never outlive this call: a leak would permanently
+            # consume the 32-slot admission budget of the whole shared service.
+            try:
+                self.jobs = ToolJobs(values, owner=self.owner)
+            except BaseException:
+                scheduler.release()
+                raise
             self._cancel_pending = False
             async def execute():
                 try:
@@ -200,7 +206,12 @@ class ToolSDK:
                 finally:
                     scheduler.release()
                     self.actions.release_ai_inputs()
-            self.task = self.loop.create_task(execute()) if self.loop is current else asyncio.run_coroutine_threadsafe(execute(), self.loop)
+            try:
+                self.task = self.loop.create_task(execute()) if self.loop is current else asyncio.run_coroutine_threadsafe(execute(), self.loop)
+            except BaseException:
+                scheduler.release()
+                self.jobs = None
+                raise
         return self.status()
 
     def host_request(self, request):

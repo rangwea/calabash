@@ -57,34 +57,25 @@ def setup_logger():
         diagnose=False,
     )
 
-    # 创建日志目录
-    LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # 文件输出 - 所有应用日志
-    logger.add(
-        LOG_BASE_DIR / "app.log",
-        format=_FILE_FORMAT,
-        level="DEBUG",
-        rotation="10 MB",
-        retention="30 days",
-        compression="zip",
-        encoding="utf-8",
-        backtrace=False,
-        diagnose=False,
-    )
-
-    # 文件输出 - 错误日志
-    logger.add(
-        LOG_BASE_DIR / "error.log",
-        format=_FILE_FORMAT,
-        level="ERROR",
-        rotation="10 MB",
-        retention="30 days",
-        compression="zip",
-        encoding="utf-8",
-        backtrace=False,
-        diagnose=False,
-    )
+    # File sinks are best effort: the app must still start when the home directory
+    # is read-only (locked-down CI, read-only install, restricted sandbox). Losing
+    # local file logs is recoverable; refusing to import this module is not.
+    for name, level in (("app.log", "DEBUG"), ("error.log", "ERROR")):
+        try:
+            LOG_BASE_DIR.mkdir(parents=True, exist_ok=True)
+            logger.add(
+                LOG_BASE_DIR / name,
+                format=_FILE_FORMAT,
+                level=level,
+                rotation="10 MB",
+                retention="30 days",
+                compression="zip",
+                encoding="utf-8",
+                backtrace=False,
+                diagnose=False,
+            )
+        except OSError:
+            logger.warning("Local log file {} is unavailable; continuing with console output", name)
 
     return logger
 

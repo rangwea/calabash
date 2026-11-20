@@ -27,3 +27,4 @@ files/*.zip
 
 # JavaScript dependencies
 node_modules/
+.pnpm-store/

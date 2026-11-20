@@ -226,10 +226,13 @@ def list_tools():
 
 def export_zip(project, name):
     data = read(project, name)
+    # Published source holds restored credentials: authoring replaces real secrets
+    # with placeholders only in memory. A shared ZIP must never carry them.
+    from service.tools.source_credentials import strip_credentials
     stream = io.BytesIO()
     with ZipFile(stream, 'w', ZIP_DEFLATED) as archive:
         for path, content in data['files'].items():
-            archive.writestr(path, content)
+            archive.writestr(path, strip_credentials(content) if path.endswith(('.py', '.tsx', '.ts', '.json', '.css')) else content)
     return stream.getvalue()
 
 

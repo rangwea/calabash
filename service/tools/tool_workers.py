@@ -321,6 +321,9 @@ class ToolWorkers:
             await worker.stop()
             self.items.pop(key, None)
             self.detached.discard(key)
+            # Keep the identity of a closed instance so a later probe can report
+            # "unavailable" instead of "never opened"; open() clears it again.
+            self.failures[key] = worker
 
     async def detach(self, project, name, chat_id):
         key = self.key(project, name, chat_id)

@@ -9,7 +9,12 @@ from core.local_paths import app_dir
 
 
 @contextmanager
-def database():
+def database(*, write=True):
+    """Writers serialize on BEGIN IMMEDIATE; readers never block them.
+
+    Result listings run while batches write, so a reader must not take the
+    database-wide write lock just to list history.
+    """
     root = app_dir()
     root.mkdir(parents=True, exist_ok=True)
     path = root / "tool-results.sqlite"
@@ -18,8 +23,10 @@ def database():
     with closing(sqlite3.connect(path, timeout=15)) as db, db:
         if os.name != "nt":
             path.chmod(0o600)
+        # WAL keeps the readers below from starving the writer and vice versa.
+        db.execute("PRAGMA journal_mode=WAL")
         initialize(db)
-        db.execute("BEGIN IMMEDIATE")
+        db.execute("BEGIN IMMEDIATE" if write else "BEGIN")
         yield db
 
 
@@ -59,7 +66,7 @@ def records(owner, *, file_id=None, limit=None):
     if limit is not None:
         query += " LIMIT ?"
         parameters.append(max(1, int(limit)))
-    with database() as db:
+    with database(write=False) as db:
         cursor = db.execute(query, parameters)
         columns = [item[0] for item in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]

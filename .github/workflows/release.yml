@@ -65,6 +65,8 @@ jobs:
         run: npm run electron:prepare
       - name: Build Electron sources
         run: npm run electron:build
+      - name: Lint Python sources
+        run: uv run --frozen --group packaging ruff check .
       - name: Test Python services
         run: uv run --frozen python -m unittest discover -s tests
       - name: Test host and synthetic Agent

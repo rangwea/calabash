@@ -1,7 +1,7 @@
 {
   "name": "calabash-desktop",
   "productName": "Calabash",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "license": "Elastic-2.0",
   "keywords": [
@@ -22,7 +22,7 @@
     "electron:prepare": "node scripts/harness.mjs prepare",
     "electron:build": "node scripts/harness.mjs build",
     "electron:dev": "node scripts/harness.mjs start",
-    "test:harness": "node --test tests/harness_launcher.test.mjs && node electron/tests/host-state.test.mjs && node electron/tests/bridge-exit.test.mjs && node electron/tests/extension-defaults.test.mjs && node electron/tests/ui-styles.test.mjs && node electron/tests/action-mentions.test.mjs && node electron/tests/agent-roundtrip.mjs && node electron/tests/ai-actions.test.mjs && node electron/tests/ai-interaction.test.mjs && node electron/tests/preview-discovery.test.mjs && node tests/preview_evidence.test.mjs && node tests/tool_runtime_guard.test.mjs && node electron/tests/ai-roundtrip.mjs",
+    "test:harness": "node --test tests/harness_launcher.test.mjs && node electron/tests/host-state.test.mjs && node electron/tests/bridge-exit.test.mjs && node electron/tests/bridge-limits.test.mjs && node electron/tests/extension-defaults.test.mjs && node electron/tests/ui-styles.test.mjs && node electron/tests/action-mentions.test.mjs && node electron/tests/agent-roundtrip.mjs && node electron/tests/ai-actions.test.mjs && node electron/tests/ai-interaction.test.mjs && node electron/tests/preview-discovery.test.mjs && node tests/preview_evidence.test.mjs && node tests/frontend_probe.test.mjs && node tests/tool_runtime_guard.test.mjs && node electron/tests/ai-roundtrip.mjs",
     "dev": "npm run electron:dev",
     "build": "npm run electron:build",
     "test:python": "python3 -m unittest discover -s tests",

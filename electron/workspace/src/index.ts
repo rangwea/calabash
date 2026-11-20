@@ -147,12 +147,18 @@ export default class CalabashWorkspace extends TypertRemoteService {
     const allowed = ['tools.open', 'tools.close', 'workspace.preview', 'workspace.publish', 'library.action']
     if (!allowed.includes(operation) || operation === 'library.action' && params.operation !== 'import') throw new Error('Unsupported task')
     const resource = params.project && params.name ? `tool:${String(params.project)}/${String(params.name)}` : params.session ? `session:${String(params.session)}` : 'library:import'
-    return this.tasks.submit(operation, params, resource, `ui:${requestId}`, () => this.bridge.call(operation, params))
+    return this.tasks.submit(operation, params, resource, `ui:${requestId}`, () => this.bridge.call(operation, params), this.callerScope(params))
+  }
+  /** A tool result is readable only by the tool/session that asked for it. */
+  private callerScope(params: Record<string, unknown>): string {
+    if (typeof params.session === 'string') return `session:${params.session}`
+    if (typeof params.project === 'string' && typeof params.name === 'string') return `tool:${params.project}/${params.name}`
+    return 'library:import'
   }
   @Remote
   async listTasks(): Promise<string> { return JSON.stringify(this.tasks.list()) }
   @Remote
-  async task(id: string): Promise<string> { return JSON.stringify(this.tasks.inspect(id)) }
+  async task(id: string, scope: string): Promise<string> { return JSON.stringify(this.tasks.inspect(id, scope)) }
   /** Host quit inspection includes long-running Python tool jobs. */
   async activeTasks(): Promise<boolean> { if (this.tasks.busy) return true; if (!this.bridge.started) return false; return await this.bridge.call('app.active_tasks', {}) === true }
   /** Read-only capability discovery; no execution or user data. */

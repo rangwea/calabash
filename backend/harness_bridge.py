@@ -115,6 +115,7 @@ async def serve(reader=None, writer=None):
     monitor = asyncio.create_task(workers.monitor())
     pending = set()
     locks = {}
+    draining = False
 
     def resource(method, params):
         if method == 'agent.call':
@@ -168,8 +169,15 @@ async def serve(reader=None, writer=None):
                 writer.flush()
                 continue
             if request['method'] == 'app.prepare_exit':
+                # Stop admission before draining: anything read after this point must not
+                # start new work, or the drain below can never converge with the host.
+                draining = True
                 await asyncio.gather(*pending, return_exceptions=True)
                 await respond(request)
+                continue
+            if draining:
+                writer.write(json.dumps({'id': request['id'], 'error': {'code': 'busy', 'message': 'Calabash is closing'}}) + '\n')
+                writer.flush()
                 continue
             if len(pending) >= 32:
                 writer.write(json.dumps({'id': request['id'], 'error': {'code': 'busy', 'message': 'Please retry shortly'}}) + '\n')
