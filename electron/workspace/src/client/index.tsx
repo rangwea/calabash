@@ -21,6 +21,7 @@ import { inspectArchive, exportArchive } from './library-transfer.ts'
 import { AIConsent } from './ai-consent.tsx'
 import { Schedules, useSchedules, toolKey, scheduleTime, scheduleStatus } from './schedules.tsx'
 import { PreviewDiscovery } from './preview-discovery.ts'
+import { registerActionMentions } from './action-mentions.ts'
 import { registerUIStyles } from './ui-styles.tsx'
 import type { UIPreset, ToolEntry, Preview, ToolTarget } from '../types.ts'
 declare module '@deepseek-ai/dsh-api-session-controller/client' { interface SessionReferenceSourceMap { calabashRepair: unknown } }
@@ -67,6 +68,7 @@ function install(ctx: Context): void {
   const library = async (action: string, args: Record<string, unknown>) => action === 'import'
     ? operation('library.action', { operation: action, arguments: args })
     : unwrap(await wire.library(action, JSON.stringify(args)))
+  registerActionMentions(ctx, async () => JSON.parse(unwrap(await wire.actionCatalog())))
   registerUIStyles(ctx, async () => JSON.parse(unwrap(await wire.uiPresets())) as UIPreset[])
   const copy = (zh: string, en: string) => ctx.locale.getSnapshot().active === 'zh' ? zh : en
   function useCopy() {

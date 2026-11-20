@@ -16,6 +16,18 @@ class HarnessBridgeTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 await dispatch(method, params)
 
+    async def test_action_discovery_is_read_only_and_uses_registry(self):
+        from service.actions.models import AIParameters
+        from service.actions.registry import _ACTIONS, Action
+        extra = Action('synthetic.new', '合成能力', 'Synthetic action', AIParameters, {}, '合成说明', 'Synthetic description')
+        with patch('service.actions.registry._ACTIONS', (*_ACTIONS, extra)):
+            values = await dispatch('actions.catalog', {})
+        self.assertEqual(['ai.text', 'synthetic.new'], [value['id'] for value in values])
+        self.assertEqual('合成说明', values[-1]['description'])
+        self.assertFalse(any(key.endswith('_schema') for value in values for key in value))
+        with self.assertRaises(ValueError):
+            await dispatch('actions.catalog', {'execute': True})
+
     async def test_open_does_not_disclose_host_token(self):
         from types import SimpleNamespace
         with patch('backend.harness_bridge.workers.open', new=AsyncMock(return_value=SimpleNamespace(url='http://127.0.0.1:1234/', host_token='secret'))):

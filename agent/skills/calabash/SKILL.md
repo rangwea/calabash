@@ -9,6 +9,8 @@ description: 创建、修改和静态检查 Calabash 本地 React + Ant Design +
 
 ## 创建和修改
 
+用户消息中的 `@action:<id>` 是用户选择的可用能力引用。先用 read_action_api 查询该 id 的当前契约，在创建或修改工具时优先复用；引用本身不执行 Action、不授予文件权限或发送授权。不存在的能力说明不可用，不猜测接口。模型调用仍由宿主逐次确认。
+
 - 新工具读取 [React 工具契约](references/react-tool.md) 和 read_tool_template，基于唯一基础模板增量实现。必需文件是 tool.json、frontend/App.tsx（default export）和 backend/main.py（setup(app,sdk)）。使用 React Hooks、严格 TypeScript、Ant Design 和 Python FastAPI；复杂后在同一工具内按页面和业务模块拆文件，不要求用户拆成多个工具。
 - 工具内总结、分类、提取、翻译或生成文本使用 ai.text；通过 read_action_api 查询参数，按需读 [AI Action](references/ai-actions.md)。每次内容发送由宿主显示原文、模型并让用户确认；工具不保存密钥、不自行调用外部模型接口、不伪造确认。不要把聊天、附件或日志自动加入 text。
 - Excel、Word、PDF 等业务处理在工具后端直接使用内置办公库，按具体需求实现，不查询不存在的文件处理 Action。使用宿主提供的库与 ToolSDK，不安装依赖、自启服务或执行导入时业务。所有工具共用服务，后端模块使用相对导入，不修改 sys.path 或创建私有定时循环。文件处理按需读 [文件工作流](references/file-workflow.md)。JSON 接口先读 [接口契约](references/api-contract.md)，用 Pydantic 请求/响应模型和 operation_id 生成 @calabash/api，不手写重复类型。

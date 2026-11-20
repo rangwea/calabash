@@ -66,6 +66,9 @@ async def dispatch(method, params):
                 await workers.close(target['project'], target['name'], workspace.owner(params['session']))
             return {'closed': True}
         raise ValueError('Invalid workspace operation')
+    if method == 'actions.catalog' and not params:
+        from service.actions.registry import catalog
+        return catalog()['actions']
     if method == 'ui.presets' and not params:
         from core.i18n import translate
         from service.tools.ui_presets import catalog

@@ -10,3 +10,5 @@ export interface UIPreset { id: string; version: number; title: string; mention:
 export interface AIPending { worker_id:string; request_id:string; invocation_id:string; revision:string; digest:string; expires:number; task:string; title:string; characters:number; state:'pending'|'running'; project:string; name:string }
 export interface AIModel { key:string; label:string; provider:string; model:string }
 export interface AIReview { id:string; pending:AIPending; text:string; instruction:string; model:AIModel }
+
+export interface ActionSummary { id: string; title: string; title_en: string; description: string; description_en: string }

@@ -155,6 +155,9 @@ export default class CalabashWorkspace extends TypertRemoteService {
   async task(id: string): Promise<string> { return JSON.stringify(this.tasks.inspect(id)) }
   /** Host quit inspection includes long-running Python tool jobs. */
   async activeTasks(): Promise<boolean> { if (this.tasks.busy) return true; if (!this.bridge.started) return false; return await this.bridge.call('app.active_tasks', {}) === true }
+  /** Read-only capability discovery; no execution or user data. */
+  @Remote
+  async actionCatalog(): Promise<string> { return JSON.stringify(await this.bridge.call('actions.catalog', {})) }
   /** Bilingual style catalog for the composer; no user paths or source. */
   @Remote
   async uiPresets(): Promise<string> { return JSON.stringify(await this.bridge.call('ui.presets', {})) }

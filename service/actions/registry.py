@@ -11,10 +11,13 @@ class Action:
     title_en: str
     parameters: type
     limits: dict
+    description: str = ''
+    description_en: str = ''
 
     def describe(self):
         from service.actions.models import ActionResult, ActionRun, ActionSubmission
         return {'id': self.id, 'version': 1, 'protocol_version': 1, 'title': self.title, 'title_en': self.title_en,
+                'description': self.description, 'description_en': self.description_en,
                 'execution': 'background', 'cancellation': 'abort_before_result_write',
                 'permissions': ['send_confirmed_text_to_selected_model', 'create_result_files'],
                 'network': 'user_selected_model', 'overwrites_inputs': False,
@@ -25,7 +28,9 @@ class Action:
 
 _ACTIONS = (
     Action('ai.text', 'AI 文本处理', 'AI text processing', AIParameters,
-           {'input_characters': 20000, 'output_characters': 32000, 'confirmation': 'each_request', 'model_tools': False, 'batch_requests': 1, 'max_output_tokens': 2048}),
+           {'input_characters': 20000, 'output_characters': 32000, 'confirmation': 'each_request', 'model_tools': False, 'batch_requests': 1, 'max_output_tokens': 2048},
+           '总结、分类、提取、翻译或生成文本；发送内容前需要确认。',
+           'Summarize, classify, extract, translate or generate text; confirm before sending.'),
 )
 
 
