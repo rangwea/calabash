@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.stdio_reader import control_reader
+from backend.stdio_reader import PipeReader, control_reader
 
 
 class ControlReaderTests(unittest.TestCase):
@@ -19,23 +19,32 @@ class ControlReaderTests(unittest.TestCase):
                 self.assertIs(reader, original)
             self.assertFalse(original.closed)
 
-    def test_windows_uses_private_descriptor_and_preserves_framing(self):
-        with tempfile.TemporaryFile() as original, patch('backend.stdio_reader.sys.platform', 'win32'):
-            original.write(b'first\nsecond\npartial')
-            original.seek(0)
+    def test_windows_selects_native_reader_without_closing_input(self):
+        with tempfile.TemporaryFile() as original, patch('backend.stdio_reader.sys.platform', 'win32'), patch('backend.stdio_reader.native_reader') as native:
             with control_reader(original) as reader:
-                self.assertNotEqual(reader.fileno(), original.fileno())
-                self.assertFalse(os.get_inheritable(reader.fileno()))
-                self.assertEqual(reader.readline(20), b'first\n')
-                self.assertEqual(reader.readline(20), b'second\n')
-                self.assertEqual(reader.readline(20), b'partial')
-                self.assertEqual(reader.readline(20), b'')
-            self.assertTrue(reader.closed)
+                self.assertIs(reader, native.return_value)
+                native.assert_called_once_with(original)
             self.assertFalse(original.closed)
 
+    def test_chunked_frames_limits_and_partial_eof(self):
+        chunks = iter([b'first\nsec', b'ond\npartial', b''])
+        reader = PipeReader(lambda size: next(chunks))
+        self.assertEqual(reader.readline(20), b'first\n')
+        self.assertEqual(reader.readline(20), b'second\n')
+        self.assertEqual(reader.readline(20), b'partial')
+        # A persistent byte source returns EOF repeatedly.
+        reader.read = lambda size: b''
+        self.assertEqual(reader.readline(20), b'')
+        reader = PipeReader(lambda size: b'x' * size)
+        self.assertEqual(reader.readline(5), b'xxxxx')
+        self.assertEqual(len(reader.pending), 0)
+        with self.assertRaises(ValueError):
+            reader.readline(0)
+
+    @unittest.skipUnless(sys.platform == 'win32', 'Native Windows pipe')
     def test_private_pipe_handles_split_frames_and_eof(self):
         read_fd, write_fd = os.pipe()
-        with os.fdopen(read_fd, 'rb') as original, patch('backend.stdio_reader.sys.platform', 'win32'):
+        with os.fdopen(read_fd, 'rb') as original:
             def write():
                 with os.fdopen(write_fd, 'wb', buffering=0) as writer:
                     writer.write(b'{"id":')
