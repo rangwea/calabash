@@ -9,7 +9,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-526b80?style=flat-square" alt="License: Elastic License 2.0"></a>
   <a href="https://github.com/rangwea/calabash/actions/workflows/release.yml"><img src="https://github.com/rangwea/calabash/actions/workflows/release.yml/badge.svg" alt="Desktop builds"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/Python-3.13%2B-3776ab?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.13 or newer"></a>
-  <a href="electron/README.md"><img src="https://img.shields.io/badge/Electron-DSH-47848f?style=flat-square&amp;logo=electron&amp;logoColor=white" alt="Electron + DSH"></a>
+  <a href="electron/README.md"><img src="https://img.shields.io/badge/Electron-47848f?style=flat-square&amp;logo=electron&amp;logoColor=white" alt="Electron desktop shell"></a>
+  <a href="electron/harness.lock.json"><img src="https://img.shields.io/badge/DSH-0.2.2--rc.1-4d6bfe?style=flat-square" alt="DeepSeek Harness version"></a>
 </p>
 
 **Everyone should be able to create their own app.**
