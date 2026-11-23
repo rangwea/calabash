@@ -106,102 +106,103 @@ DESIGNS = {
             "panel_note": "192 rows · 4 regions",
         },
     },
-    "customers": {
+    "video": {
         "zh": {
-            "title": "客户管理",
-            "button": "导出客户",
-            "tabs": ("全部客户", "跟进中"),
-            "columns": ("客户", "联系人", "阶段", "最近跟进"),
+            "title": "视频剪裁",
+            "button": "导出片段",
+            "tabs": ("剪裁", "媒体信息"),
+            "columns": ("文件", "时长", "编码", "状态"),
             "rows": [
-                ("远山科技", "陈女士", "报价", "今天", True),
-                ("衡宇材料", "刘先生", "接洽", "昨天", False),
-                ("清和设计", "王女士", "成单", "2 天前", False),
-                ("北辰物流", "赵先生", "报价", "3 天前", False),
-                ("和风餐饮", "周女士", "接洽", "上周", False),
+                ("interview-01.mp4", "12:04", "H.264", "已选择", True),
+                ("lecture-clip.mp4", "23:15", "H.264", "可选", False),
+                ("meeting-raw.mp4", "41:08", "H.264", "可选", False),
+                ("", "", "", "", False),
+                ("", "", "", "", False),
             ],
-            "panel": "销售漏斗",
-            "panel_note": "接洽 12 · 报价 7 · 成单 3",
+            "panel": "起点 00:32 · 终点 00:44",
+            "panel_note": "导出为新文件 · 原视频保留",
         },
         "en": {
-            "title": "Customer workspace",
-            "button": "Export",
-            "tabs": ("All customers", "In progress"),
-            "columns": ("Customer", "Contact", "Stage", "Last touch"),
-            "rows": [
-                ("Yuanshan Tech", "Ms. Chen", "Quoted", "Today", True),
-                ("Hengyu Materials", "Mr. Liu", "Contacted", "Yesterday", False),
-                ("Qinghe Design", "Ms. Wang", "Won", "2 days ago", False),
-                ("Beichen Logistics", "Mr. Zhao", "Quoted", "3 days ago", False),
-                ("Hefeng Catering", "Ms. Zhou", "Contacted", "Last week", False),
-            ],
-            "panel": "Pipeline",
-            "panel_note": "Contacted 12 · Quoted 7 · Won 3",
-        },
-    },
-    "documents": {
-        "zh": {
-            "title": "PDF 整理",
-            "button": "生成 PDF",
-            "tabs": ("文件顺序", "页码范围"),
-            "columns": ("文件", "页数", "已选", "状态"),
-            "rows": [
-                ("Project-brief.pdf", "2", "1-2", "待合并", False),
-                ("Budget-plan.pdf", "2", "1", "待合并", False),
-                ("Meeting-notes.pdf", "2", "2", "待合并", False),
-                ("Signature.pdf", "1", "1", "待合并", False),
-                ("", "", "", "", False),
-            ],
-            "panel": "共 7 页",
-            "panel_note": "输出为新文件，原文件不改动",
-        },
-        "en": {
-            "title": "PDF workspace",
-            "button": "Build PDF",
-            "tabs": ("File order", "Page ranges"),
-            "columns": ("File", "Pages", "Selected", "State"),
-            "rows": [
-                ("Project-brief.pdf", "2", "1-2", "Pending", False),
-                ("Budget-plan.pdf", "2", "1", "Pending", False),
-                ("Meeting-notes.pdf", "2", "2", "Pending", False),
-                ("Signature.pdf", "1", "1", "Pending", False),
-                ("", "", "", "", False),
-            ],
-            "panel": "7 pages total",
-            "panel_note": "New file only; originals untouched",
-        },
-    },
-    "media": {
-        "zh": {
-            "title": "音视频处理",
-            "button": "批量提取",
-            "tabs": ("提取音频", "媒体信息"),
-            "columns": ("文件", "时长", "格式", "状态"),
-            "rows": [
-                ("interview-01.mp4", "12:04", "H.264", "就绪", False),
-                ("interview-02.mp4", "08:37", "H.264", "就绪", False),
-                ("lecture-clip.mp4", "23:15", "H.264", "就绪", False),
-                ("", "", "", "", False),
-                ("", "", "", "", False),
-            ],
-            "panel": "区间 00:30 - 02:15",
-            "panel_note": "输出 FLAC · 保留原视频",
-        },
-        "en": {
-            "title": "Media workspace",
-            "button": "Extract",
-            "tabs": ("Extract audio", "Metadata"),
+            "title": "Video trimming",
+            "button": "Export clip",
+            "tabs": ("Trim", "Metadata"),
             "columns": ("File", "Length", "Codec", "State"),
             "rows": [
-                ("interview-01.mp4", "12:04", "H.264", "Ready", False),
-                ("interview-02.mp4", "08:37", "H.264", "Ready", False),
-                ("lecture-clip.mp4", "23:15", "H.264", "Ready", False),
+                ("interview-01.mp4", "12:04", "H.264", "Selected", True),
+                ("lecture-clip.mp4", "23:15", "H.264", "Available", False),
+                ("meeting-raw.mp4", "41:08", "H.264", "Available", False),
                 ("", "", "", "", False),
                 ("", "", "", "", False),
             ],
-            "panel": "Range 00:30 - 02:15",
-            "panel_note": "FLAC output · originals kept",
+            "panel": "Start 00:32 · End 00:44",
+            "panel_note": "New file · original kept",
         },
     },
+    "watermark": {
+        "zh": {
+            "title": "图片水印",
+            "button": "批量导出",
+            "tabs": ("水印设置", "输出格式"),
+            "columns": ("图片", "尺寸", "格式", "状态"),
+            "rows": [
+                ("product-01.jpg", "1920×1280", "JPEG", "就绪", True),
+                ("product-02.jpg", "1920×1280", "JPEG", "就绪", False),
+                ("product-03.jpg", "1600×1600", "JPEG", "就绪", False),
+                ("lookbook.png", "2400×1600", "PNG", "就绪", False),
+                ("", "", "", "", False),
+            ],
+            "panel": "文字：仅供内部评审 · 45° · 30%",
+            "panel_note": "输出为新图 · 原图不改动",
+        },
+        "en": {
+            "title": "Image watermarks",
+            "button": "Export batch",
+            "tabs": ("Watermark", "Output format"),
+            "columns": ("Image", "Size", "Format", "State"),
+            "rows": [
+                ("product-01.jpg", "1920×1280", "JPEG", "Ready", True),
+                ("product-02.jpg", "1920×1280", "JPEG", "Ready", False),
+                ("product-03.jpg", "1600×1600", "JPEG", "Ready", False),
+                ("lookbook.png", "2400×1600", "PNG", "Ready", False),
+                ("", "", "", "", False),
+            ],
+            "panel": "Text: Internal review · 45° · 30%",
+            "panel_note": "New images · originals untouched",
+        },
+    },
+    "todo": {
+        "zh": {
+            "title": "AI 待办",
+            "button": "添加",
+            "tabs": ("全部", "今天"),
+            "columns": ("待办", "建议", "截止", "状态"),
+            "rows": [
+                ("整理本周会议要点", "拆成 3 个具体任务", "今天", "进行中", True),
+                ("准备客户演示材料", "先列大纲再补图", "明天", "待开始", False),
+                ("归档上月合同", "按客户名排序", "本周", "待开始", False),
+                ("更新报价单模板", "沿用上季度格式", "本周", "已完成", False),
+                ("", "", "", "", False),
+            ],
+            "panel": "一句话创建",
+            "panel_note": "AI 给出整理建议 · 保存在本机",
+        },
+        "en": {
+            "title": "AI to-do",
+            "button": "Add",
+            "tabs": ("All", "Today"),
+            "columns": ("Task", "Suggestion", "Due", "State"),
+            "rows": [
+                ("Summarise this week's meetings", "Split into 3 concrete tasks", "Today", "Doing", True),
+                ("Prepare the client demo", "Outline first, then visuals", "Tomorrow", "To do", False),
+                ("Archive last month's contracts", "Sort by customer name", "This week", "To do", False),
+                ("Update the quote template", "Reuse last quarter's format", "This week", "Done", False),
+                ("", "", "", "", False),
+            ],
+            "panel": "Create from one sentence",
+            "panel_note": "AI suggests · stored locally",
+        },
+    },
+
 }
 
 BAR_VALUES = [0.42, 0.58, 0.36, 0.71, 0.54, 0.63, 0.48]
@@ -259,24 +260,25 @@ def compose(destination: Path, demo: str = "ledger", language: str = "zh") -> No
     draw.text((34, 346), copy["panel"], fill="#7c8a92", font=font(12))
     draw.text((WIDTH - 34, 346), copy["panel_note"], fill="#7c8a92", font=font(12), anchor="ra")
 
-    if demo == "documents":
-        # A page strip reads more honestly than a bar chart for a PDF assembly.
-        pages = 7
-        gap = 6
-        cell = (WIDTH - 68 - (pages - 1) * gap) / pages
-        for index in range(pages):
-            left = 34 + index * (cell + gap)
-            shade = BAR_ON if index in (0, 1, 3) else BAR
-            draw.rounded_rectangle((left, 372, left + cell, 452), radius=3, fill=shade)
-    elif demo == "media":
-        # A waveform stands in for an audio interval selection.
-        heights = [14, 26, 18, 34, 22, 40, 30, 46, 24, 36, 16, 28, 20, 32, 12]
-        gap = 5
-        cell = (WIDTH - 68 - (len(heights) - 1) * gap) / len(heights)
-        for index, height in enumerate(heights):
-            left = 34 + index * (cell + gap)
-            shade = BAR_ON if 4 <= index <= 9 else BAR
-            draw.rounded_rectangle((left, 452 - height * 1.8, left + cell, 452), radius=2, fill=shade)
+    if demo == "video":
+        # A timeline strip with an in/out range marked reads better than a bar chart.
+        track = (34, 408, WIDTH - 34, 424)
+        draw.rounded_rectangle(track, radius=8, fill=BAR)
+        draw.rounded_rectangle((track[0], track[1], track[0] + 120, track[3]), radius=8, fill=BAR_ON)
+        draw.rounded_rectangle((track[0] + 196, track[1], track[0] + 268, track[3]), radius=8, fill=BAR_ON)
+        for fraction in (0, 0.25, 0.5, 0.75, 1):
+            x = track[0] + fraction * (track[2] - track[0])
+            draw.line((x, track[3] + 6, x, track[3] + 12), fill=RULE, width=1)
+        draw.text((34, 440), "00:00", fill=MUTED, font=font(10))
+        draw.text(((WIDTH) / 2, 440), "06:00", fill=MUTED, font=font(10), anchor="ma")
+        draw.text((WIDTH - 34, 440), "12:04", fill=MUTED, font=font(10), anchor="ra")
+    elif demo == "watermark":
+        # Tiled marks stand in for a repeating watermark preview.
+        for row in range(3):
+            for column in range(6):
+                x = 52 + column * 108
+                y = 376 + row * 34
+                draw.text((x, y), "SAMPLE", fill="#c8d6d0", font=font(11))
     else:
         slot = (WIDTH - 68 - 34 - 6 * 9) / len(BAR_VALUES)
         highlight = 3 if demo == "ledger" else 0

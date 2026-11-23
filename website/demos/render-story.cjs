@@ -14,24 +14,24 @@ if (!output) throw Error('Usage: node render-story.cjs <output-directory>');
 // [title, prompt] per language, in the order the frames are generated.
 const stories = {
   ledger: {
-    zh: ['个人账本', '做一个记账工具：记录收支、分类筛选，查看月度趋势和预算，支持导出账本。'],
-    en: ['Personal ledger', 'Build a ledger with income and expenses, category filters, monthly trends, budgets and CSV export.'],
+    zh: ['个人记账', '做一个记账工具：记录收支、分类筛选，查看月度趋势和预算，支持导出账本。'],
+    en: ['Personal finance', 'Build a ledger with income and expenses, category filters, monthly trends, budgets and CSV export.'],
   },
   excel: {
-    zh: ['销售统计', '创建 Excel 销售统计工具：读取工作簿，按地区或产品汇总，用图表展示，导出统计结果。'],
-    en: ['Sales summary', 'Create an Excel sales tool: read a workbook, summarize by region or product, show charts and export the results.'],
+    zh: ['Excel 统计', '创建一个 Excel 统计工具：读取工作簿，按地区或产品汇总，用图表展示，导出统计结果。'],
+    en: ['Excel analytics', 'Create an Excel tool: read a workbook, summarize by region or product, show charts and export the results.'],
   },
-  customers: {
-    zh: ['客户管理', '帮我做一个客户管理工具：搜索客户、管理销售阶段、保存跟进记录，并导出客户列表。'],
-    en: ['Customer workspace', 'Build a customer workspace with search, sales stages, saved follow-up notes and customer list export.'],
+  video: {
+    zh: ['视频剪裁', '做一个视频剪裁工具：选择本地视频，设置起止时间，剪出需要的片段并导出新文件。'],
+    en: ['Video trimming', 'Build a trimming tool: choose a local video, set start and end, cut the segment and export a new file.'],
   },
-  documents: {
-    zh: ['PDF 整理', '创建 PDF 整理工具：预览页面、调整文件顺序、选择页码，再合并成一份新的 PDF。'],
-    en: ['PDF workspace', 'Create a PDF workspace: preview pages, reorder files, select page ranges and merge them into a new PDF.'],
+  watermark: {
+    zh: ['图片水印', '做一个图片水印工具：批量添加重复文字水印，可调颜色、透明度、角度和间距。'],
+    en: ['Image watermarks', 'Build a watermark tool: add repeating text to a batch of images, with colour, opacity, angle and spacing controls.'],
   },
-  media: {
-    zh: ['音视频处理', '做一个音视频工具：预览视频，设置起止时间，批量提取 FLAC 音频，保留原文件。'],
-    en: ['Media workspace', 'Build a media tool: preview videos, set a time interval and batch-extract FLAC audio without changing the originals.'],
+  todo: {
+    zh: ['AI 待办', '做一个 AI 待办工具：输入一句话创建任务，给出整理建议，支持完成、筛选与搜索。'],
+    en: ['AI to-do', 'Build an AI to-do tool: create a task from one sentence, suggest how to organise it, and support completion, filters and search.'],
   },
 };
 

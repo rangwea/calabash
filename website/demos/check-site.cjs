@@ -24,7 +24,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '/Applications/Cha
         } else {
           assert.ok(description.y >= panel.y + panel.height, 'Mobile explanation must follow the GIF');
         }
-        for (const name of ['ledger', 'excel', 'customers', 'documents', 'media']) {
+        for (const name of ['ledger', 'excel', 'video', 'watermark', 'todo']) {
           await page.locator(`[data-demo="${name}"]`).click();
           await page.waitForFunction(() => { const i = document.querySelector('#demo-image'); return i.complete && i.naturalWidth > 0; });
           assert.match(await page.locator('#demo-image').getAttribute('src'), new RegExp(`${name}-${lang}\\.webp$`));
