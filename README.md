@@ -23,7 +23,7 @@ Calabash turns your ideas into interactive tools with AI—built for you, runnin
 
 ![Describe a request in chat, then preview and operate the resulting tool](website/assets/demos/ledger-en.gif)
 
-*The chat generation sequence is an illustration with accelerated waiting. Tool interactions are real recordings using synthetic data.*
+*The whole frame is an interface illustration, not a screen recording. The tool shown inside it is drawn too, not an actual run.*
 
 1. **Describe it.** Explain your inputs, requirements and intended result.
 2. **Try it.** Adjust parameters, inspect results and keep chatting to refine the tool.

@@ -19,12 +19,21 @@ see still posters until they explicitly play a demo.
 
 ## Re-record locally
 
-Record the current React desktop app using a disposable HOME and synthetic
-React/Python tool bundles. Never use the normal user HOME or real model credits.
-The previous server-side UI demonstration runner has been removed.
+The published demos are illustrations, not screen recordings. The tool panes
+are drawn by `demos/compose_preview.py`, and `demos/story.html` composes the
+chat shell around them. `demos/render-story.cjs` writes the frames and
+`demos/compose_gif.py` encodes `<demo>-<language>.gif` plus the poster webp.
 
-`demos/prepare.py` prepares synthetic files. `demos/record-story.cjs` and
-`demos/story.html` compose illustrated chat flows from captured tool frames;
-`demos/render_gifs.py` produces GIFs and posters. Keep generated recordings
-explicitly labeled as demonstrations, and verify actual tool interactions
-before replacing the published assets.
+```bash
+node demos/render-story.cjs ./out      # needs Playwright and Chrome
+```
+
+Recording the real desktop app again is still the goal. If you do, use a
+disposable HOME and synthetic tool bundles, never the normal user HOME or real
+model credits, and keep the result labeled as a demonstration. Replace the
+published assets only after checking the actual tool interactions.
+
+`demos/prepare.py` still prepares the synthetic input files, and
+`demos/record-story.cjs` composes illustrated chat flows from captured tool
+frames once real captures exist again. `demos/check-site.cjs` verifies the
+published page.
