@@ -1,5 +1,6 @@
 """Bounded control-pipe reads without holding Windows CRT descriptor locks."""
 import sys
+import time
 from contextlib import contextmanager
 
 
@@ -37,9 +38,27 @@ def native_reader(stream):
     read_file.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD,
                           ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
     read_file.restype = wintypes.BOOL
+    peek_pipe = kernel.PeekNamedPipe
+    peek_pipe.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD,
+                          ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD),
+                          ctypes.POINTER(wintypes.DWORD)]
+    peek_pipe.restype = wintypes.BOOL
     handle = msvcrt.get_osfhandle(stream.fileno())
 
     def read(size):
+        # Blocking ReadFile also participates in the Windows pipe/DLL stall.
+        # Only read bytes already present; there is exactly one pipe reader.
+        available = wintypes.DWORD()
+        while True:
+            if not peek_pipe(handle, None, 0, None, ctypes.byref(available), None):
+                error = ctypes.get_last_error()
+                if error in (38, 109):
+                    return b''
+                raise ctypes.WinError(error)
+            if available.value:
+                break
+            time.sleep(.01)
+        size = min(size, available.value)
         buffer = ctypes.create_string_buffer(size)
         count = wintypes.DWORD()
         if not read_file(handle, buffer, size, ctypes.byref(count), None):
@@ -55,7 +74,8 @@ def native_reader(stream):
 @contextmanager
 def control_reader(stream):
     # Even a duplicated fd still enters the CRT read path, which can deadlock
-    # NumPy/OpenBLAS DLL initialization while it inspects CRT handles. ReadFile
-    # releases the GIL without taking those locks; libraries remain lazy-loaded.
+    # NumPy/OpenBLAS DLL initialization while it inspects standard handles.
+    # Native availability checks avoid a long-lived blocked pipe read entirely;
+    # libraries remain lazy-loaded.
     # This handle is borrowed: only the host owns pipe closure and EOF.
     yield native_reader(stream) if sys.platform == 'win32' else stream

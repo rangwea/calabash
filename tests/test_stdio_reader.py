@@ -7,9 +7,10 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend.stdio_reader import PipeReader, control_reader
+from backend.stdio_reader import PipeReader, control_reader, native_reader
 
 
 class ControlReaderTests(unittest.TestCase):
@@ -40,6 +41,38 @@ class ControlReaderTests(unittest.TestCase):
         self.assertEqual(len(reader.pending), 0)
         with self.assertRaises(ValueError):
             reader.readline(0)
+
+    def test_native_read_waits_for_available_bytes_and_handles_disconnect(self):
+        class Function:
+            def __init__(self, call):
+                self.call = call
+
+            def __call__(self, *args):
+                return self.call(*args)
+
+        counts = iter([0, 0, 3, None])
+        pauses, sizes = [], []
+
+        def peek(handle, buffer, size, read, available, left):
+            count = next(counts)
+            if count is None:
+                return False
+            available._obj.value = count
+            return True
+
+        def read(handle, buffer, size, count, overlapped):
+            sizes.append(size)
+            buffer.raw = b'a\nb'
+            count._obj.value = 3
+            return True
+
+        kernel = SimpleNamespace(PeekNamedPipe=Function(peek), ReadFile=Function(read))
+        with tempfile.TemporaryFile() as stream, patch.dict(sys.modules, {'msvcrt': SimpleNamespace(get_osfhandle=lambda fd: fd)}), patch('ctypes.WinDLL', return_value=kernel, create=True), patch('ctypes.get_last_error', return_value=109, create=True), patch('backend.stdio_reader.time.sleep', side_effect=pauses.append):
+            reader = native_reader(stream)
+            self.assertEqual(reader.readline(10), b'a\n')
+            self.assertEqual(reader.readline(10), b'b')
+        self.assertEqual(sizes, [3])
+        self.assertEqual(pauses, [.01, .01])
 
     @unittest.skipUnless(sys.platform == 'win32', 'Native Windows pipe')
     def test_private_pipe_handles_split_frames_and_eof(self):

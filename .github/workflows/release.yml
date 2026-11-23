@@ -61,6 +61,10 @@ jobs:
         run: |
           npm ci
           uv sync --frozen --group packaging
+      - name: Verify Windows lazy office imports
+        if: runner.os == 'Windows'
+        timeout-minutes: 2
+        run: uv run --frozen python -m unittest discover -s tests -p test_stdio_reader.py
       - name: Prepare pinned DSH
         run: npm run electron:prepare
       - name: Build Electron sources
