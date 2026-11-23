@@ -98,6 +98,22 @@ It might solve one small problem for one person. Or it might grow into something
 
 I want Calabash to help more people move from finding an app that works to making an app that fits. Fewer repeated prompts and fewer tokens spent are practical benefits. Giving more people a way to turn their ideas into software is the larger ambition.
 
+Something else keeps pushing me on this.
+
+I wanted to merge two PDFs—just two contracts joined into one, or a scan put back together with its signature page. The first answer I found was: install an office suite. Several gigabytes, a subscription I did not want, and pivot tables, mail merge, macros, a diagram tool—things I will never touch, all to turn two files into one.
+
+Then it kept happening. Cutting ten bad seconds out of a video meant a video editor with color grading, keying and multi-camera sync in its menus, when I only wanted ten seconds gone. Removing duplicate rows meant a spreadsheet app. Changing an image's format meant a converter. Renaming a batch of files meant a batch renamer, which turned out to want a runtime installed first.
+
+The shape was always the same: I needed one feature and was handed an entire program.
+
+This is not the software's fault. Software used to be expensive: a usable program took a team and months, so once you had built it you shipped more features, because a longer feature list was what sold it. Distribution was hard too—discs, installers, one release window—so if you could only ship once, you put in everything you could imagine. The bundle became the default shape. But a bundle was never what users asked for; it was what the economics produced.
+
+AI changed that economics. Building a tool for one specific task is now cheap: no roadmap to wait for, no product manager to persuade, no thousand users needed before it is worth making. Describe what should happen and the tool takes shape, with an interface you can click, running on your own computer.
+
+So Calabash ships no features. What it gives you is the ability to make them. To merge PDFs, there is a tool that merges PDFs; to cut ten seconds, there is a tool that cuts ten seconds. Keep it, and it is there next time.
+
+I do not intend to turn it into a universal toolbox, because that is the bundle in another form: a box holding a hundred features still makes you hunt through a hundred entries for the one you need, and still asks you to carry the size, updates and complexity of everything you never use.
+
 **I hope for an era of apps made by everyone—where anyone can be a creator of software, as well as a user.**
 
 Starting with an idea, a conversation and a tool of your own.
