@@ -13,8 +13,9 @@ def install_office_smoke(app, sdk):
             import sys
             def phase(name):
                 print("Synthetic office smoke: " + name, file=sys.stderr, flush=True)
-            phase("loading libraries")
+            phase("loading openpyxl")
             from openpyxl import Workbook, load_workbook
+            phase("openpyxl loaded; loading docx")
             from docx import Document
             phase("creating spreadsheet")
             spreadsheet = sdk.output_path('synthetic.xlsx')
@@ -33,7 +34,13 @@ def install_office_smoke(app, sdk):
             doc.save(document)
             phase("processing complete")
             return spreadsheet, document
-        spreadsheet, document = await sdk.io(process)
+        import faulthandler
+        # Synthetic acceptance only: never enable thread dumps for user tools.
+        faulthandler.dump_traceback_later(30, repeat=False)
+        try:
+            spreadsheet, document = await sdk.io(process)
+        finally:
+            faulthandler.cancel_dump_traceback_later()
         return {'excel': sdk.add_result(spreadsheet)['id'], 'word': sdk.add_result(document)['id']}
 '''
 

@@ -100,7 +100,14 @@ async def dispatch(method, params):
 
 
 async def serve(reader=None, writer=None):
-    reader = reader or sys.stdin.buffer
+    if reader is not None:
+        return await _serve(reader, writer)
+    from backend.stdio_reader import control_reader
+    with control_reader(sys.stdin.buffer) as control:
+        return await _serve(control, writer)
+
+
+async def _serve(reader, writer=None):
     original_stdout = sys.stdout
     if writer is None:
         writer = sys.stdout
