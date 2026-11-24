@@ -2,8 +2,17 @@
 
 Independent, buildless Chinese/English landing page and usage guide. Open
 `index.html` directly, or serve this directory with any static file server.
-No account, analytics, remote fonts, CDN scripts, or deployment configuration.
+No account, analytics, remote fonts, or CDN scripts.
 The site deliberately has no download button until a public release exists.
+
+## Deployment
+
+Public site: https://rangwea.github.io/calabash/
+
+`.github/workflows/pages.yml` deploys changes under `website/` pushed to `main`.
+It can also be run manually from GitHub Actions. Repository Settings → Pages
+must use **GitHub Actions** as its source. The workflow publishes the two HTML
+pages, CSS, JavaScript and `assets/`; recording scripts are excluded.
 
 ## Demonstrations
 
