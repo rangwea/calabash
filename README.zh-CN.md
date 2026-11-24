@@ -31,7 +31,7 @@ Calabash 借助 AI 把你的想法变成可交互的工具，为你而建，运�
 
 你可以从一个很小的想法开始。它不需要是宏大的产品，也不需要和别人一样。
 
-更多场景见[产品介绍](website/index.html)与[使用指南](website/guide.html)。演示中的工具是可创建的示例，不是 App 的固定功能边界。
+更多场景见[产品介绍](https://rangwea.github.io/calabash/)与[使用指南](https://rangwea.github.io/calabash/guide.html)。演示中的工具是可创建的示例，不是 App 的固定功能边界。
 
 ## 现在可以做什么
 
@@ -47,11 +47,11 @@ Calabash 借助 AI 把你的想法变成可交互的工具，为你而建，运�
 
 ## 开始使用
 
-Calabash 目前处于预览阶段，官网尚未提供公开下载地址；完成签名与公证后再开放下载。源码运行请参考[开发指南](CONTRIBUTING.zh-CN.md)。
+Calabash v1.3.1 预览版已发布。[前往 GitHub Releases 下载](https://github.com/rangwea/calabash/releases/latest)，根据设备选择 macOS Apple Silicon（arm64）、macOS Intel（x64）或 Windows x64 安装包。源码运行请参考[开发指南](CONTRIBUTING.zh-CN.md)。
 
 桌面安装包包含 Python 后端和内置运行库，最终用户不需要安装 Python 或 uv。首次使用需在设置中配置模型 API 和密钥，再选择模型开始对话；不需要 Calabash 账号。
 
-CI 在 macOS Apple Silicon、macOS Intel 与 Windows x64 三种原生环境构建并验收安装包，打版本标签后只创建草稿 Release，不会自动发布。开发者分发签名与 Apple 公证尚未完成，安装包暂不能公开下载。
+CI 在 macOS Apple Silicon、macOS Intel 与 Windows x64 三种原生环境构建并验收安装包，打版本标签后只创建草稿 Release，不会自动发布。已发布的预览安装包尚未完成开发者分发签名与 Apple 公证；不要为安装而关闭系统安全保护。
 
 ### 文件和数据
 

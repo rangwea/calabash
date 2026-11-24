@@ -31,7 +31,7 @@ Calabash turns your ideas into interactive tools with AI—built for you, runnin
 
 Start with a small idea. It does not need to become a large product, or look like anyone else’s.
 
-Explore the [product website](website/index.html?lang=en) and [guide](website/guide.html?lang=en). The demonstrations show examples you can create, rather than a fixed boundary for the app.
+Explore the [product website](https://rangwea.github.io/calabash/?lang=en) and [guide](https://rangwea.github.io/calabash/guide.html?lang=en). The demonstrations show examples you can create, rather than a fixed boundary for the app.
 
 ## What it offers today
 
@@ -47,11 +47,11 @@ What a particular tool can do depends on its requirements, generated code, selec
 
 ## Getting started
 
-Calabash is in preview and has no public download yet. The website will add a download entry once a signed, notarized release is available. For running from source, see the [contributor guide](CONTRIBUTING.md).
+Calabash v1.3.1 is available as a preview release. [Download from GitHub Releases](https://github.com/rangwea/calabash/releases/latest): choose the macOS Apple Silicon (arm64), macOS Intel (x64), or Windows x64 installer. For running from source, see the [contributor guide](CONTRIBUTING.md).
 
 Desktop packages include the Python backend and built-in runtime libraries. End users do not need Python or uv. Configure your model API and key in Settings, select a model, and start a conversation. No Calabash account is required.
 
-CI builds and verifies installers natively on macOS Apple Silicon, macOS Intel and Windows x64. A version tag only creates a draft release; nothing is published automatically. Developer distribution signing and Apple notarization are still missing, so no public download is offered yet.
+CI builds and verifies installers natively on macOS Apple Silicon, macOS Intel and Windows x64. A version tag only creates a draft release; nothing is published automatically. The published preview installers are not developer-signed or Apple-notarized. Do not disable system security protections to install them.
 
 ### Files and data
 

@@ -85,7 +85,7 @@ CI now validates Electron sources rather than generating obsolete installers. Ap
 
 `npm run electron:package` builds a self-contained Apple Silicon app and DMG. Python uses an onedir frozen executor; frontend compiler resources are separate. Packaging materializes the exact installed DSH package graph with internal relative links and registers Calabash as an installation-owned dependency. No installed path refers back to the source tree. `uv run python -m scripts.check_electron_package <App path>` verifies a synthetic draft, strict React build, preview and Python action with a temporary HOME/cwd and no Node in PATH. The generated DMG was also checked read-only before installation.
 
-The installed profile is ~/.calabash/harness, separate from harness-development; no model credentials are migrated automatically. Release signing/notarization and other installer platforms remain separate work. Calabash does not use upstream DSH automatic update or mandatory-policy feeds.
+The installed profile is ~/.calabash/harness, separate from harness-development; no model credentials are migrated automatically. Release signing/notarization remain separate work; CI verifies macOS arm64/x64 and Windows x64 installers. Calabash does not use upstream DSH automatic update or mandatory-policy feeds.
 
 ## Agent execution evidence
 
