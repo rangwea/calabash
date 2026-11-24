@@ -59,6 +59,11 @@ or a changed dialog breaks it loudly instead of silently producing a wrong
 picture. Frames per tool: `ledger` 7, `todo` 6, `watermark` 4, `excel` 4,
 `video` 3-4.
 
+Frames are captured with `deviceScaleFactor: 2` and re-encoded at 1480 px wide.
+The page renders the pane at about 740 CSS px, so that is 2 device pixels per
+CSS pixel at display size. Capturing at 1x and letting the browser shrink it is
+what made earlier GIFs look soft.
+
 Always use a disposable `HOME` with copied tool bundles and no `data.sqlite`.
 `~/.calabash` is the user's real profile: it holds real ledger entries, real
 todos and real CRM rows. Never capture against it, and never copy its databases

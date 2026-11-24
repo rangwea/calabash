@@ -7,7 +7,7 @@
     'hero.description':'From a simple request to a tool you can see, use and reuse.',
     'hero.download':'Download preview','hero.demos':'See what you can make','hero.guide':'Read the guide','hero.note':'Local tools · Your choice of model · No Calabash account',
     'demos.eyebrow':'01 / YOUR WORK, NOT A FIXED TEMPLATE','demos.title':'One desktop. Many possibilities.',
-    'demos.description':'Five everyday ideas.<br>Five real, usable workspaces.','demos.synthetic':'Real screen capture · Synthetic sample data',
+    'demos.description':'Five everyday ideas.<br>Five real, usable workspaces.',
     'demos.play':'Play demo','demos.pause':'Pause demo',
     'demo.ledger.tab':'Personal finance','demo.excel.tab':'Excel product copy','demo.video.tab':'Video trimming','demo.watermark.tab':'Image watermarks','demo.todo.tab':'AI to-do',
     'workflow.eyebrow':'02 / FROM AN IDEA TO A DAILY TOOL','workflow.title':'More than an answer.<br>A tool you can keep using.','workflow.link':'Make your first tool',

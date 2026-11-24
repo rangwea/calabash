@@ -251,8 +251,6 @@ button:disabled{cursor:default}
   font-weight:650;
   line-height:1}
 .toolbar-separator{color:#c2cbc5}
-.demo-data-label{font-size:9px;
-  color:#9aa59f}
 .demo-figure{width:100%;
   aspect-ratio:1120/760;
   position:relative;
@@ -586,9 +584,6 @@ button:disabled{cursor:default}
   height:15px}
 .demo-toolbar{height:34px;
   padding:0 10px}
-.demo-data-label{font-size:7px;
-  max-width:105px;
-  text-align:right;
   line-height:1.4}
 .demo-window-label{font-size:8px;
   gap:6px}
@@ -689,7 +684,6 @@ button:disabled{cursor:default}
 .demo-layout .demo-figure{height:min(460px,52svh);aspect-ratio:auto;margin:0}
 .demo-layout .demo-controls{justify-content:flex-end;min-height:36px;padding:4px 14px}
 .demo-layout .demo-toolbar{height:34px;padding:0 12px}
-.demo-layout .demo-data-label{max-width:48%;text-align:right;font-size:8px}
 .demo-layout .demo-explanation{display:flex;flex-direction:column;gap:20px;margin:0;min-width:0}
 .demo-layout .demo-explanation h3{font-size:23px;line-height:1.4}
 .demo-request-label{font-size:10px!important;letter-spacing:.06em;color:#749080!important;margin:0 0 9px}

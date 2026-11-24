@@ -8,6 +8,10 @@ const [url, outDir, recipe, fixtures] = process.argv.slice(2);
 if (!url || !outDir || !recipe) throw Error('Usage: record-real.cjs <url> <out-dir> <recipe> <fixtures>');
 
 const W = 1120, H = 760;
+// The site shows this pane at roughly 740 CSS px wide, so capture at 2x and let
+// the browser downscale: text and hairlines stay sharp instead of being
+// resampled away at capture time.
+const SCALE = 2;
 
 // Each recipe receives a `shot(name, ms)` callback and moves the real controls.
 const recipes = {
@@ -176,7 +180,7 @@ const recipes = {
   const frames = [];
   try {
     fs.mkdirSync(outDir, { recursive: true });
-    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: SCALE });
     const errors = [];
     page.on('pageerror', error => errors.push(String(error)));
     await page.goto(url, { waitUntil: 'load', timeout: 60000 });
