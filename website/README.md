@@ -3,7 +3,9 @@
 Independent, buildless Chinese/English landing page and usage guide. Open
 `index.html` directly, or serve this directory with any static file server.
 No account, analytics, remote fonts, or CDN scripts.
-The site deliberately has no download button until a public release exists.
+The download button points to the latest public GitHub Release. Preview installers
+are available for macOS arm64/x64 and Windows x64; developer signing and Apple
+notarization remain pending.
 
 ## Deployment
 
@@ -16,11 +18,20 @@ pages, CSS, JavaScript and `assets/`; recording scripts are excluded.
 
 ## Demonstrations
 
-The five recorded examples demonstrate SQLite, spreadsheet, PDF and media
-workflows using synthetic data. Their illustrated chat steps are scripted,
-not recorded model responses or generation-speed claims. Existing GIFs and
-posters show the earlier desktop UI; the current app uses React + Ant Design.
-These examples are not installed App modules.
+The five demo GIFs are real screen recordings of published tools running through
+the local shared runtime, driven by `demos/record-real.cjs`. Only the input files
+are synthetic: a generated workbook, generated JPEGs and a generated WebM clip.
+The tool UI, the backend calls and the resulting numbers are the app's own.
+
+What is *not* recorded is the chat shell around the tool. Each frame is the tool
+pane only, so the demo shows the finished workspace rather than a model
+conversation, and it makes no claim about generation speed. The tools are not
+installed App modules; each was built by AI in Calabash.
+
+Tool interfaces are Chinese-only because tool frontends hard-code their labels
+(`frontend/App.tsx` has no i18n). The `-en` assets are therefore the same
+capture as `-zh`; the surrounding page copy is what changes per language. Do not
+describe them as English-language recordings.
 
 Both languages have separate GIFs and WebP posters in `assets/demos`.
 Animations load only for the selected visible scene; reduced-motion users
@@ -28,21 +39,28 @@ see still posters until they explicitly play a demo.
 
 ## Re-record locally
 
-The published demos are illustrations, not screen recordings. The tool panes
-are drawn by `demos/compose_preview.py`, and `demos/story.html` composes the
-chat shell around them. `demos/render-story.cjs` writes the frames and
-`demos/compose_gif.py` encodes `<demo>-<language>.gif` plus the poster webp.
+Capture runs the real tool backend and drives the real page with Playwright:
 
 ```bash
-node demos/render-story.cjs ./out      # needs Playwright and Chrome
+# Serve tools so they can be opened by hand
+.venv/bin/python3 demos/serve-tools.py image_watermark/image_watermark
+
+# One still per tool
+.venv/bin/python3 demos/render-real.py ./out image_watermark/image_watermark
+
+# Multi-step frames, then encode
+.venv/bin/python3 demos/render-real.py ./out image_watermark/image_watermark \
+  --recipe watermark --fixtures ./fixtures
+.venv/bin/python3 demos/compose_gif.py ./out
 ```
 
-Recording the real desktop app again is still the goal. If you do, use a
-disposable HOME and synthetic tool bundles, never the normal user HOME or real
-model credits, and keep the result labeled as a demonstration. Replace the
-published assets only after checking the actual tool interactions.
+Each recipe in `demos/record-real.cjs` moves real controls, so a renamed field
+or a changed dialog breaks it loudly instead of silently producing a wrong
+picture. Frames per tool: `ledger` 7, `todo` 6, `watermark` 4, `excel` 4,
+`video` 3-4.
 
-`demos/prepare.py` still prepares the synthetic input files, and
-`demos/record-story.cjs` composes illustrated chat flows from captured tool
-frames once real captures exist again. `demos/check-site.cjs` verifies the
-published page.
+Always use a disposable `HOME` with copied tool bundles and no `data.sqlite`.
+`~/.calabash` is the user's real profile: it holds real ledger entries, real
+todos and real CRM rows. Never capture against it, and never copy its databases
+into the captured bundle.
+

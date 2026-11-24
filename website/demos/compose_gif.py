@@ -1,9 +1,9 @@
-"""Encode the illustrated frames into per-demo GIFs and poster stills.
+"""Encode recorded frames into per-demo GIFs and poster stills.
 
-Reads frames written by render-story.cjs. Each directory is named
+Reads frames written by record-real.cjs. Each directory is named
 <demo>-<language> and produces <demo>-<language>.gif plus a matching webp.
-The frames are illustrations, so the animation is labelled as such in the
-image itself rather than implying a screen recording.
+The frames are real captures of a running tool, so the animation is presented
+as a screen recording rather than an illustration.
 """
 
 import json

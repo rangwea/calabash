@@ -36,7 +36,8 @@
           <p class="hero-tagline" data-i18n="hero.tagline">用 AI，创建你自己的办公工具。</p>
           <p class="hero-description" data-i18n="hero.description">从一句需求，到一个有界面、能操作、可反复使用的工具。</p>
           <div class="hero-actions">
-            <a class="button button-dark" href="#demos"><img src="assets/icons/play.svg" alt="" width="16" height="16"><span data-i18n="hero.demos">看看它能做什么</span></a>
+            <a class="button button-dark" href="https://github.com/rangwea/calabash/releases/latest" data-i18n="hero.download">下载预览版</a>
+            <a class="button" href="#demos"><img src="assets/icons/play.svg" alt="" width="16" height="16"><span data-i18n="hero.demos">看看它能做什么</span></a>
             <a class="text-link" href="guide.html"><span data-i18n="hero.guide">阅读使用指南</span><img src="assets/icons/arrow-up-right.svg" alt="" width="16" height="16"></a>
           </div>
           <p class="hero-note" data-i18n="hero.note">本地工具 · 自选模型 · 无需 Calabash 账号</p>
@@ -52,14 +53,14 @@
       </div>
       <div class="demo-tabs" role="tablist" aria-label="Tool demonstrations">
         <button id="tab-ledger" type="button" role="tab" aria-selected="true" aria-controls="demo-panel" data-demo="ledger"><img src="assets/icons/wallet.svg" alt="" width="18" height="18"><span data-i18n="demo.ledger.tab">个人记账</span></button>
-        <button id="tab-excel" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="demo-panel" data-demo="excel"><img src="assets/icons/file-spreadsheet.svg" alt="" width="18" height="18"><span data-i18n="demo.excel.tab">Excel 统计</span></button>
+        <button id="tab-excel" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="demo-panel" data-demo="excel"><img src="assets/icons/file-spreadsheet.svg" alt="" width="18" height="18"><span data-i18n="demo.excel.tab">Excel 商品文案</span></button>
         <button id="tab-video" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="demo-panel" data-demo="video"><img src="assets/icons/audio-lines.svg" alt="" width="18" height="18"><span data-i18n="demo.video.tab">视频剪裁</span></button>
         <button id="tab-watermark" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="demo-panel" data-demo="watermark"><img src="assets/icons/monitor.svg" alt="" width="18" height="18"><span data-i18n="demo.watermark.tab">图片水印</span></button>
         <button id="tab-todo" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="demo-panel" data-demo="todo"><img src="assets/icons/check.svg" alt="" width="18" height="18"><span data-i18n="demo.todo.tab">AI 待办</span></button>
       </div>
       <div class="demo-layout">
       <div id="demo-panel" class="demo-panel" role="tabpanel" aria-labelledby="tab-ledger">
-        <div class="demo-toolbar"><span class="demo-window-label"><span class="tiny-mark">C</span><span>Calabash</span><span class="toolbar-separator">/</span><span id="demo-window-name">个人记账</span></span><span class="demo-data-label" data-i18n="demos.synthetic">界面示意 · 非真实录屏</span></div>
+        <div class="demo-toolbar"><span class="demo-window-label"><span class="tiny-mark">C</span><span>Calabash</span><span class="toolbar-separator">/</span><span id="demo-window-name">个人记账</span></span><span class="demo-data-label" data-i18n="demos.synthetic">真实录屏 · 合成示例数据</span></div>
         <figure class="demo-figure" id="demo-frame"><img id="demo-image" src="assets/demos/ledger-zh.webp" alt="个人记账工具：录入、分类筛选、趋势图与预算进度" width="1120" height="760" loading="lazy" decoding="async"></figure>
         <div class="demo-controls"><div class="demo-control-actions"><button class="media-button" id="demo-play" type="button" aria-pressed="false"><img src="assets/icons/play.svg" alt="" width="14" height="14"><span data-i18n="demos.play">播放演示</span></button><a class="media-button" id="demo-file" href="assets/demos/ledger-zh.gif" target="_blank" rel="noopener"><img src="assets/icons/external-link.svg" alt="" width="14" height="14"><span>GIF</span></a></div></div>
       </div>
@@ -93,7 +94,7 @@
       <details><summary><span data-i18n="faq.one.q">这些工具是 App 内置的吗？</span><img src="assets/icons/chevron-down.svg" alt="" width="18" height="18"></summary><p data-i18n="faq.one.a">不是。这里展示的是为官网制作的真实示例工具，使用合成数据录制。Calabash 的核心是让 AI 按你的需求创建和修改工具，而不是提供几个固定业务模块。</p></details>
       <details><summary><span data-i18n="faq.two.q">需要配置模型吗？数据会发到哪里？</span><img src="assets/icons/chevron-down.svg" alt="" width="18" height="18"></summary><p data-i18n="faq.two.a">创建和修改工具需要配置外部模型及你自己的 API Key。目前支持 DeepSeek、OpenAI、Anthropic 和通义千问。工具与结果保存在本机，但模型请求可能发送对话和相关文件内容；“本地运行”不代表所有数据都不出设备。</p></details>
       <details><summary><span data-i18n="faq.three.q">音视频处理需要额外安装什么？</span><img src="assets/icons/chevron-down.svg" alt="" width="18" height="18"></summary><p data-i18n="faq.three.a">需要在设置页导入可信的 FFmpeg 能力插件 ZIP。演示环境已经预先安装插件。它不随主 App 内置，不会自动下载；目前不提供转写、字幕生成或 OCR 能力。</p></details>
-      <details><summary><span data-i18n="faq.four.q">现在可以下载吗？</span><img src="assets/icons/chevron-down.svg" alt="" width="18" height="18"></summary><p data-i18n="faq.four.a">目前处于体验阶段，官网尚未提供公开下载地址。已验证的构建面向 macOS Apple Silicon；正式签名与公证仍待完成。安装包准备好后会更新入口。</p></details>
+      <details><summary><span data-i18n="faq.four.q">现在可以下载吗？</span><img src="assets/icons/chevron-down.svg" alt="" width="18" height="18"></summary><p data-i18n="faq.four.a">v1.3.1 预览版已发布，支持 macOS Apple Silicon（arm64）、macOS Intel（x64）和 Windows x64。请从 GitHub Releases 下载对应安装包；开发者分发签名与 Apple 公证尚未完成，不要为安装而关闭系统安全保护。</p></details>
     </section>
 
     <section class="closing-band"><div class="inner closing-inner"><div><p class="eyebrow" data-i18n="closing.eyebrow">从你每天重复的那件事开始。</p><h2 data-i18n="closing.title">下一件顺手的工具，<br>可以是你自己的。</h2></div><a class="button button-dark" href="guide.html"><span data-i18n="closing.link">阅读使用指南</span><img src="assets/icons/arrow-up-right.svg" alt="" width="18" height="18"></a></div></section>
